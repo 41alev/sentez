@@ -12,7 +12,7 @@
     "dev": "NODE_ENV=development node server/index.js",
     "test:contract": "node test/contract.js",
     "test:ui": "node test/ui-smoke.js",
-    "test:all": "node test/e2e.js && node test/contract.js && node test/import.js && node test/planning.js && node test/ui-smoke.js && node test/security.js",
+    "test:all": "node test/run-all.js",
     "test:einvoice": "node test/einvoice.js",
     "test:visual": "node test/visual-audit.js",
     "test:planning": "node test/planning.js",
