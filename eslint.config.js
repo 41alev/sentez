@@ -29,7 +29,7 @@ const PUBLIC_GLOBALS = {
 module.exports = [
   js.configs.recommended,
   {
-    files: ['eslint.config.js'],
+    files: ['eslint.config.js', 'vite.config.js'],
     languageOptions: { ecmaVersion: 2022, sourceType: 'commonjs', globals: { ...globals.node } }
   },
   {
@@ -58,6 +58,25 @@ module.exports = [
     }
   },
   {
-    ignores: ['node_modules/**', 'data/**']
+    // frontend-react/: `UI`/`Api`/vb. burada da bare global olarak
+    // kullanılıyor (bkz. public/js/**/*.js notu) — tek fark ES modül
+    // sourceType (import/export) ve JSX sözdizimi.
+    files: ['frontend-react/**/*.jsx'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      parserOptions: { ecmaFeatures: { jsx: true } },
+      globals: { ...globals.browser, ...PUBLIC_GLOBALS }
+    },
+    rules: {
+      'no-unused-vars': ['warn', { args: 'none', caughtErrors: 'none' }],
+      'no-empty': ['error', { allowEmptyCatch: true }]
+    }
+  },
+  {
+    // public/dist/**: Vite'ın ürettiği, dakikalık minified build çıktısı —
+    // kaynak dosya değil, düzenlenmez (bkz. CLAUDE.md §54). Kaynağı
+    // frontend-react/**/*.jsx zaten lint ediliyor.
+    ignores: ['node_modules/**', 'data/**', 'public/dist/**']
   }
 ];

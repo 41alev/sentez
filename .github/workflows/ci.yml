@@ -35,6 +35,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Build frontend (React pilot)
+        run: npm run build
+
       - name: Run full test suite (872 checks, isolated per package)
         run: npm run test:all
 

@@ -8,8 +8,8 @@
  * there. Those never show up in a syntax check or an API test, but they leave a
  * dead button in front of the user.
  *
- * Requires jsdom (dev-only) and a running server:
- *   npm install --no-save jsdom && node test/ui-smoke.js
+ * Requires jsdom (dev-only), the React build, and a running server:
+ *   npm install --no-save jsdom && npm run build && node test/ui-smoke.js
  */
 const fs = require('fs');
 const path = require('path');
@@ -46,6 +46,12 @@ async function until(fn, timeout = 6000, step = 60) {
     process.exit(2);
   }
 
+  const REACT_BUNDLE = path.join(ROOT, 'public', 'dist', 'react-views.js');
+  if (!fs.existsSync(REACT_BUNDLE)) {
+    console.error('React derlemesi bulunamadı / React bundle not found:\n  npm run build');
+    process.exit(2);
+  }
+
   const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
 
   const dom = new JSDOM(html, {
@@ -78,10 +84,13 @@ async function until(fn, timeout = 6000, step = 60) {
   window.URL.createObjectURL = () => 'blob:stub';
   window.URL.revokeObjectURL = () => {};
 
-  // Load application scripts in the same order index.html does.
+  // Load application scripts in the same order index.html does. Dashboard is now
+  // React (frontend-react/DashboardView.jsx) — the built bundle is loaded here,
+  // same as the browser loads it, so this test exercises the actual production
+  // artifact rather than superseded source.
   const files = [
     'js/i18n.js', 'js/api.js', 'js/ui.js',
-    'js/views/dashboard.js', 'js/views/items.js', 'js/views/lots.js', 'js/views/counts.js',
+    'dist/react-views.js', 'js/views/items.js', 'js/views/lots.js', 'js/views/counts.js',
     'js/views/production.js', 'js/views/purchasing.js', 'js/views/sales.js', 'js/views/planning.js',
     'js/views/quality.js', 'js/views/reports.js', 'js/views/admin.js', 'js/app.js'
   ];
@@ -96,6 +105,7 @@ async function until(fn, timeout = 6000, step = 60) {
     const name = f.split('/').pop().replace('.js', '');
     const globalName = {
       'i18n': 'I18N', 'api': 'Api', 'ui': 'UI', 'app': 'App',
+      'react-views': 'ViewDashboard', // frontend-react/main.jsx defines this global
       'dashboard': 'ViewDashboard', 'items': 'ViewItems', 'lots': 'ViewLots', 'counts': 'ViewCounts',
       'production': 'ViewProduction', 'purchasing': 'ViewPurchasing', 'sales': 'ViewSales',
       'quality': 'ViewQuality', 'reports': 'ViewReports', 'admin': 'ViewAdmin', 'planning': 'ViewPlanning'
