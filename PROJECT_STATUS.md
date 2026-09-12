@@ -1,5 +1,79 @@
 # PROJECT_STATUS.md
 
+## 2026-09-12 (devam 5) — Rekabet eksiklerini kapatma turu: Aşama 2 Faz 1 (React pilotu — Panel/Dashboard)
+
+**Kapsam:** Arayüz modernizasyonuna kademeli (strangler-fig) geçişin ilk
+adımı. Kullanıcıya büyük-patlama React geçişinin riskleri anlatıldı
+("reacte geçmek bize ne kazandırır ne kaybettirir riskleri neler");
+kullanıcı önerilen küçük/tersine çevrilebilir pilotu onayladı ("senin
+önerinle devam et"): 10 ekrandan yalnızca **Panel (Dashboard)** — en düşük
+iş riskli, salt okunur ekran — React'e taşınır, diğer 9 ekran hiç
+değişmeden vanilla JS'te kalır; sonuç değerlendirilmeden geri kalan 9
+ekrana geçilmez.
+
+**Yapılanlar:**
+- `vite.config.js` (yeni): `frontend-react/` kaynağını TEK dosyaya
+  (`public/dist/react-views.js`) derliyor; çıktı formatı bilinçli olarak
+  **IIFE** (ES modül değil) — modül script'leri tarayıcıda otomatik
+  ertelenir ve `app.js`'nin `VIEWS` nesnesini kurduğu andan SONRA çalışır,
+  bu da `window.ViewDashboard`'ı henüz tanımlanmamış bulup `undefined`
+  bırakırdı. IIFE, eski `dashboard.js`'nin yükleme sırasını birebir korur.
+- `frontend-react/main.jsx`, `frontend-react/DashboardView.jsx` (yeni): KPI
+  kartları, 3 grafik (Chart.js — aynen çağrılıyor), kritik listeler; iş
+  mantığı YENİDEN YAZILMADI — `UI.stat()/card()/table()/chart()` ve
+  `Api.summary()/trends()` olduğu gibi çağrılıyor.
+- **Gerçek bulunan/düzeltilen hata:** ilk yazımda `window.UI`/`window.Api`
+  kullanıldı — ama `public/js/ui.js`/`api.js` bunları üst seviye `const` ile
+  tanımlıyor, ve klasik `<script>`'te üst seviye `const` `window`'a
+  EKLENMEZ (yalnızca `var` eklenir), yalnızca sayfadaki tüm script'lerin
+  paylaştığı sözcüksel kapsamdan bare tanımlayıcı olarak erişilebilir.
+  Tarayıcıda `TypeError: Cannot destructure property 't' of 'window.UI' as
+  it is undefined` ile yakalandı, `window.UI`→`UI`/`window.Api`→`Api`
+  olarak düzeltildi ve tarayıcıda gerçek verilerle doğrulandı.
+- `public/index.html`: dashboard script etiketi `/dist/react-views.js`'e
+  çevrildi (aynı konum, klasik script, `type="module"` YOK).
+- `eslint.config.js`: `frontend-react/**/*.jsx` için yeni blok (ES modül +
+  JSX ayrıştırma + `UI`/`Api`/vb. paylaşılan globaller); `public/dist/**`
+  lint'ten hariç tutuldu (üretilen dosya, düzenlenmez — CLAUDE.md §54);
+  `vite.config.js` Node/CommonJS globallerine eklendi.
+- **Build zinciri tamamlandı** (plan bunu Faz 1'in parçası olarak
+  öngörmüştü, ertelenmedi): `Dockerfile` iki aşamalı hale getirildi
+  (builder aşaması `npm run build` çalıştırır, yalnızca `public/dist/`
+  çıktısı son (dev bağımlılıksız) imaja kopyalanır); `.github/workflows/
+  ci.yml`'e `npm run build` adımı eklendi (typecheck/lint'ten sonra,
+  testlerden önce); `.gitignore`'a `public/dist/` eklendi (üretilen dosya
+  commit'lenmez).
+- `test/ui-smoke.js`: Dashboard'a özel jsdom testi artık gerçek üretim
+  eserini (`public/dist/react-views.js`) yüklüyor — önceden üretimden
+  koparılmış eski `public/js/views/dashboard.js` kaynağını doğrudan
+  yüklüyordu, bu da React'e geçildikten sonra ARTIK TESTİN GERÇEKTE NEYİ
+  DOĞRULADIĞINI YANLIŞ GÖSTERİYORDU (sahte güven). Bina bulunamazsa açık
+  hata verir (`npm run build` ipucuyla). `dashboard renders` ve `dashboard
+  and report charts are constructed` testleri React bundle'ına karşı
+  geçiyor.
+- Artık üretimde kullanılmayan `public/js/views/dashboard.js` silindi
+  (yalnızca yorumlarda tarihsel referans kaldı).
+
+**Doğrulama:** `npx tsc --noEmit` temiz. `npx eslint .` 0 hata (52 uyarı,
+hepsi bu değişiklikten önce de vardı, ilgisiz). `node test/run-all.js`
+19/19 paket geçti (ui-smoke dahil, React bundle'ına karşı). Tarayıcıda
+elle doğrulama: gerçek KPI verileri (₺181.118 toplam stok değeri vb.)
+doğru render edildi, konsol hatası yok.
+
+**Bilinen sınırlama (bu ortama özel, kodda değil):** grafikler bu
+sandbox'ta boş kalıyor çünkü Chart.js `cdnjs.cloudflare.com`'dan
+yükleniyor ve bu tarayıcı korumalı ortamı dış CDN erişimini engelliyor
+(`net::ERR_CONNECTION_REFUSED`). `UI.chart()` zaten `typeof Chart ===
+'undefined'` durumunda sessizce çıkıyor (mevcut, önceden var olan
+davranış) — eski vanilla dashboard da bu sandbox'ta aynı şekilde
+etkilenirdi. Gerçek bir tarayıcıda (CDN erişimi olan) sorun yaşanmaz.
+
+**Sırada:** Kullanıcıyla anlaşılan kontrol noktası — geri kalan 9 ekranın
+React'e taşınmasına (Aşama 3) otomatik geçilmeyecek; önce bu pilotun
+sonucu değerlendirilip yön kullanıcıyla teyit edilecek.
+
+---
+
 ## 2026-09-12 (devam 4) — Rekabet eksiklerini kapatma turu: Aşama 1 (muhasebe köprüsü)
 
 Kullanıcıya rakip ürünlere (Logo/Netsis/Mikro, Odoo/SAP B1) karşı geride
