@@ -1,0 +1,55 @@
+Coklu sirketlilik altyapi hazirligi - Asama A (semа tamamlama, devreye alinmadi)
+
+Kullanicinin nihai hedefi bu urunu ayri fabrikalara/sirketlere satmak.
+Bir kesif ajani mevcut durumu cikardi: company_id yalnizca 65 tablodan
+7'sinde vardi (hepsi nullable, indekssiz), hicbir sorguda filtre olarak
+kullanilmiyordu, ve canli API rotalari (POST /users, /warehouses,
+/suppliers, /customers, /items) bu alani hic yazmiyordu - bu rotalardan
+olusturulan kayitlar company_id=NULL aliyordu.
+
+Bu commit YALNIZCA katkisal (additive) degisiklikler icerir - davranis
+degismedi, 897 -> 1038 kontrolun tamami (yeni multitenancy.js paketi dahil)
+degismeden geciyor:
+
+- server/migrations/006_multitenancy_prep.js: eksik ~56 islemsel tabloya
+  (stok, siparis, uretim, kalite, sevkiyat, e-belge, denetim kaydi vb.)
+  `company_id INTEGER NOT NULL DEFAULT 1` + indeks eklendi. Zaten var olan
+  6 ana veri tablosundaki (users, warehouses, suppliers, customers, items,
+  work_centers) NULL degerler 1'e dolduruldu.
+
+  BULUNAN GERCEK SORUNLAR (planlanandan farkli, gelistirme sirasinda
+  ortaya cikti):
+  1. SQLite `ALTER TABLE ADD COLUMN`, REFERENCES + NOT NULL DEFAULT
+     kombinasyonuna izin vermiyor ("Cannot add a REFERENCES column with
+     non-NULL default value") - yabanci anahtar bu yeni sutunlar icin
+     eklenemedi (atil bir sutun icin simdilik kritik degil).
+  2. `document_templates.company_id`'deki NULL degerler KASITLI is kurali
+     ("tum firmalar icin gecerli varsayilan sablon", 005_templates.js'in
+     kendi yorumunda belirtilmis) - baslangicta yanlislikla 1'e doldurmayi
+     planladim, bu hem semantigi bozar (varsayilan sablonlari company 1'e
+     ozel yapar) hem de gercek bir yabanci anahtar hatasi verir (migration
+     sirasinda companies tablosu henuz bos - seed migration'lardan SONRA
+     calisir). Bu tablo backfill'den acikca haric tutuldu.
+
+- server/lib/tenant.js (yeni): `companyIdOf(req)` - tek paylasilan kaynak,
+  henuz HICBIR YERDE cagrilmiyor/filtrelemiyor.
+- server/middleware/auth.js: JWT payload'ina ve req.user'a `companyId`
+  eklendi (atil - hicbir route henuz okumuyor). /auth/me sozlesmesi
+  degismedi (companyId sizdirmiyor, ayri response objesi kuruyor).
+- server/routes/{admin,purchasing,sales,items}.js: 5 INSERT noktasi artik
+  `company_id: companyIdOf(req)` (=1) yaziyor - yeni kayitlar artik NULL
+  almiyor.
+- test/multitenancy.js (yeni, 141 test): sema dogrulamasi (tum tablolarda
+  sutun var, NULL kalmadi - document_templates haric), yabanci anahtar
+  butunlugu, 5 canli rotanin gercekten company_id yazdigi, JWT claim'i.
+
+Bu turda YAPILMADI (Asama B'ye birakildi - SQLite'ta UNIQUE kisit
+degisikligi tablo yeniden olusturmayi gerektirir, ayri ve daha dikkatli
+bir migration'in konusu): users.username / work_centers.code / shifts.code
+sirket bazli benzersizlik. settings/number_sequences sirket bazli hale
+getirme ve gercek sorgu filtrelemesi/aktivasyon kasitli olarak kapsam disi.
+
+Dogrulama: npx tsc --noEmit temiz; npx eslint . 0 hata; node test/run-all.js
+1038/1038 (897 + yeni multitenancy 141).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>

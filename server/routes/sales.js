@@ -4,6 +4,7 @@ const db = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { validate, z } = require('../middleware/validate');
 const { AppError, uuid, nextNumber, logAudit, diff, toBase, paginate } = require('../lib/core');
+const { companyIdOf } = require('../lib/tenant');
 const stock = require('../services/stock');
 
 const router = express.Router();
@@ -44,10 +45,10 @@ router.get('/customers/:id', (req, res) => {
 
 router.post('/customers', ADMIN, validate(customerSchema), (req, res) => {
   const b = req.valid;
-  const info = db.prepare(`INSERT INTO customers (code,name,contact_person,phone,email,address,country,tax_no,currency,payment_terms_days,credit_limit,incoterm,notes,created_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(b.code || null, b.name, b.contactPerson || null, b.phone || null,
+  const info = db.prepare(`INSERT INTO customers (code,name,contact_person,phone,email,address,country,tax_no,currency,payment_terms_days,credit_limit,incoterm,notes,created_at,company_id)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(b.code || null, b.name, b.contactPerson || null, b.phone || null,
     b.email || null, b.address || null, b.country || null, b.taxNo || null, b.currency,
-    b.paymentTermsDays, b.creditLimit, b.incoterm || null, b.notes || null, Date.now());
+    b.paymentTermsDays, b.creditLimit, b.incoterm || null, b.notes || null, Date.now(), companyIdOf(req));
   logAudit(req, 'auditCustomerAdd', { entityType: 'customer', entityId: info.lastInsertRowid, newValue: b, detail: b.name });
   res.status(201).json(db.prepare('SELECT * FROM customers WHERE id = ?').get(info.lastInsertRowid));
 });

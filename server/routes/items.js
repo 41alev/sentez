@@ -2,6 +2,7 @@
 const express = require('express');
 const db = require('../db');
 const { AppError, uuid, logAudit, diff } = require('../lib/core');
+const { companyIdOf } = require('../lib/tenant');
 const { requireAuth, requirePermission } = require('../middleware/auth');
 const { validate, validateQuery, z, pageQuery, currency } = require('../middleware/validate');
 const stock = require('../services/stock');
@@ -192,10 +193,10 @@ router.post('/', requirePermission('stock.write'), validate(itemSchema), (req, r
       const warehouseId = resolveWarehouseId(b);
       db.prepare(`INSERT INTO items (id,name,code,barcode,category,item_type,origin,default_warehouse_id,location,unit,
         min_stock,reorder_qty,costing_method,standard_cost,sale_price,sale_currency,is_lot_tracked,is_serial_tracked,
-        shelf_life_days,requires_incoming_inspection,hs_code,default_supplier_id,supplier,description,created_at)
+        shelf_life_days,requires_incoming_inspection,hs_code,default_supplier_id,supplier,description,created_at,company_id)
         VALUES (@id,@name,@code,@barcode,@category,@item_type,@origin,@wh,@location,@unit,
         @min_stock,@reorder_qty,@costing_method,@standard_cost,@sale_price,@sale_currency,@lot,@serial,
-        @shelf,@insp,@hs,@sup_id,@supplier,@description,@created)`).run({
+        @shelf,@insp,@hs,@sup_id,@supplier,@description,@created,@company_id)`).run({
         id, name: b.name, code: b.code || '', barcode: b.barcode || '', category: b.category || 'Genel',
         item_type: b.itemType, origin: b.origin, wh: warehouseId, location: b.location || '', unit: b.unit,
         min_stock: b.minStock, reorder_qty: b.reorderQty, costing_method: b.costingMethod,
@@ -203,7 +204,7 @@ router.post('/', requirePermission('stock.write'), validate(itemSchema), (req, r
         lot: b.isLotTracked ? 1 : 0, serial: b.isSerialTracked ? 1 : 0,
         shelf: b.shelfLifeDays ?? null, insp: b.requiresIncomingInspection ? 1 : 0,
         hs: b.hsCode || null, sup_id: b.defaultSupplierId ?? null, supplier: b.supplier || '',
-        description: b.description || '', created: Date.now()
+        description: b.description || '', created: Date.now(), company_id: companyIdOf(req)
       });
 
       writeBom(id, b.bom);

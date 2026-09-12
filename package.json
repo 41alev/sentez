@@ -31,6 +31,7 @@
     "upgrade": "node server/scripts/upgrade.js",
     "test:setup": "node test/setup-upgrade.js",
     "test:dates": "node test/dates.js",
+    "test:multitenancy": "node test/multitenancy.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },

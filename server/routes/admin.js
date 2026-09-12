@@ -6,6 +6,7 @@ const { requireAuth, requireRole, PERMISSIONS } = require('../middleware/auth');
 const { validate, z } = require('../middleware/validate');
 const { AppError, logAudit, diff, getSetting, setSetting, paginate } = require('../lib/core');
 const { today } = require('../lib/dates');
+const { companyIdOf } = require('../lib/tenant');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -51,9 +52,9 @@ router.post('/users', ADMIN, validate(userCreateSchema), (req, res) => {
   if (db.prepare('SELECT id FROM users WHERE username = ?').get(b.username)) {
     throw new AppError('Bu kullanıcı adı zaten kullanılıyor / Username already taken', 409);
   }
-  const info = db.prepare(`INSERT INTO users (username, full_name, email, password_hash, role, approval_limit, must_change_password, is_active, created_at)
-    VALUES (?,?,?,?,?,?,?,1,?)`).run(b.username, b.fullName || null, b.email || null,
-    bcrypt.hashSync(b.password, 12), b.role, b.approvalLimit, b.mustChangePassword ? 1 : 0, Date.now());
+  const info = db.prepare(`INSERT INTO users (username, full_name, email, password_hash, role, approval_limit, must_change_password, is_active, created_at, company_id)
+    VALUES (?,?,?,?,?,?,?,1,?,?)`).run(b.username, b.fullName || null, b.email || null,
+    bcrypt.hashSync(b.password, 12), b.role, b.approvalLimit, b.mustChangePassword ? 1 : 0, Date.now(), companyIdOf(req));
   logAudit(req, 'auditUserAdd', { entityType: 'user', entityId: info.lastInsertRowid, newValue: { username: b.username, role: b.role }, detail: `${b.username} (${b.role})` });
   res.status(201).json({ id: info.lastInsertRowid, username: b.username, role: b.role });
 });
@@ -131,8 +132,8 @@ router.post('/warehouses', MANAGER, validate(z.object({
 })), (req, res) => {
   const b = req.valid;
   try {
-    const info = db.prepare('INSERT INTO warehouses (name, code, address, is_quarantine) VALUES (?,?,?,?)')
-      .run(b.name, b.code || null, b.address || null, b.isQuarantine ? 1 : 0);
+    const info = db.prepare('INSERT INTO warehouses (name, code, address, is_quarantine, company_id) VALUES (?,?,?,?,?)')
+      .run(b.name, b.code || null, b.address || null, b.isQuarantine ? 1 : 0, companyIdOf(req));
     logAudit(req, 'auditWarehouseAdd', { entityType: 'warehouse', entityId: info.lastInsertRowid, newValue: b, detail: b.name });
     res.status(201).json(db.prepare('SELECT * FROM warehouses WHERE id = ?').get(info.lastInsertRowid));
   } catch (e) {

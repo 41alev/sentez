@@ -3,6 +3,7 @@ const express = require('express');
 const db = require('../db');
 const { AppError, uuid, nextNumber, logAudit, diff, fxRate } = require('../lib/core');
 const { toLocalDateStr } = require('../lib/dates');
+const { companyIdOf } = require('../lib/tenant');
 const { requireAuth, requirePermission } = require('../middleware/auth');
 const { validate, validateQuery, z, pageQuery, currency } = require('../middleware/validate');
 const stock = require('../services/stock');
@@ -95,11 +96,11 @@ router.post('/suppliers', requirePermission('purchase.write'), validate(supplier
   try {
     const b = req.body;
     const info = db.prepare(`INSERT INTO suppliers (code,name,contact_person,phone,email,address,country,tax_no,
-      currency,payment_terms_days,lead_time_days,incoterm,bank_info,is_approved,notes,created_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+      currency,payment_terms_days,lead_time_days,incoterm,bank_info,is_approved,notes,created_at,company_id)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
       b.code || null, b.name, b.contactPerson || null, b.phone || null, b.email || null, b.address || null,
       b.country || null, b.taxNo || null, b.currency, b.paymentTermsDays, b.leadTimeDays,
-      b.incoterm || null, b.bankInfo || null, b.isApproved ? 1 : 0, b.notes || null, Date.now());
+      b.incoterm || null, b.bankInfo || null, b.isApproved ? 1 : 0, b.notes || null, Date.now(), companyIdOf(req));
     logAudit(req, 'auditSupplierAdd', { entityType: 'supplier', entityId: info.lastInsertRowid, newValue: { name: b.name }, detail: b.name });
     res.status(201).json(serializeSupplier(db.prepare('SELECT * FROM suppliers WHERE id = ?').get(info.lastInsertRowid)));
   } catch (e) { next(e); }

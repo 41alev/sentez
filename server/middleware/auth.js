@@ -27,8 +27,11 @@ function hasPermission(role, permission) {
 }
 
 function signToken(user, jti) {
+  // companyId: çok şirketlilik altyapı hazırlığı, bkz. server/lib/tenant.js.
+  // Hiçbir route bunu henüz okumuyor/filtrelemiyor — ileride kullanılmak
+  // üzere token'da hazır duruyor.
   return jwt.sign(
-    { id: user.id, username: user.username, role: user.role, jti },
+    { id: user.id, username: user.username, role: user.role, companyId: user.company_id, jti },
     JWT_SECRET,
     { expiresIn: `${TOKEN_TTL_HOURS}h` }
   );
@@ -46,11 +49,13 @@ function requireAuth(req, res, next) {
     if (!session || session.revoked_at) {
       return res.status(401).json({ error: 'Oturum sonlandırılmış / Session revoked' });
     }
-    const user = db.prepare('SELECT id, username, role, is_active, must_change_password FROM users WHERE id = ?').get(payload.id);
+    const user = db.prepare('SELECT id, username, role, is_active, must_change_password, company_id FROM users WHERE id = ?').get(payload.id);
     if (!user || !user.is_active) {
       return res.status(401).json({ error: 'Kullanıcı pasif / User inactive' });
     }
-    req.user = { id: user.id, username: user.username, role: user.role, jti: payload.jti, mustChangePassword: !!user.must_change_password };
+    // companyId: çok şirketlilik altyapı hazırlığı (bkz. server/lib/tenant.js) —
+    // henüz hiçbir route bunu okuyup filtrelemiyor.
+    req.user = { id: user.id, username: user.username, role: user.role, companyId: user.company_id, jti: payload.jti, mustChangePassword: !!user.must_change_password };
     next();
   } catch (e) {
     return res.status(401).json({ error: 'Geçersiz veya süresi dolmuş oturum / Invalid or expired session' });
