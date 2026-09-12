@@ -1,5 +1,60 @@
 # PROJECT_STATUS.md
 
+## 2026-09-12 (devam 3) — Çok şirketlilik altyapı hazırlığı: Aşama A
+
+**Kullanıcının nihai hedefi:** bu ürünü ayrı ayrı fabrikalara/şirketlere
+satmak — altyapı hazır olsun, ama şimdi devreye alınmasın. Bir keşif ajanı
+mevcut durumu çıkardı: `company_id` yalnızca 65 tablodan 7'sinde vardı
+(hepsi nullable, indekssiz), hiçbir sorguda filtre olarak kullanılmıyordu,
+canlı API rotaları (`POST /users`, `/warehouses`, `/suppliers`,
+`/customers`, `/items`) bu alanı hiç yazmıyordu (yeni kayıtlar `NULL`
+alıyordu), `companies` tablosuna her erişim sabit `WHERE id = 1`, ve
+auth/JWT'de şirket kavramı sıfırdı. Ayrıca kullanıcı adı/ürün kodu gibi
+bazı alanlar global (şirketler arası) benzersiz — gerçek izolasyona engel.
+
+Kullanıcı "şema + daha derin hazırlık" kapsamını onayladı. İş, SQLite'ta
+risk profili farklı olan **iki aşamaya** bölündü (`
+C:\Users\ilker\.claude\plans\peppy-puzzling-plum.md`):
+
+**Aşama A — şema tamamlama, katkısal (TAMAMLANDI, `5c1a34f`).**
+`server/migrations/006_multitenancy_prep.js`: eksik ~56 işlemsel tabloya
+`company_id INTEGER NOT NULL DEFAULT 1` + indeks eklendi; zaten var olan
+6 ana veri tablosundaki NULL değerler 1'e dolduruldu. `server/lib/tenant.js`
+(yeni, atıl `companyIdOf(req)`), `server/middleware/auth.js` (JWT/`req.user`'a
+atıl `companyId`), 5 route'ta INSERT düzeltmesi (artık `company_id` yazıyor).
+
+**Geliştirme sırasında bulunan 2 gerçek sorun (planlanandan farklıydı):**
+1. SQLite `ALTER TABLE ADD COLUMN`, `REFERENCES` + `NOT NULL DEFAULT`
+   kombinasyonuna izin vermiyor — yabancı anahtar bu yeni sütunlar için
+   eklenemedi (atıl sütun için şimdilik kritik değil, gerçek aktivasyonda
+   yeniden ele alınacak).
+2. `document_templates.company_id`'deki NULL'lar **kasıtlı bir iş kuralı**
+   ("tüm firmalar için geçerli varsayılan şablon" — 005_templates.js'in
+   kendi yorumunda zaten yazıyordu). İlk denemede bunu da 1'e doldurmayı
+   planlamıştım; hem semantiği bozardı (varsayılan şablonları company 1'e
+   özel yapardı) hem de gerçek bir yabancı anahtar hatası verdi (migration
+   sırasında `companies` tablosu henüz boş — seed her zaman migration'lardan
+   SONRA çalışır). Bu tablo backfill'den açıkça hariç tutuldu.
+
+**Doğrulama:** `test/multitenancy.js` (yeni, 141 test) — şema bütünlüğü,
+5 canlı rotanın gerçekten `company_id` yazdığı, JWT claim'i. `npx tsc
+--noEmit` temiz, `npx eslint .` 0 hata, `node test/run-all.js`
+**1038/1038** (897 + yeni multitenancy 141) — davranış değişmedi.
+
+**Aşama B — şirket bazlı benzersizlik (BEKLEMEDE, kullanıcı onayı gerekiyor).**
+`users.username`, `work_centers.code`, `shifts.code` için SQLite'ta UNIQUE
+kısıt değişikliği tablo yeniden oluşturmayı gerektirir (create-copy-drop-rename)
+— Aşama A'dan daha riskli bir işlem sınıfı. Kullanıcıyla konuşulup
+onaylanmadan başlanmayacak.
+
+**Kapsam dışı (kullanıcıyla konuşulup ertelendi):** `settings`/
+`number_sequences` şirket bazlı hale getirme, `/companies` CRUD, şirket
+değiştirme arayüzü, gerçek sorgu filtrelemesi — bunlar gerçek aktivasyona
+çok daha yakın adımlar, gerçek bir ikinci müşteri onboard edilecekken ele
+alınmalı.
+
+---
+
 ## 2026-09-12 (devam 2) — İkinci tur: off-site yedek + Dependabot + ESLint
 
 4 aşamalık sertleştirme turunun ardından, kalan operasyonel/araç boşlukları
