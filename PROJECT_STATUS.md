@@ -1,5 +1,49 @@
 # PROJECT_STATUS.md
 
+## 2026-09-12 (devam 2) — İkinci tur: off-site yedek + Dependabot + ESLint
+
+4 aşamalık sertleştirme turunun ardından, kalan operasyonel/araç boşlukları
+sırayla kapatıldı (her biri ayrı commit, öncesinde `node test/run-all.js`
+ile doğrulandı):
+
+**Off-site yedek senkronizasyon kancası (`be22e7e`).** Yerel yedek sunucuyla
+aynı diskte duruyordu (disk arızası/yangın/hırsızlıkta işe yaramaz — bu zaten
+`docs/KURULUM.md`'de belirtiliyordu ama hiçbir araç yoktu). Yeni
+`BACKUP_OFFSITE_CMD` ortam değişkeni, her başarılı yerel yedekten sonra
+kullanıcının seçtiği bir komutu (rclone/rsync/robocopy) çalıştırır.
+Başarısızlık — e-posta bildirimlerinde daha önce bulunan "sessizce yutulan
+hata" dersi tekrarlanmasın diye — açıkça loglanır, ana yedeği bozmaz.
+5 yeni test (`test/backup-restore.js` 32→37). Ayrıca `npm run demo`
+(`server/scripts/demo.js`) eklendi — `DEMO_DATA=1 npm start` Windows'ta
+çalışmıyordu, platform bağımsız bir başlatıcı yazıldı.
+
+**Dependabot (`58306bf`).** Haftalık npm + github-actions bağımlılık
+taraması — `npm audit` yalnızca push anında çalıştığı için yeni bir CVE
+bir sonraki push'a kadar fark edilmiyordu.
+
+**ESLint (`958fcd2`).** Dar kapsamlı, yalnızca gerçek hata yakalayan kurallar
+(üslup zorlanmadı). Bu geçişte **3 gerçek hata bulundu**: `public/js/i18n.js`
+içinde `dueDate` anahtarı iki farklı anlamla (RFQ teklif tarihi / üretim
+termini) tanımlanmıştı — JS'te son tanım kazandığı için RFQ ekranı sessizce
+yanlış etiket gösteriyordu; çakışan anahtar `orderDueDate` olarak ayrıldı.
+Ayrıca birkaç dosyada hiç okunmadan ezilen "ölü" değişken ilklendirmeleri
+temizlendi. `npm run lint` CI'a eklendi.
+
+**Toplam doğrulama:** `npx tsc --noEmit` temiz · `npx eslint .` → 0 hata,
+53 zararsız uyarı (kasıtlı: dosyalar arası paylaşılan global değişkenler,
+ESLint'in izleyemediği bir mimari örüntü) · `node test/run-all.js`
+**897/897** (872 + `dates` 20 + backup +5).
+
+**Tartışılıp ertelenen (kod değişikliği yapılmadı):**
+- **API versiyonlama:** Tüm uç noktalar `/api/...` altında, sürüm öneki yok.
+  Frontend+backend her zaman birlikte dağıtıldığı için şu an pratik bir sorun
+  değil; üçüncü bir sistem bu API'ye bağımlı olursa yeniden ele alınmalı.
+- **Hız sınırlayıcı tek-sunucu varsayımı:** `express-rate-limit` bellek içi
+  sayaç tutuyor — çoklu uygulama örneği (yük dengeleyici arkasında)
+  çalıştırılırsa etkisiz kalır. Şu anki tek-tesis modeliyle sorun değil.
+
+---
+
 ## 2026-09-12 (devam) — Sertleştirme (hardening) turu: 4 aşama tamamlandı
 
 Bağımsız doğrulama turunun ardından kullanıcı "gerçekten kusursuza yakın" bir
