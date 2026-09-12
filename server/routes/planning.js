@@ -5,6 +5,7 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 const { validate, z } = require('../middleware/validate');
 const { AppError, logAudit, diff, paginate } = require('../lib/core');
 const dates = require('../lib/dates');
+const { companyIdOf } = require('../lib/tenant');
 const capacity = require('../services/capacity');
 const mrp = require('../services/mrp');
 
@@ -47,7 +48,7 @@ const wcSchema = z.object({
 router.post('/work-centers', MANAGER, validate(wcSchema), (req, res) => {
   const b = req.valid;
   const result = db.tx(() => {
-    if (db.prepare('SELECT id FROM work_centers WHERE code = ?').get(b.code)) {
+    if (db.prepare('SELECT id FROM work_centers WHERE code = ? AND company_id = ?').get(b.code, companyIdOf(req))) {
       throw new AppError('Bu kodda bir iş merkezi zaten var / Work centre code already exists', 409);
     }
     const info = db.prepare(`INSERT INTO work_centers (code,name,description,warehouse_id,capacity_units,

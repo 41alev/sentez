@@ -160,7 +160,10 @@ const WRITERS = {
   },
 
   work_centers(d, batchId, mode) {
-    const existing = db.prepare('SELECT * FROM work_centers WHERE code = ?').get(d.code);
+    // company_id = 1: bu servisin istek (req) bağlamı yok, tıpkı bu dosyadaki
+    // items/suppliers/customers commit fonksiyonlarının company_id'yi sabit
+    // yazması gibi — çok şirketlilik henüz devreye alınmadı.
+    const existing = db.prepare('SELECT * FROM work_centers WHERE code = ? AND company_id = 1').get(d.code);
     if (existing) {
       if (mode === 'skip') return { action: 'skipped', table: 'work_centers', id: existing.id };
       db.prepare(`UPDATE work_centers SET name=?, description=COALESCE(?,description), capacity_units=?,

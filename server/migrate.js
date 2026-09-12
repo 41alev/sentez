@@ -37,13 +37,27 @@ function runMigrations({ silent = false } = {}) {
   }
   for (const m of pending) {
     const mod = require(path.join(MIGRATIONS_DIR, m.file));
-    // Each migration runs inside its own transaction: it either fully applies or not at all.
-    const runOne = db.transaction(() => {
-      mod.up(db);
-      db.prepare('INSERT INTO schema_migrations (version, name, applied_at) VALUES (?,?,?)')
-        .run(m.version, m.name, Date.now());
-    });
-    runOne();
+    // Bir UNIQUE/PRIMARY KEY kısıtını değiştirmek SQLite'ta tabloyu yeniden
+    // oluşturmayı gerektirir (create-copy-drop-rename); bu sırada başka bir
+    // tablonun ona olan yabancı anahtarı varsa `foreign_keys` AÇIKKEN DROP
+    // TABLE reddedilir. SQLite'ın resmi çözümü PRAGMA foreign_keys=OFF'u
+    // TRANSACTION DIŞINDA çalıştırmaktır (pragma bir transaction içindeyken
+    // no-op'tur) — bu yüzden bu tek durumda migration'ı sarmalayan
+    // transaction'ın dışına çıkıyoruz. Bayrağı taşımayan mevcut migration'lar
+    // (hepsi) davranışını hiç değiştirmez.
+    const needsFkToggle = !!mod.disableForeignKeys;
+    if (needsFkToggle) db.pragma('foreign_keys = OFF');
+    try {
+      // Each migration runs inside its own transaction: it either fully applies or not at all.
+      const runOne = db.transaction(() => {
+        mod.up(db);
+        db.prepare('INSERT INTO schema_migrations (version, name, applied_at) VALUES (?,?,?)')
+          .run(m.version, m.name, Date.now());
+      });
+      runOne();
+    } finally {
+      if (needsFkToggle) db.pragma('foreign_keys = ON');
+    }
     if (!silent) console.log(`Migration uygulandı / applied: ${m.name}`);
   }
   return pending.length;

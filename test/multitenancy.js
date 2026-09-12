@@ -30,7 +30,7 @@ async function api(method, p, { token, body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
   const r = await fetch(BASE + p, { method, headers, body: body ? JSON.stringify(body) : undefined });
-  let d = null;
+  let d;
   try { d = await r.json(); } catch { d = null; }
   return { status: r.status, data: d };
 }
@@ -128,6 +128,79 @@ const GLOBAL_DEFAULT_TABLE = 'document_templates';
   const me = await api('GET', '/api/auth/me', { token: admin });
   ok('/auth/me hâlâ eskisi gibi çalışıyor (companyId sızdırmıyor, sözleşme bozulmadı)',
     me.status === 200 && me.data.user && !('companyId' in me.data.user), JSON.stringify(me.data));
+
+  console.log('\n=== AŞAMA B — AYNI ŞİRKETTE TEKRAR HÂLÂ REDDEDİLİYOR / SAME-COMPANY DUPES STILL REJECTED ===');
+  // Tek şirketli bugünkü kullanım için davranış değişmemeli: aynı company_id
+  // içinde aynı kullanıcı adı/kod hâlâ 409 vermeli.
+  const dupUser = await api('POST', '/api/users', {
+    token: admin, body: { username: 'admin', password: 'BaskaSifre!2026', role: 'viewer' }
+  });
+  ok('aynı şirkette aynı kullanıcı adı hâlâ reddediliyor (409)', dupUser.status === 409, JSON.stringify(dupUser.data));
+
+  const wcCodeDup = `MT-WC-${rndSuffix}`;
+  const wc1 = await api('POST', '/api/planning/work-centers', { token: admin, body: { code: wcCodeDup, name: 'MT İş Merkezi 1' } });
+  ok('iş merkezi oluşturuldu', wc1.status === 201, JSON.stringify(wc1.data));
+  const wc2 = await api('POST', '/api/planning/work-centers', { token: admin, body: { code: wcCodeDup, name: 'MT İş Merkezi 2' } });
+  ok('aynı şirkette aynı iş merkezi kodu hâlâ reddediliyor (409)', wc2.status === 409, JSON.stringify(wc2.data));
+
+  console.log('\n=== AŞAMA B — İZOLASYON KANITI / ISOLATION PROOF (doğrudan SQL, arayüz yok) ===');
+  // Gerçek bir çoklu-şirket API'si henüz yok (bkz. plan — kasıtlı olarak
+  // ertelendi). Bu bölüm "şema gerçekten izolasyona hazır mı" sorusunun tek
+  // gerçek kanıtı: companies tablosuna ELLE ikinci bir satır eklenir
+  // (hiçbir CRUD yok, yalnızca test amaçlı) ve aynı username/kodun FARKLI
+  // company_id ile çakışmadan var olabildiği doğrudan veritabanı seviyesinde
+  // doğrulanır.
+  const rw = new Database(dbPath);
+  let secondCompanyId = null;
+  try {
+    secondCompanyId = rw.prepare(
+      "INSERT INTO companies (name, base_currency, is_active) VALUES ('MT İkinci Test Firması', 'TRY', 1)"
+    ).run().lastInsertRowid;
+
+    let usernameIsolated = false;
+    try {
+      rw.prepare('INSERT INTO users (company_id, username, password_hash, role, created_at) VALUES (?,?,?,?,?)')
+        .run(secondCompanyId, 'admin', 'x', 'viewer', Date.now());
+      usernameIsolated = true;
+    } catch { usernameIsolated = false; }
+    ok('farklı şirkette AYNI kullanıcı adı çakışmadan eklenebiliyor', usernameIsolated);
+
+    let wcIsolated = false;
+    try {
+      rw.prepare('INSERT INTO work_centers (company_id, code, name, created_at) VALUES (?,?,?,?)')
+        .run(secondCompanyId, wcCodeDup, 'MT İkinci Firma İş Merkezi', Date.now());
+      wcIsolated = true;
+    } catch { wcIsolated = false; }
+    ok('farklı şirkette AYNI iş merkezi kodu çakışmadan eklenebiliyor', wcIsolated);
+
+    let shiftIsolated = false;
+    const shiftCodeDup = `MT-SH-${rndSuffix}`;
+    rw.prepare('INSERT INTO shifts (company_id, code, name, start_time, end_time) VALUES (1,?,?,?,?)')
+      .run(shiftCodeDup, 'MT Vardiya 1', '08:00', '16:00');
+    try {
+      rw.prepare('INSERT INTO shifts (company_id, code, name, start_time, end_time) VALUES (?,?,?,?,?)')
+        .run(secondCompanyId, shiftCodeDup, 'MT İkinci Firma Vardiyası', '08:00', '16:00');
+      shiftIsolated = true;
+    } catch { shiftIsolated = false; }
+    ok('farklı şirkette AYNI vardiya kodu çakışmadan eklenebiliyor', shiftIsolated);
+
+    let shiftSameCompanyRejected = false;
+    try {
+      rw.prepare('INSERT INTO shifts (company_id, code, name, start_time, end_time) VALUES (1,?,?,?,?)')
+        .run(shiftCodeDup, 'MT Tekrar', '08:00', '16:00');
+    } catch (e) { shiftSameCompanyRejected = /UNIQUE/.test(e.message); }
+    ok('aynı şirkette aynı vardiya kodu hâlâ reddediliyor', shiftSameCompanyRejected);
+  } finally {
+    // Temizlik: bu test bölümünün eklediği satırlar geri alınır.
+    if (secondCompanyId) {
+      rw.exec(`DELETE FROM users WHERE company_id = ${secondCompanyId}`);
+      rw.exec(`DELETE FROM work_centers WHERE company_id = ${secondCompanyId}`);
+      rw.exec(`DELETE FROM shifts WHERE company_id = ${secondCompanyId}`);
+      rw.exec(`DELETE FROM companies WHERE id = ${secondCompanyId}`);
+    }
+    rw.exec(`DELETE FROM shifts WHERE code = '${`MT-SH-${rndSuffix}`}' AND company_id = 1`);
+    rw.close();
+  }
 
   db.close();
 

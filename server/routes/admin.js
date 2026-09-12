@@ -49,7 +49,7 @@ function assertPasswordStrength(pw) {
 router.post('/users', ADMIN, validate(userCreateSchema), (req, res) => {
   const b = req.valid;
   assertPasswordStrength(b.password);
-  if (db.prepare('SELECT id FROM users WHERE username = ?').get(b.username)) {
+  if (db.prepare('SELECT id FROM users WHERE username = ? AND company_id = ?').get(b.username, companyIdOf(req))) {
     throw new AppError('Bu kullanıcı adı zaten kullanılıyor / Username already taken', 409);
   }
   const info = db.prepare(`INSERT INTO users (username, full_name, email, password_hash, role, approval_limit, must_change_password, is_active, created_at, company_id)
