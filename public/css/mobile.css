@@ -1,0 +1,308 @@
+/* ============================================================
+   Depo Terminali — el terminali ve telefon için arayüz
+
+   Masaüstü arayüzünden farkı bilinçli: burada kullanıcı ayakta, tek elli,
+   eldivenli ve aceleci. Tasarım kararları buna göre:
+
+   - Dokunma hedefleri en az 56px. Eldivenli parmak 44px'i ıskalar.
+   - Birincil eylemler ekranın ALTINDA. Başparmak yukarı zor uzanır.
+   - Yüksek kontrast: depo aydınlatması kötüdür, ekran parlar.
+   - Az bilgi, büyük yazı. Okumak için durmak zaman kaybıdır.
+   ============================================================ */
+
+:root {
+  --m-bg: #16191C;
+  --m-panel: #212528;
+  --m-panel-2: #2A2F33;
+  --m-border: #3C4348;
+  --m-text: #F2F0EB;
+  --m-muted: #A8B0B6;
+  --m-faint: #7E878E;
+  --m-accent: #F2A900;
+  --m-accent-ink: #1E1502;
+  --m-ok: #5FBF7A;
+  --m-warn: #F2A900;
+  --m-danger: #EE7C72;
+  --m-info: #7FA6D9;
+  --m-tap: 56px;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0; padding: 0; height: 100%;
+  background: var(--m-bg); color: var(--m-text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 16px; line-height: 1.45;
+  /* Kaydırma sırasında kazara yenileme olmasın */
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, select { font-family: inherit; font-size: 16px; }
+/* 16px altı yazı iOS'ta alanı otomatik yakınlaştırır ve düzeni bozar */
+input { font-size: 16px !important; }
+
+/* ---------- Giriş ---------- */
+.m-login {
+  min-height: 100dvh; display: flex; align-items: center; justify-content: center;
+  padding: 24px; background: var(--m-bg);
+}
+.m-login-box { width: 100%; max-width: 380px; }
+.m-logo {
+  font-size: 26px; font-weight: 800; letter-spacing: .14em;
+  text-align: center; margin-bottom: 32px; color: var(--m-accent);
+}
+.m-logo span { display: block; font-size: 13px; letter-spacing: .3em; color: var(--m-faint); font-weight: 600; }
+.m-login input {
+  width: 100%; height: var(--m-tap); margin-bottom: 12px; padding: 0 16px;
+  background: var(--m-panel-2); border: 2px solid var(--m-border);
+  border-radius: 10px; color: var(--m-text);
+}
+.m-login input:focus { outline: none; border-color: var(--m-accent); }
+.m-login-err { color: var(--m-danger); font-size: 14px; text-align: center; margin-top: 14px; min-height: 20px; }
+.m-link { display: block; text-align: center; margin-top: 26px; color: var(--m-faint); font-size: 14px; }
+
+/* ---------- Üst çubuk ---------- */
+.m-app { min-height: 100dvh; display: flex; flex-direction: column; }
+.m-top {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: 8px;
+  height: 60px; padding: 0 8px;
+  background: var(--m-panel); border-bottom: 1px solid var(--m-border);
+  padding-top: env(safe-area-inset-top);
+}
+.m-top-title { flex: 1; font-size: 18px; font-weight: 700; letter-spacing: .01em; }
+.m-top-right { display: flex; align-items: center; gap: 6px; }
+.m-icon-btn {
+  width: 48px; height: 48px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: none; color: var(--m-text); cursor: pointer; border-radius: 10px;
+}
+.m-icon-btn:active { background: var(--m-panel-2); }
+.m-icon-btn svg { width: 24px; height: 24px; }
+.m-queue {
+  min-width: 30px; height: 30px; padding: 0 9px; border-radius: 15px;
+  background: var(--m-warn); color: var(--m-accent-ink);
+  font-size: 14px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+}
+.m-offline {
+  background: var(--m-danger); color: #2A0F0C;
+  text-align: center; padding: 9px; font-size: 14px; font-weight: 700;
+}
+
+/* ---------- Gövde ---------- */
+.m-main {
+  flex: 1; padding: 14px 14px 88px;   /* altta tarama çubuğu için boşluk */
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+}
+
+/* ---------- Kartlar ---------- */
+.m-card {
+  background: var(--m-panel); border: 1px solid var(--m-border);
+  border-radius: 12px; padding: 14px; margin-bottom: 12px;
+}
+.m-card-tap { cursor: pointer; }
+.m-card-tap:active { background: var(--m-panel-2); transform: scale(.985); }
+.m-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.m-card-title { font-size: 17px; font-weight: 700; line-height: 1.3; }
+.m-card-sub { font-size: 14px; color: var(--m-muted); margin-top: 3px; }
+.m-card-meta { font-size: 13px; color: var(--m-faint); margin-top: 6px; }
+
+/* Büyük eylem düğmeleri: ana menüde başparmakla basılır */
+.m-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.m-tile {
+  background: var(--m-panel); border: 1px solid var(--m-border); border-radius: 14px;
+  padding: 20px 14px; text-align: center; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  min-height: 120px; justify-content: center; color: var(--m-text);
+}
+.m-tile:active { background: var(--m-panel-2); transform: scale(.97); }
+.m-tile svg { width: 34px; height: 34px; color: var(--m-accent); }
+.m-tile-label { font-size: 15px; font-weight: 700; }
+.m-tile-count {
+  position: absolute; top: 10px; right: 12px;
+  background: var(--m-accent); color: var(--m-accent-ink);
+  min-width: 26px; height: 26px; border-radius: 13px; padding: 0 7px;
+  font-size: 14px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+}
+.m-tile-wrap { position: relative; }
+
+/* ---------- Düğmeler ---------- */
+.m-btn {
+  width: 100%; min-height: var(--m-tap); padding: 0 18px;
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  background: var(--m-panel-2); color: var(--m-text);
+  border: 1px solid var(--m-border); border-radius: 11px;
+  font-size: 16px; font-weight: 700; cursor: pointer;
+}
+.m-btn:active { transform: scale(.98); }
+.m-btn:disabled { opacity: .45; }
+.m-btn-primary { background: var(--m-accent); color: var(--m-accent-ink); border-color: var(--m-accent); }
+.m-btn-ok { background: var(--m-ok); color: #0D2412; border-color: var(--m-ok); }
+.m-btn-danger { background: var(--m-danger); color: #2A0F0C; border-color: var(--m-danger); }
+.m-btn-ghost { background: transparent; }
+.m-btn-lg { min-height: 64px; font-size: 18px; }
+.m-btn-row { display: flex; gap: 10px; }
+.m-btn-row .m-btn { flex: 1; }
+
+/* ---------- Miktar girişi ---------- */
+/* Depoda miktar sık düzeltilir; +/- düğmeleri klavye açmaktan hızlıdır. */
+.m-qty { display: flex; align-items: stretch; gap: 10px; margin: 14px 0; }
+.m-qty button {
+  width: 64px; flex-shrink: 0; font-size: 28px; font-weight: 700;
+  background: var(--m-panel-2); color: var(--m-text);
+  border: 1px solid var(--m-border); border-radius: 11px; cursor: pointer;
+}
+.m-qty button:active { background: var(--m-accent); color: var(--m-accent-ink); }
+.m-qty input {
+  flex: 1; min-width: 0; height: 64px; text-align: center;
+  font-size: 30px !important; font-weight: 800;
+  background: var(--m-panel-2); border: 2px solid var(--m-border);
+  border-radius: 11px; color: var(--m-text);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.m-qty input:focus { outline: none; border-color: var(--m-accent); }
+
+.m-field { margin-bottom: 12px; }
+.m-field label {
+  display: block; font-size: 13px; font-weight: 600;
+  color: var(--m-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em;
+}
+.m-field input, .m-field select {
+  width: 100%; height: var(--m-tap); padding: 0 14px;
+  background: var(--m-panel-2); border: 2px solid var(--m-border);
+  border-radius: 10px; color: var(--m-text);
+}
+.m-field input:focus, .m-field select:focus { outline: none; border-color: var(--m-accent); }
+
+/* ---------- Rozetler ve satırlar ---------- */
+.m-badge {
+  display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 7px;
+  font-size: 13px; font-weight: 700; background: var(--m-panel-2); color: var(--m-muted);
+}
+.m-badge.ok { background: rgba(95,191,122,.18); color: var(--m-ok); }
+.m-badge.warn { background: rgba(242,169,0,.18); color: var(--m-warn); }
+.m-badge.crit { background: rgba(238,124,114,.18); color: var(--m-danger); }
+.m-badge.info { background: rgba(127,166,217,.18); color: var(--m-info); }
+
+.m-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 12px 0; border-bottom: 1px solid var(--m-border);
+}
+.m-row:last-child { border-bottom: none; }
+.m-row-main { min-width: 0; flex: 1; }
+.m-row-title { font-size: 16px; font-weight: 600; }
+.m-row-sub { font-size: 13.5px; color: var(--m-faint); margin-top: 2px; }
+.m-row-val { font-size: 19px; font-weight: 800; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+.m-big-num { font-size: 34px; font-weight: 800; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.m-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+.m-note {
+  background: var(--m-panel-2); border-left: 4px solid var(--m-info);
+  padding: 11px 13px; border-radius: 8px; font-size: 14px;
+  color: var(--m-muted); margin-bottom: 12px;
+}
+.m-note.warn { border-left-color: var(--m-warn); }
+.m-note.crit { border-left-color: var(--m-danger); color: var(--m-text); }
+
+.m-empty { text-align: center; padding: 48px 20px; color: var(--m-faint); font-size: 15px; }
+
+/* ---------- Tarama çubuğu ---------- */
+.m-scanbar {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 25;
+  display: flex; gap: 8px; padding: 10px 12px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  background: var(--m-panel); border-top: 1px solid var(--m-border);
+}
+.m-scanbar input {
+  flex: 1; min-width: 0; height: 52px; padding: 0 14px;
+  background: var(--m-panel-2); border: 2px solid var(--m-accent);
+  border-radius: 11px; color: var(--m-text);
+}
+.m-scanbar input:focus { outline: none; box-shadow: 0 0 0 3px rgba(242,169,0,.22); }
+.m-scan-cam {
+  width: 52px; height: 52px; background: var(--m-panel-2);
+  border: 1px solid var(--m-border); border-radius: 11px;
+}
+
+/* ---------- Kamera ---------- */
+.m-cam {
+  position: fixed; inset: 0; z-index: 60; background: #000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.m-cam video { width: 100%; height: 100%; object-fit: cover; }
+.m-cam-frame {
+  position: absolute; left: 12%; right: 12%; top: 38%; height: 130px;
+  border: 3px solid var(--m-accent); border-radius: 12px;
+  box-shadow: 0 0 0 100vmax rgba(0,0,0,.55);
+}
+.m-cam .m-btn { position: absolute; bottom: 34px; width: auto; padding: 0 40px; }
+
+/* ---------- Alt sayfa (bottom sheet) ---------- */
+/* Diyaloglar ekranın altından açılır: başparmak oraya rahat uzanır. */
+.m-sheet-host {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(0,0,0,.6);
+  display: flex; align-items: flex-end;
+}
+.m-sheet {
+  width: 100%; max-height: 92dvh; overflow-y: auto;
+  background: var(--m-panel); border-radius: 18px 18px 0 0;
+  padding: 8px 16px calc(20px + env(safe-area-inset-bottom));
+  animation: sheetUp .18s ease-out;
+}
+@keyframes sheetUp { from { transform: translateY(28px); opacity: .7 } to { transform: none; opacity: 1 } }
+.m-sheet-grip {
+  width: 42px; height: 4px; border-radius: 2px; background: var(--m-border);
+  margin: 8px auto 14px;
+}
+.m-sheet-title { font-size: 19px; font-weight: 800; margin-bottom: 4px; }
+.m-sheet-sub { font-size: 14px; color: var(--m-muted); margin-bottom: 16px; }
+
+/* ---------- Bildirim ---------- */
+.m-toast {
+  position: fixed; left: 12px; right: 12px; bottom: 84px; z-index: 70;
+  padding: 15px 18px; border-radius: 12px;
+  font-size: 16px; font-weight: 700; text-align: center;
+  opacity: 0; transform: translateY(14px); pointer-events: none;
+  transition: opacity .16s, transform .16s;
+}
+.m-toast.show { opacity: 1; transform: none; }
+.m-toast.ok { background: var(--m-ok); color: #0D2412; }
+.m-toast.err { background: var(--m-danger); color: #2A0F0C; }
+.m-toast.info { background: var(--m-info); color: #0C1B2E; }
+
+/* ---------- Yükleniyor ---------- */
+.m-spin {
+  width: 20px; height: 20px; border: 2.5px solid rgba(255,255,255,.25);
+  border-top-color: currentColor; border-radius: 50%;
+  animation: mspin .7s linear infinite; display: inline-block;
+}
+@keyframes mspin { to { transform: rotate(360deg) } }
+.m-loading { text-align: center; padding: 44px; color: var(--m-faint); }
+
+/* ---------- İlerleme ---------- */
+.m-progress { height: 8px; background: var(--m-panel-2); border-radius: 4px; overflow: hidden; margin-top: 8px; }
+.m-progress > div { height: 100%; background: var(--m-accent); border-radius: 4px; }
+
+/* ---------- Geniş ekran ---------- */
+/* Tablet veya masaüstü tarayıcıda açılırsa içerik ortalanır; tam genişlik
+   dev bir sütun yapar ve okunmaz hale gelir. */
+@media (min-width: 720px) {
+  .m-app { max-width: 620px; margin: 0 auto; border-left: 1px solid var(--m-border); border-right: 1px solid var(--m-border); }
+  .m-scanbar { max-width: 620px; left: 50%; transform: translateX(-50%); }
+  .m-sheet { max-width: 620px; margin: 0 auto; border-radius: 18px; }
+  .m-sheet-host { align-items: center; }
+}
+
+/* ---------- Hareket azaltma ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important; transition-duration: .01ms !important;
+  }
+  .m-spin { animation: none; border-top-color: var(--m-accent); }
+}

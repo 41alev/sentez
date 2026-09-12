@@ -1,0 +1,14 @@
+node_modules/
+data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+.env
+.env.local
+npm-debug.log*
+.DS_Store
+*.zip
+coverage/
+
+# Kabuk süslü parantez genişletmesinden kalan çöp klasörler
+*{*,*}*

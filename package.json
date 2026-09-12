@@ -1,0 +1,61 @@
+{
+  "name": "depo-takip",
+  "version": "2.0.0",
+  "description": "Depo Takip ERP - Warehouse, Production, Purchasing, Quality Management System",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "migrate": "node server/migrate.js",
+    "seed": "node server/seed.js",
+    "backup": "node server/scripts/backup.js",
+    "test": "node test/e2e.js",
+    "dev": "NODE_ENV=development node server/index.js",
+    "test:contract": "node test/contract.js",
+    "test:ui": "node test/ui-smoke.js",
+    "test:all": "node test/e2e.js && node test/contract.js && node test/import.js && node test/planning.js && node test/ui-smoke.js && node test/security.js",
+    "test:einvoice": "node test/einvoice.js",
+    "test:visual": "node test/visual-audit.js",
+    "test:planning": "node test/planning.js",
+    "test:security": "node test/security.js",
+    "test:load": "node test/load.js",
+    "test:backup": "node test/backup-restore.js",
+    "test:email": "node test/email.js",
+    "test:barcode": "node test/barcode.js",
+    "restore": "node server/scripts/restore.js",
+    "test:import": "node test/import.js",
+    "test:templates": "node test/templates.js",
+    "test:mobile": "node test/mobile.js",
+    "test:health": "node test/data-health.js",
+    "setup": "node server/scripts/setup.js",
+    "upgrade": "node server/scripts/upgrade.js",
+    "test:setup": "node test/setup-upgrade.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^13.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "exceljs": "^4.4.0",
+    "express": "^5.1.0",
+    "express-rate-limit": "^7.4.1",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.3.0",
+    "nodemailer": "^10.0.3",
+    "pino": "^9.5.0",
+    "pino-pretty": "^13.1.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
+  },
+  "allowScripts": {
+    "better-sqlite3@13.0.3": true
+  }
+}

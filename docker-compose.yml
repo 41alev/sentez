@@ -1,0 +1,36 @@
+services:
+  app:
+    build: .
+    container_name: depo-takip
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # ÜRETİMDE MUTLAKA DEĞİŞTİRİN
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET tanimlanmali}
+      TOKEN_TTL_HOURS: 12
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      FORCE_HTTPS: ${FORCE_HTTPS:-0}
+      BACKUP_INTERVAL_HOURS: 24
+      BACKUP_KEEP: 14
+    volumes:
+      - depo-data:/app/data
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  # TLS sonlandırma ve statik dosya önbelleği için ters vekil
+  nginx:
+    image: nginx:alpine
+    container_name: depo-takip-nginx
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+
+volumes:
+  depo-data:

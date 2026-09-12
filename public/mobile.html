@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <!-- Terminalde yakınlaştırma kazara olur ve hizayı bozar; kapalı tutuluyor. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#16191C">
+  <title>Depo Terminali</title>
+  <link rel="stylesheet" href="/css/mobile.css">
+</head>
+<body>
+
+<!-- ============ GİRİŞ ============ -->
+<div id="mLogin" class="m-login">
+  <div class="m-login-box">
+    <div class="m-logo">DEPO<span>TERMİNAL</span></div>
+    <input type="text" id="mUser" placeholder="Kullanıcı adı" autocomplete="username"
+           autocapitalize="off" autocorrect="off" spellcheck="false">
+    <input type="password" id="mPass" placeholder="Şifre" autocomplete="current-password">
+    <button class="m-btn m-btn-primary m-btn-lg" id="mLoginBtn">GİRİŞ</button>
+    <div class="m-login-err" id="mLoginErr"></div>
+    <a class="m-link" href="/">Masaüstü arayüze geç</a>
+  </div>
+</div>
+
+<!-- ============ UYGULAMA ============ -->
+<div id="mApp" class="m-app" hidden>
+
+  <header class="m-top">
+    <button class="m-icon-btn" id="mBack" hidden aria-label="Geri">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <div class="m-top-title" id="mTitle">Görevler</div>
+    <div class="m-top-right">
+      <span class="m-queue" id="mQueue" hidden title="Gönderilmeyi bekleyen işlem">0</span>
+      <button class="m-icon-btn" id="mMenu" aria-label="Menü">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Bağlantı durumu: çevrimdışıyken kullanıcı bunu bilmeli -->
+  <div class="m-offline" id="mOffline" hidden>
+    Çevrimdışı — işlemler kuyruğa alınıyor
+  </div>
+
+  <main class="m-main" id="mMain"></main>
+
+  <!-- Tarama çubuğu her ekranda altta sabit: eldeki okuyucu her an kullanılabilir -->
+  <div class="m-scanbar" id="mScanbar">
+    <input type="text" id="mScanInput" placeholder="Barkod okutun veya yazın"
+           autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+           data-barcode-target="1" inputmode="text">
+    <button class="m-icon-btn m-scan-cam" id="mCamBtn" aria-label="Kamera ile oku">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 7h3l2-2h8l2 2h3v12H3z"/><circle cx="12" cy="13" r="3.5"/></svg>
+    </button>
+  </div>
+
+  <div class="m-cam" id="mCam" hidden>
+    <video id="mVideo" playsinline muted></video>
+    <div class="m-cam-frame"></div>
+    <button class="m-btn m-btn-ghost" id="mCamClose">Kapat</button>
+  </div>
+</div>
+
+<div class="m-sheet-host" id="mSheetHost" hidden></div>
+<div class="m-toast" id="mToast"></div>
+
+<script src="/js/mobile.js"></script>
+</body>
+</html>
