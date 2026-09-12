@@ -1,44 +1,74 @@
-// @ts-nocheck
-const ViewPlanning = (() => {
+/**
+ * Planlama (Planning) — React'e kademeli geçişin bir sonraki ekranı.
+ *
+ * Reports'la aynı sekmeli yapı (dış kabuk sabit, her sekme kendi
+ * body/actions konteynerini dolduran ayrı fonksiyon) + Items/Production
+ * gibi bir ön-koşul veri çekimi (workCenters/shifts/items/warehouses,
+ * tüm sekmelerde paylaşılıyor). İki tür yenileme var:
+ *  - `reload()`  : yalnızca o an aktif sekmeyi yeniden çeker.
+ *  - `fullReload()`: paylaşılan ön-koşul verisini (iş merkezleri, vardiyalar
+ *    vb.) YENİDEN çeker + sekmeyi yeniler — orijinaldeki `render(el)`
+ *    çağrılarının karşılığı (iş merkezi/vardiya ekle-düzenle-sil sonrası).
+ */
+import { useEffect, useState, useRef } from 'react';
+
+export default function PlanningView() {
   const { t, esc, num, money, dt, ts, table, pager, loading, modal, closeModal,
-          field, input, select, textarea, checkbox, val, numVal, intVal, checked, can } = UI;
+          field, input, select, textarea, val, numVal, intVal, can } = UI;
 
-  let tab = 'mrp';
-  let workCenters = [], shifts = [], items = [], warehouses = [];
+  const [tab, setTab] = useState('mrp');
+  const [reloadToken, setReloadToken] = useState(0);
+  const [ready, setReady] = useState(false);
 
-  async function render(el) {
-    el.innerHTML = loading();
+  const workCentersRef = useRef([]);
+  const shiftsRef = useRef([]);
+  const itemsRef = useRef([]);
+  const warehousesRef = useRef([]);
+  const capFromRef = useRef(UI.today());
+  const capToRef = useRef(UI.addDays(capFromRef.current, 30));
+  const routingItemIdRef = useRef('');
+
+  function reload() { setReloadToken(x => x + 1); }
+  async function fullReload() {
     try {
       const [wc, sh, it, wh] = await Promise.all([
         Api.workCenters(), Api.shifts(), Api.items({ pageSize: 300 }), Api.warehouses()
       ]);
-      workCenters = wc; shifts = sh; items = it.data; warehouses = wh;
+      workCentersRef.current = wc; shiftsRef.current = sh; itemsRef.current = it.data; warehousesRef.current = wh;
     } catch (e) { UI.err(e); }
-    await load(el);
+    reload();
   }
 
-  async function load(el) {
-    el.innerHTML = `
-      <div class="topbar">
-        <div><h2>${t('planTitle')}</h2><div class="sub">${t('planSub')}</div></div>
-        <div class="topbar-actions" id="planActions"></div>
-      </div>
-      ${UI.tabs([
-        { k: 'mrp', l: t('tabMrp') }, { k: 'capacity', l: t('tabCapacity') },
-        { k: 'workcenters', l: t('tabWorkCenters') }, { k: 'routings', l: t('tabRoutings') },
-        { k: 'shifts', l: t('tabShiftLogs') }
-      ], tab, k => { tab = k; load(el); })}
-      <div id="planBody">${loading()}</div>`;
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [wc, sh, it, wh] = await Promise.all([
+          Api.workCenters(), Api.shifts(), Api.items({ pageSize: 300 }), Api.warehouses()
+        ]);
+        if (cancelled) return;
+        workCentersRef.current = wc; shiftsRef.current = sh; itemsRef.current = it.data; warehousesRef.current = wh;
+      } catch (e) { UI.err(e); }
+      if (cancelled) return;
+      setReady(true);
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
+  useEffect(() => {
+    if (!ready) return;
     const body = document.getElementById('planBody');
     const actions = document.getElementById('planActions');
+    if (!body || !actions) return;
     const fns = { mrp: mrpTab, capacity: capacityTab, workcenters: wcTab, routings: routingTab, shifts: shiftTab };
-    try { await fns[tab](el, body, actions); }
-    catch (e) { UI.err(e); body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
-  }
+    (async () => {
+      try { await fns[tab](body, actions); }
+      catch (e) { UI.err(e); body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+    })();
+  }, [ready, tab, reloadToken]);
 
   /* ================= MRP ================= */
-  async function mrpTab(el, body, actions) {
+  async function mrpTab(body, actions) {
     const [runs, sugg] = await Promise.all([
       Api.mrpRuns().catch(() => []),
       Api.mrpSuggestions({ status: 'open' }).catch(() => ({ data: [] }))
@@ -47,6 +77,8 @@ const ViewPlanning = (() => {
 
     if (can('approve')) {
       actions.innerHTML = `<button class="btn btn-primary btn-sm" id="mrpRun">${UI.icon(UI.ICONS.check)}${t('runMrp')}</button>`;
+    } else {
+      actions.innerHTML = '';
     }
 
     const rows = sugg.data || [];
@@ -123,7 +155,7 @@ const ViewPlanning = (() => {
                   ? 'Uyarı: döngüsel reçete tespit edildi, o dallar atlandı.'
                   : 'Warning: circular BOM detected; those branches were skipped.', 'err');
               }
-              load(el);
+              reload();
             } catch (e) { UI.err(e); }
           };
         }
@@ -144,19 +176,17 @@ const ViewPlanning = (() => {
       try {
         const r = await Api.convertSuggestion(b.dataset.conv);
         UI.ok(`${r.number} ${UI.getLang() === 'tr' ? 'oluşturuldu' : 'created'}`);
-        load(el);
+        reload();
       } catch (e) { UI.err(e); }
     });
     body.querySelectorAll('[data-dis]').forEach(b => b.onclick = async () => {
-      try { await Api.dismissSuggestion(b.dataset.dis); UI.ok(t('saved')); load(el); } catch (e) { UI.err(e); }
+      try { await Api.dismissSuggestion(b.dataset.dis); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); }
     });
   }
 
   /* ================= KAPASİTE ================= */
-  let capFrom = UI.today();
-  let capTo = UI.addDays(capFrom, 30);
-
-  async function capacityTab(el, body, actions) {
+  async function capacityTab(body, actions) {
+    const capFrom = capFromRef.current, capTo = capToRef.current;
     const cap = await Api.capacity({ from: capFrom, to: capTo });
     actions.innerHTML = `<button class="btn btn-ghost btn-sm" id="capCsv">${UI.icon(UI.ICONS.download)}CSV</button>`;
 
@@ -182,8 +212,8 @@ const ViewPlanning = (() => {
         { key: 'act', label: '', render: c => `<button class="btn btn-ghost btn-sm" data-days="${c.workCenterId}">${t('detail')}</button>` }
       ], cap.data)}</div>`;
 
-    document.getElementById('capFrom').onchange = e => { capFrom = e.target.value; load(el); };
-    document.getElementById('capTo').onchange = e => { capTo = e.target.value; load(el); };
+    document.getElementById('capFrom').onchange = e => { capFromRef.current = e.target.value; reload(); };
+    document.getElementById('capTo').onchange = e => { capToRef.current = e.target.value; reload(); };
     document.getElementById('capCsv').onclick = () => UI.exportCsv('kapasite.csv',
       [t('workCenterCode'), t('workCenter'), t('capacityMinutes'), t('loadMinutes'), t('utilizationPct'), t('overloadDays')],
       cap.data.map(c => [c.code, c.name, c.totalCapacityMinutes, c.totalLoadMinutes, c.utilizationPct, c.overloadedDays]));
@@ -220,11 +250,14 @@ const ViewPlanning = (() => {
   }
 
   /* ================= İŞ MERKEZLERİ ================= */
-  async function wcTab(el, body, actions) {
+  async function wcTab(body, actions) {
+    const workCenters = workCentersRef.current, shifts = shiftsRef.current;
     const exceptions = await Api.calendarExceptions().catch(() => []);
     if (can('approve')) {
       actions.innerHTML = `<button class="btn btn-ghost btn-sm" id="shNew2">${UI.icon(UI.ICONS.plus)}${t('newShift')}</button>
         <button class="btn btn-primary btn-sm" id="wcNew">${UI.icon(UI.ICONS.plus)}${t('newWorkCenter')}</button>`;
+    } else {
+      actions.innerHTML = '';
     }
 
     body.innerHTML = `
@@ -273,22 +306,23 @@ const ViewPlanning = (() => {
           ], exceptions)}
         </div></div>`;
 
-    document.getElementById('wcNew')?.addEventListener('click', () => wcForm(el, null));
-    document.getElementById('shNew2')?.addEventListener('click', () => shiftForm(el));
-    document.getElementById('holNew')?.addEventListener('click', () => holidayForm(el));
+    document.getElementById('wcNew')?.addEventListener('click', () => wcForm(null));
+    document.getElementById('shNew2')?.addEventListener('click', () => shiftForm());
+    document.getElementById('holNew')?.addEventListener('click', () => holidayForm());
     body.querySelectorAll('[data-edit]').forEach(b => b.onclick = () =>
-      wcForm(el, workCenters.find(w => String(w.id) === b.dataset.edit)));
+      wcForm(workCenters.find(w => String(w.id) === b.dataset.edit)));
     body.querySelectorAll('[data-del]').forEach(b => b.onclick = () => UI.confirmDialog(
       UI.getLang() === 'tr' ? 'İş merkezi pasifleştirilecek. Rotalarda kullanılıyorsa plan etkilenir.'
                             : 'The work centre will be deactivated. Plans using it will be affected.',
-      async () => { try { await Api.deleteWorkCenter(b.dataset.del); UI.ok(t('saved')); render(el); } catch (e) { UI.err(e); } },
+      async () => { try { await Api.deleteWorkCenter(b.dataset.del); UI.ok(t('saved')); fullReload(); } catch (e) { UI.err(e); } },
       { danger: true }));
     body.querySelectorAll('[data-delex]').forEach(b => b.onclick = async () => {
-      try { await Api.deleteCalendarException(b.dataset.delex); UI.ok(t('deleted')); load(el); } catch (e) { UI.err(e); }
+      try { await Api.deleteCalendarException(b.dataset.delex); UI.ok(t('deleted')); reload(); } catch (e) { UI.err(e); }
     });
   }
 
-  function wcForm(el, w) {
+  function wcForm(w) {
+    const warehouses = warehousesRef.current, shifts = shiftsRef.current;
     modal({
       title: w ? `${t('edit')} — ${w.name}` : t('newWorkCenter'), size: 'wide',
       body: `
@@ -330,14 +364,14 @@ const ViewPlanning = (() => {
           };
           try {
             if (w) await Api.updateWorkCenter(w.id, p); else await Api.createWorkCenter(p);
-            closeModal(); UI.ok(t('saved')); render(el);
+            closeModal(); UI.ok(t('saved')); fullReload();
           } catch (e) { UI.err(e); }
         };
       }
     });
   }
 
-  function shiftForm(el) {
+  function shiftForm() {
     const dayKeys = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
     modal({
       title: t('newShift'),
@@ -367,14 +401,15 @@ const ViewPlanning = (() => {
               code: val('sfCode'), name: val('sfName'), startTime: val('sfStart'),
               endTime: val('sfEnd'), breakMinutes: intVal('sfBreak'), weekdays
             });
-            closeModal(); UI.ok(t('saved')); render(el);
+            closeModal(); UI.ok(t('saved')); fullReload();
           } catch (e) { UI.err(e); }
         };
       }
     });
   }
 
-  function holidayForm(el) {
+  function holidayForm() {
+    const workCenters = workCentersRef.current;
     modal({
       title: t('addHoliday'),
       body: `
@@ -391,7 +426,7 @@ const ViewPlanning = (() => {
               date: val('hoDate'), workCenterId: val('hoWc') ? intVal('hoWc') : undefined,
               reason: val('hoReason'), exceptionType: 'holiday'
             });
-            closeModal(); UI.ok(t('saved')); load(el);
+            closeModal(); UI.ok(t('saved')); reload();
           } catch (e) { UI.err(e); }
         };
       }
@@ -399,11 +434,12 @@ const ViewPlanning = (() => {
   }
 
   /* ================= ROTALAR ================= */
-  let routingItemId = '';
-  async function routingTab(el, body, actions) {
+  async function routingTab(body, actions) {
+    const items = itemsRef.current, workCenters = workCentersRef.current;
     actions.innerHTML = '';
     const producible = items.filter(i => i.itemType === 'finished' || i.itemType === 'semi');
-    if (!routingItemId && producible.length) routingItemId = producible[0].id;
+    if (!routingItemIdRef.current && producible.length) routingItemIdRef.current = producible[0].id;
+    const routingItemId = routingItemIdRef.current;
     const ops = routingItemId ? await Api.routings(routingItemId).catch(() => []) : [];
 
     body.innerHTML = `
@@ -453,7 +489,7 @@ const ViewPlanning = (() => {
     };
     draw();
 
-    document.getElementById('rtItem').onchange = e => { routingItemId = e.target.value; load(el); };
+    document.getElementById('rtItem').onchange = e => { routingItemIdRef.current = e.target.value; reload(); };
     document.getElementById('rtAdd')?.addEventListener('click', () => {
       const nextNo = rows.length ? Math.max(...rows.map(r => r.operationNo)) + 10 : 10;
       rows.push({ operationNo: nextNo, operationName: '', workCenterId: workCenters[0]?.id,
@@ -467,13 +503,13 @@ const ViewPlanning = (() => {
           setupMinutes: r.setupMinutes, runMinutesPerUnit: r.runMinutesPerUnit,
           queueMinutes: r.queueMinutes, scrapPct: r.scrapPct
         })));
-        UI.ok(t('saved')); load(el);
+        UI.ok(t('saved')); reload();
       } catch (e) { UI.err(e); }
     });
   }
 
   /* ================= VARDİYA & OEE ================= */
-  async function shiftTab(el, body, actions) {
+  async function shiftTab(body, actions) {
     const to = UI.today();
     const from = UI.addDays(to, -30);
     const [logs, oee] = await Promise.all([
@@ -481,6 +517,7 @@ const ViewPlanning = (() => {
       Api.oee({ from, to })
     ]);
     if (can('write')) actions.innerHTML = `<button class="btn btn-primary btn-sm" id="slNew">${UI.icon(UI.ICONS.plus)}${t('newShiftLog')}</button>`;
+    else actions.innerHTML = '';
 
     body.innerHTML = `
       <div class="card"><div class="card-head"><h3>${t('oeeTitle')}</h3></div><div class="card-body">
@@ -513,9 +550,9 @@ const ViewPlanning = (() => {
           { key: 'producedQty', label: t('producedQty'), num: true, render: l => num(l.producedQty) },
           { key: 'scrapQty', label: t('scrapQty'), num: true, render: l => num(l.scrapQty) }
         ], logs.data)}
-        ${logs.totalPages ? pager(logs, () => load(el)) : ''}</div>`;
+        ${logs.totalPages ? pager(logs, () => reload()) : ''}</div>`;
 
-    document.getElementById('slNew')?.addEventListener('click', () => shiftLogForm(el));
+    document.getElementById('slNew')?.addEventListener('click', () => shiftLogForm());
 
     UI.chart('chOee', {
       type: 'bar',
@@ -537,7 +574,8 @@ const ViewPlanning = (() => {
     return `<span style="color:${col}">${num(v, 1)}%</span>`;
   };
 
-  function shiftLogForm(el) {
+  function shiftLogForm() {
+    const shifts = shiftsRef.current, workCenters = workCentersRef.current;
     modal({
       title: t('newShiftLog'), size: 'wide',
       body: `
@@ -571,12 +609,28 @@ const ViewPlanning = (() => {
               downtimeReason: val('slReason'), producedQty: numVal('slProd'),
               scrapQty: numVal('slScrap'), operatorCount: intVal('slOps'), notes: val('slNote')
             });
-            closeModal(); UI.ok(t('saved')); load(el);
+            closeModal(); UI.ok(t('saved')); reload();
           } catch (e) { UI.err(e); }
         };
       }
     });
   }
 
-  return { render };
-})();
+  if (!ready) {
+    return <div dangerouslySetInnerHTML={{ __html: loading() }} />;
+  }
+
+  const html = `
+    <div class="topbar">
+      <div><h2>${t('planTitle')}</h2><div class="sub">${t('planSub')}</div></div>
+      <div class="topbar-actions" id="planActions"></div>
+    </div>
+    ${UI.tabs([
+      { k: 'mrp', l: t('tabMrp') }, { k: 'capacity', l: t('tabCapacity') },
+      { k: 'workcenters', l: t('tabWorkCenters') }, { k: 'routings', l: t('tabRoutings') },
+      { k: 'shifts', l: t('tabShiftLogs') }
+    ], tab, k => setTab(k))}
+    <div id="planBody">${loading()}</div>`;
+
+  return <div dangerouslySetInnerHTML={{ __html: html }} />;
+}

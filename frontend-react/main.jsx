@@ -15,6 +15,7 @@ import CountsView from './CountsView.jsx';
 import LotsView, { traceDialog } from './LotsView.jsx';
 import ProductionView from './ProductionView.jsx';
 import ReportsView from './ReportsView.jsx';
+import PlanningView from './PlanningView.jsx';
 
 window.ViewDashboard = mountView(DashboardView);
 window.ViewItems = mountView(ItemsView);
@@ -25,3 +26,4 @@ window.ViewCounts = mountView(CountsView);
 window.ViewLots = { ...mountView(LotsView), traceDialog };
 window.ViewProduction = mountView(ProductionView);
 window.ViewReports = mountView(ReportsView);
+window.ViewPlanning = mountView(PlanningView);
