@@ -1,6 +1,6 @@
 # PROJECT_STATUS.md
 
-## 2026-09-12 (devam 3) — Çok şirketlilik altyapı hazırlığı: Aşama A
+## 2026-09-12 (devam 3) — Çok şirketlilik altyapı hazırlığı: Aşama A + B (tamamlandı)
 
 **Kullanıcının nihai hedefi:** bu ürünü ayrı ayrı fabrikalara/şirketlere
 satmak — altyapı hazır olsun, ama şimdi devreye alınmasın. Bir keşif ajanı
@@ -41,11 +41,33 @@ atıl `companyId`), 5 route'ta INSERT düzeltmesi (artık `company_id` yazıyor)
 --noEmit` temiz, `npx eslint .` 0 hata, `node test/run-all.js`
 **1038/1038** (897 + yeni multitenancy 141) — davranış değişmedi.
 
-**Aşama B — şirket bazlı benzersizlik (BEKLEMEDE, kullanıcı onayı gerekiyor).**
-`users.username`, `work_centers.code`, `shifts.code` için SQLite'ta UNIQUE
-kısıt değişikliği tablo yeniden oluşturmayı gerektirir (create-copy-drop-rename)
-— Aşama A'dan daha riskli bir işlem sınıfı. Kullanıcıyla konuşulup
-onaylanmadan başlanmayacak.
+**Aşama B — şirket bazlı benzersizlik (TAMAMLANDI, `58ae7b6`).** Kullanıcı
+onayladıktan sonra `server/migrations/007_scoped_uniqueness.js`:
+`users.username`, `work_centers.code`, `shifts.code` için SQLite'ın resmi
+tablo yeniden oluşturma yöntemiyle (create-copy-drop-rename)
+`UNIQUE(username)` → `UNIQUE(company_id, username)` (aynısı diğer ikisi
+için de).
+
+**Geliştirme sırasında bulunan 2 gerçek sorun:**
+1. SQLite, başka tabloların yabancı anahtarla başvurduğu bir tabloyu
+   (`DROP TABLE users`) `foreign_keys=ON` iken silmeye izin vermiyor.
+   Resmi çözüm `PRAGMA foreign_keys=OFF`'u transaction DIŞINDA çalıştırmak
+   — ama `migrate.js` her migration'ı otomatik transaction'a sarıyordu.
+   `server/migrate.js`'e küçük, geriye dönük uyumlu bir bayrak eklendi
+   (`disableForeignKeys`) — bu bayrağı taşımayan mevcut 7 migration'ın
+   davranışı hiç değişmedi.
+2. Aşama A'dakiyle aynı sınıftan bir sorun: `company_id`'ye
+   `REFERENCES companies(id)` eklemek migration'lar `companies` tablosu
+   henüz boşken çalıştığı için (seed migration'lardan SONRA çalışır)
+   `foreign_key_check`'i her seferinde başarısız kılıyordu — kaldırıldı,
+   yalnızca `NOT NULL DEFAULT 1` bırakıldı.
+
+**Doğrulama — asıl kanıt:** `test/multitenancy.js`'e eklenen testler
+`companies` tablosuna doğrudan SQL ile (arayüz yok, kasıtlı) ikinci bir
+test firması ekleyip AYNI kullanıcı adının/iş merkezi kodunun/vardiya
+kodunun farklı şirkette ÇAKIŞMADAN eklenebildiğini, aynı şirket içinde
+hâlâ reddedildiğini kanıtlıyor — dormant bir kolon değil, gerçekten
+çalışan bir izolasyon yapısı. 141→148 test, toplam **1045/1045**.
 
 **Kapsam dışı (kullanıcıyla konuşulup ertelendi):** `settings`/
 `number_sequences` şirket bazlı hale getirme, `/companies` CRUD, şirket
