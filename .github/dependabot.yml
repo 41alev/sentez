@@ -1,0 +1,21 @@
+version: 2
+updates:
+  # npm bağımlılıkları: güvenlik ve sürüm güncellemeleri haftalık taranır.
+  # Bugüne kadar zafiyetler (nodemailer, xlsx→exceljs) elle, `npm audit`
+  # rastgele çalıştırıldığında fark edilmişti — bu, yeni bir CVE çıktığında
+  # kimsenin push beklemeden haberdar olmasını sağlar.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+
+  # CI workflow'undaki actions/checkout, actions/setup-node gibi eylemler de
+  # kendi başına bir tedarik zinciri riski taşır.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
