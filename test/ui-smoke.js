@@ -93,7 +93,7 @@ async function until(fn, timeout = 6000, step = 60) {
     'js/i18n.js', 'js/api.js', 'js/ui.js',
     'dist/react-views.js',
     'js/views/purchasing.js', 'js/views/sales.js', 'js/views/planning.js',
-    'js/views/quality.js', 'js/views/reports.js', 'js/views/admin.js', 'js/app.js'
+    'js/views/quality.js', 'js/views/admin.js', 'js/app.js'
   ];
   console.log('\n=== BETİK YÜKLEME / SCRIPT LOADING ===');
   // Inject as real <script> elements so top-level `const` lands in the shared global
@@ -106,7 +106,7 @@ async function until(fn, timeout = 6000, step = 60) {
     const name = f.split('/').pop().replace('.js', '');
     const globalNames = {
       'i18n': ['I18N'], 'api': ['Api'], 'ui': ['UI'], 'app': ['App'],
-      'react-views': ['ViewDashboard', 'ViewItems', 'ViewCounts', 'ViewLots', 'ViewProduction'], // frontend-react/main.jsx defines these globals
+      'react-views': ['ViewDashboard', 'ViewItems', 'ViewCounts', 'ViewLots', 'ViewProduction', 'ViewReports'], // frontend-react/main.jsx defines these globals
       'production': ['ViewProduction'], 'purchasing': ['ViewPurchasing'], 'sales': ['ViewSales'],
       'quality': ['ViewQuality'], 'reports': ['ViewReports'], 'admin': ['ViewAdmin'], 'planning': ['ViewPlanning']
     }[name];

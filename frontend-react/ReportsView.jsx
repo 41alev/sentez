@@ -1,36 +1,39 @@
-// @ts-nocheck
-const ViewReports = (() => {
+/**
+ * Raporlar (Reports) — React'e kademeli geçişin bir sonraki ekranı.
+ *
+ * Items/Counts/Lots/Production ile aynı disiplin. Bu ekranın kendine özgü
+ * yapısı: dış kabuk (topbar + `UI.tabs()` + `#repBody`/`#repActions`
+ * konteynerleri) sabit, her sekme kendi verisini çekip bu iki konteyneri
+ * DOĞRUDAN dolduran ayrı bir async fonksiyon (`valuation`, `trends`, vb.).
+ * `UI.tabs()` kendi tıklama bağlamasını (`setTimeout(0)` ile) kendisi
+ * yapıyor ve her çağrıda rastgele bir id üretiyor — bu yüzden dış HTML
+ * string'i her render'da değişir ve React `dangerouslySetInnerHTML`'i her
+ * seferinde tazeler; bu, vanilla sürümün "her load() tam yeniden kurar"
+ * davranışıyla zaten birebir örtüşüyor.
+ */
+import { useEffect, useState, useRef } from 'react';
+
+const DEAD_STOCK_DEFAULT_DAYS = 180;
+
+export default function ReportsView() {
   const { t, esc, num, money, dt, ts, table, loading, select } = UI;
 
-  let tab = 'valuation';
+  const [tab, setTab] = useState('valuation');
+  const [reloadToken, setReloadToken] = useState(0);
+  const deadDaysRef = useRef(DEAD_STOCK_DEFAULT_DAYS);
 
-  async function render(el) {
-    await load(el);
-  }
+  function reload() { setReloadToken(x => x + 1); }
 
-  async function load(el) {
-    el.innerHTML = `
-      <div class="topbar">
-        <div><h2>${t('repTitle')}</h2><div class="sub">${t('repSub')}</div></div>
-        <div class="topbar-actions" id="repActions"></div>
-      </div>
-      ${UI.tabs([
-        { k: 'valuation', l: t('tabValuation') }, { k: 'trends', l: t('tabTrends') },
-        { k: 'deadStock', l: t('tabDeadStock') }, { k: 'turnover', l: t('tabTurnover') },
-        { k: 'abc', l: t('tabAbc') }, { k: 'reorder', l: t('tabReorder') },
-        { k: 'supplier', l: t('tabSupplierPerf') }, { k: 'quality', l: t('tabQualityKpi') },
-        { k: 'prodCost', l: t('tabProdCost') }
-      ], tab, k => { tab = k; load(el); })}
-      <div id="repBody">${loading()}</div>`;
-
+  useEffect(() => {
     const body = document.getElementById('repBody');
     const actions = document.getElementById('repActions');
-    const fns = {
-      valuation, trends, deadStock, turnover, abc, reorder, supplier, quality: qualityKpi, prodCost
-    };
-    try { await fns[tab](el, body, actions); }
-    catch (e) { UI.err(e); body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
-  }
+    if (!body || !actions) return;
+    const fns = { valuation, trends, deadStock, turnover, abc, reorder, supplier, quality: qualityKpi, prodCost };
+    (async () => {
+      try { await fns[tab](body, actions); }
+      catch (e) { UI.err(e); body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+    })();
+  }, [tab, reloadToken]);
 
   const csvBtn = (actions, onClick) => {
     actions.innerHTML = `<button class="btn btn-ghost btn-sm" id="repCsv">${UI.icon(UI.ICONS.download)}CSV</button>`;
@@ -38,7 +41,7 @@ const ViewReports = (() => {
   };
 
   /* ---------- valuation ---------- */
-  async function valuation(el, body, actions) {
+  async function valuation(body, actions) {
     const d = await Api.valuation();
     csvBtn(actions, () => UI.exportCsv('stok-degerleme.csv',
       [t('itemName'), t('itemCode'), t('category'), t('available'), t('unit'), t('avgCost'), t('totalValue'), t('quarantine'), t('blocked')],
@@ -59,7 +62,7 @@ const ViewReports = (() => {
   }
 
   /* ---------- trends ---------- */
-  async function trends(el, body, actions) {
+  async function trends(body, actions) {
     const d = await Api.trends(12);
     actions.innerHTML = '';
     body.innerHTML = `
@@ -105,8 +108,8 @@ const ViewReports = (() => {
   }
 
   /* ---------- dead stock ---------- */
-  let deadDays = 180;
-  async function deadStock(el, body, actions) {
+  async function deadStock(body, actions) {
+    const deadDays = deadDaysRef.current;
     const d = await Api.deadStock(deadDays);
     csvBtn(actions, () => UI.exportCsv('olu-stok.csv',
       [t('itemName'), t('lotNo'), t('warehouse'), t('qty'), t('unit'), t('totalValue'), 'age', 'daysSinceLastOut'],
@@ -136,7 +139,7 @@ const ViewReports = (() => {
         { key: 'expiryDate', label: t('expiryDate'), render: r => dt(r.expiryDate) }
       ], d.items)}</div>`;
 
-    document.getElementById('dsDays').onchange = e => { deadDays = Number(e.target.value); load(el); };
+    document.getElementById('dsDays').onchange = e => { deadDaysRef.current = Number(e.target.value); reload(); };
     UI.chart('rpAge', {
       type: 'bar',
       data: {
@@ -148,7 +151,7 @@ const ViewReports = (() => {
   }
 
   /* ---------- turnover ---------- */
-  async function turnover(el, body, actions) {
+  async function turnover(body, actions) {
     const d = await Api.turnover(365);
     csvBtn(actions, () => UI.exportCsv('devir-hizi.csv',
       [t('itemName'), t('category'), t('onHand'), t('consumed'), t('turnoverRatio'), t('daysOnHand'), t('totalValue')],
@@ -172,7 +175,7 @@ const ViewReports = (() => {
   }
 
   /* ---------- ABC ---------- */
-  async function abc(el, body, actions) {
+  async function abc(body, actions) {
     const d = await Api.abc(365);
     csvBtn(actions, () => UI.exportCsv('abc-analizi.csv',
       [t('itemName'), t('category'), t('annualValue'), t('cumulative'), t('abcClass')],
@@ -202,7 +205,7 @@ const ViewReports = (() => {
   }
 
   /* ---------- reorder ---------- */
-  async function reorder(el, body, actions) {
+  async function reorder(body, actions) {
     const d = await Api.reorderSuggestions(90);
     csvBtn(actions, () => UI.exportCsv('siparis-onerileri.csv',
       [t('itemName'), t('onHand'), t('onOrder'), t('dailyUse'), t('leadTime'), t('reorderPoint'), t('suggestedQty'), t('supplierName')],
@@ -230,7 +233,7 @@ const ViewReports = (() => {
   }
 
   /* ---------- supplier performance ---------- */
-  async function supplier(el, body, actions) {
+  async function supplier(body, actions) {
     const d = await Api.supplierPerformance();
     csvBtn(actions, () => UI.exportCsv('tedarikci-performansi.csv',
       [t('supplierName'), t('deliveries'), t('onTimePct'), t('avgDelay'), t('totalSpend'), t('rejectPct'), 'NCR', t('supplierScore')],
@@ -271,7 +274,7 @@ const ViewReports = (() => {
   }
 
   /* ---------- quality KPIs ---------- */
-  async function qualityKpi(el, body, actions) {
+  async function qualityKpi(body, actions) {
     const d = await Api.qualityKpis(365);
     actions.innerHTML = '';
     body.innerHTML = `
@@ -315,7 +318,7 @@ const ViewReports = (() => {
   }
 
   /* ---------- production costs ---------- */
-  async function prodCost(el, body, actions) {
+  async function prodCost(body, actions) {
     const rows = await Api.productionCosts();
     csvBtn(actions, () => UI.exportCsv('uretim-maliyetleri.csv',
       [t('prodOrderNo'), t('itemName'), t('producedQty'), t('scrapQty'), t('materialCost'), t('laborCost'), t('overheadCost'), t('totalCost'), t('unitCostLabel')],
@@ -352,5 +355,19 @@ const ViewReports = (() => {
     });
   }
 
-  return { render };
-})();
+  const html = `
+    <div class="topbar">
+      <div><h2>${t('repTitle')}</h2><div class="sub">${t('repSub')}</div></div>
+      <div class="topbar-actions" id="repActions"></div>
+    </div>
+    ${UI.tabs([
+      { k: 'valuation', l: t('tabValuation') }, { k: 'trends', l: t('tabTrends') },
+      { k: 'deadStock', l: t('tabDeadStock') }, { k: 'turnover', l: t('tabTurnover') },
+      { k: 'abc', l: t('tabAbc') }, { k: 'reorder', l: t('tabReorder') },
+      { k: 'supplier', l: t('tabSupplierPerf') }, { k: 'quality', l: t('tabQualityKpi') },
+      { k: 'prodCost', l: t('tabProdCost') }
+    ], tab, k => setTab(k))}
+    <div id="repBody">${loading()}</div>`;
+
+  return <div dangerouslySetInnerHTML={{ __html: html }} />;
+}

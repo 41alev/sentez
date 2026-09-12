@@ -14,6 +14,7 @@ import ItemsView from './ItemsView.jsx';
 import CountsView from './CountsView.jsx';
 import LotsView, { traceDialog } from './LotsView.jsx';
 import ProductionView from './ProductionView.jsx';
+import ReportsView from './ReportsView.jsx';
 
 window.ViewDashboard = mountView(DashboardView);
 window.ViewItems = mountView(ItemsView);
@@ -23,3 +24,4 @@ window.ViewCounts = mountView(CountsView);
 // `ViewLots.traceDialog(lotId)` olarak çağırıyor.
 window.ViewLots = { ...mountView(LotsView), traceDialog };
 window.ViewProduction = mountView(ProductionView);
+window.ViewReports = mountView(ReportsView);
