@@ -1,93 +1,102 @@
-// @ts-nocheck
-const ViewItems = (() => {
-  const { t, esc, num, money, cur, dt, ts, card, table, pager, loading, modal, closeModal,
+/**
+ * Ürünler (Items) — React'e kademeli geçişin ikinci ekranı.
+ *
+ * Dashboard pilotuyla aynı disiplin: iş mantığı YENİDEN YAZILMADI. Bu dosya
+ * `public/js/views/items.js`'nin (artık silindi) neredeyse birebir aynısı —
+ * yalnızca dış kabuk değişti: modül-seviyesi `let state/warehouses/...`
+ * yerine `useState`/`ref`, ve `render(el)/load(el)` yerine bir veri-çekme
+ * `useEffect`'i + `dangerouslySetInnerHTML` + DOM-bağlama `useEffect`'i.
+ * Barkod tarama, ürün formu (BOM dahil), stok girişi diyaloğu, ürün kartı
+ * ve CSV dışa aktarım fonksiyonları `UI.modal()` gibi GLOBAL (bu view'ın
+ * React ağacından bağımsız) bir overlay sistemi kullandığı için hiç
+ * değişmeden taşındı.
+ *
+ * Bilinçli tasarım kararı — filtre/sayfa durumu KORUNMAZ: vanilla sürümde
+ * bu durum modül kapsamında tutulduğu için ekrandan ayrılıp geri dönünce
+ * filtre aynen dururdu. Kullanıcıyla netleştirildi: Dashboard'daki gibi
+ * her navigasyonda bileşen sıfırdan mount edilir (bkz. mountView.jsx) ve
+ * filtreler varsayılana döner — bilinçli, kabul edilmiş küçük bir davranış
+ * değişikliği (ek "yenile" altyapısı kurmaktan kaçınmak için).
+ */
+import { useEffect, useState, useRef, useCallback } from 'react';
+
+const DEFAULT_FILTERS = { page: 1, q: '', category: '', origin: '', warehouseId: '', itemType: '', lowOnly: false };
+
+export default function ItemsView() {
+  const { t, esc, num, card, table, pager, loading, modal, closeModal,
           field, input, select, textarea, checkbox, val, numVal, intVal, checked, can } = UI;
 
-  let state = { page: 1, q: '', category: '', origin: '', warehouseId: '', itemType: '', lowOnly: false };
-  let warehouses = [], suppliers = [], allItems = [];
+  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [reloadToken, setReloadToken] = useState(0);
+  const [phase, setPhase] = useState({ status: 'loading', res: null, error: null });
 
-  async function render(el) {
-    el.innerHTML = loading();
-    try {
-      [warehouses, suppliers] = await Promise.all([
-        Api.warehouses(),
-        Api.suppliers({ pageSize: 200 }).then(r => r.data || r).catch(() => [])
-      ]);
-    } catch (e) { warehouses = []; suppliers = []; }
-    await load(el);
-  }
+  const warehousesRef = useRef([]);
+  const suppliersRef = useRef([]);
+  const allItemsRef = useRef([]);
+  const firstLoadRef = useRef(true);
+  const stopWedgeRef = useRef(null);
+  const scanStreamRef = useRef(null);
+  const scanTimerRef = useRef(null);
 
-  async function load(el) {
-    let res;
-    try { res = await Api.items({ ...state, pageSize: 25 }); }
-    catch (e) { UI.err(e); return; }
-    allItems = res.data;
+  const reload = useCallback(() => setReloadToken(x => x + 1), []);
 
-    const categories = [...new Set(res.facets?.categories || res.data.map(i => i.category).filter(Boolean))].sort();
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (firstLoadRef.current) {
+        firstLoadRef.current = false;
+        try {
+          const [wh, sup] = await Promise.all([
+            Api.warehouses(),
+            Api.suppliers({ pageSize: 200 }).then(r => r.data || r).catch(() => [])
+          ]);
+          if (cancelled) return;
+          warehousesRef.current = wh;
+          suppliersRef.current = sup;
+        } catch (e) {
+          warehousesRef.current = [];
+          suppliersRef.current = [];
+        }
+      }
+      if (cancelled) return;
+      let res;
+      try { res = await Api.items({ ...filters, pageSize: 25 }); }
+      catch (e) { UI.err(e); return; }
+      if (cancelled) return;
+      allItemsRef.current = res.data;
+      setPhase({ status: 'ready', res, error: null });
+    })();
+    return () => { cancelled = true; };
+  }, [filters, reloadToken]);
 
-    el.innerHTML = `
-      <div class="topbar">
-        <div><h2>${t('itemsTitle')}</h2><div class="sub">${t('itemsSub')} · ${res.total}</div></div>
-        <div class="topbar-actions">
-          <div class="search-box">${UI.icon(UI.ICONS.search)}<input id="itSearch" placeholder="${t('search')}" value="${esc(state.q)}"></div>
-          <button class="btn btn-ghost btn-sm" id="itScan">${UI.icon(UI.ICONS.eye)}${UI.getLang() === 'tr' ? 'Barkod' : 'Barcode'}</button>
-          <button class="btn btn-ghost btn-sm" id="itCsv">${UI.icon(UI.ICONS.download)}CSV</button>
-          ${can('write') ? `<button class="btn btn-primary btn-sm" id="itNew">${UI.icon(UI.ICONS.plus)}${t('newItem')}</button>` : ''}
-        </div>
-      </div>
+  // Veri geldikten ve HTML DOM'a yazıldıktan SONRA: filtreleri, arama
+  // kutusunu, satır aksiyonlarını ve diyalog tetikleyicilerini bağla —
+  // orijinal render()'daki "wiring" bölümüyle birebir aynı.
+  useEffect(() => {
+    if (phase.status !== 'ready') return;
+    const res = phase.res;
 
-      <div class="filters">
-        ${select('fCat', [{ v: '', l: t('all') + ' — ' + t('category') }, ...categories.map(c => ({ v: c, l: c }))], state.category)}
-        ${select('fOrigin', [{ v: '', l: t('all') + ' — ' + t('origin') }, { v: 'Yurt İçi', l: t('originDomestic') }, { v: 'Yurt Dışı', l: t('originIntl') }], state.origin)}
-        ${select('fWh', [{ v: '', l: t('all') + ' — ' + t('warehouse') }, ...warehouses.map(w => ({ v: w.id, l: w.name }))], state.warehouseId)}
-        ${select('fType', [{ v: '', l: t('all') + ' — ' + t('itemType') },
-          { v: 'raw', l: t('typeRaw') }, { v: 'semi', l: t('typeSemi') }, { v: 'finished', l: t('typeFinished') }, { v: 'consumable', l: t('typeConsumable') }], state.itemType)}
-        <button class="chip ${state.lowOnly ? 'active' : ''}" id="fLow">${t('statusLow')}</button>
-      </div>
-
-      <div class="card">
-        ${table([
-          { key: 'name', label: t('itemName'), render: r => `
-              <button class="link-btn" data-open="${esc(r.id)}">${esc(r.name)}</button>
-              <div class="sub-line mono">${esc(r.code || '')}${r.barcode ? ' · ' + esc(r.barcode) : ''}</div>` },
-          { key: 'itemType', label: t('itemType'), render: r => `<span class="badge plain">${t('type' + r.itemType.charAt(0).toUpperCase() + r.itemType.slice(1))}</span>` },
-          { key: 'origin', label: t('origin'), render: r => UI.originBadge(r.origin) },
-          { key: 'category', label: t('category'), render: r => esc(r.category || '—') },
-          { key: 'qty', label: t('available'), num: true, render: r => `${num(r.qty)} <span style="color:var(--text-faint);font-size:11px">${esc(r.unit)}</span>` },
-          { key: 'quarantineQty', label: t('quarantine'), num: true, render: r => r.quarantineQty ? `<span style="color:var(--accent)">${num(r.quarantineQty)}</span>` : '—' },
-          { key: 'avgCost', label: t('avgCost'), num: true, render: r => '₺' + num(r.avgCost, 2) },
-          { key: 'status', label: t('status'), render: r => UI.stockStatus(r.qty, r.minStock) },
-          { key: 'act', label: t('actions'), render: r => `<div class="row-actions">
-              ${can('write') ? `<button class="icon-btn ok" data-in="${esc(r.id)}" title="${UI.getLang() === 'tr' ? 'Stok girişi' : 'Stock in'}">${UI.icon(UI.ICONS.plus)}</button>` : ''}
-              ${can('write') ? `<button class="icon-btn" data-edit="${esc(r.id)}" title="${t('edit')}">${UI.icon(UI.ICONS.edit)}</button>` : ''}
-              ${can('delete') ? `<button class="icon-btn danger" data-del="${esc(r.id)}" title="${t('del')}">${UI.icon(UI.ICONS.trash)}</button>` : ''}
-            </div>` }
-        ], res.data)}
-        ${pager(res, p => { state.page = p; load(el); })}
-      </div>`;
-
-    // wiring
     const s = document.getElementById('itSearch');
-    s.oninput = UI.debounce(() => { state.q = s.value; state.page = 1; load(el); }, 350);
-    document.getElementById('fCat').onchange = e => { state.category = e.target.value; state.page = 1; load(el); };
-    document.getElementById('fOrigin').onchange = e => { state.origin = e.target.value; state.page = 1; load(el); };
-    document.getElementById('fWh').onchange = e => { state.warehouseId = e.target.value; state.page = 1; load(el); };
-    document.getElementById('fType').onchange = e => { state.itemType = e.target.value; state.page = 1; load(el); };
-    document.getElementById('fLow').onclick = () => { state.lowOnly = !state.lowOnly; state.page = 1; load(el); };
+    s.oninput = UI.debounce(() => setFilters(f => ({ ...f, q: s.value, page: 1 })), 350);
+    document.getElementById('fCat').onchange = e => setFilters(f => ({ ...f, category: e.target.value, page: 1 }));
+    document.getElementById('fOrigin').onchange = e => setFilters(f => ({ ...f, origin: e.target.value, page: 1 }));
+    document.getElementById('fWh').onchange = e => setFilters(f => ({ ...f, warehouseId: e.target.value, page: 1 }));
+    document.getElementById('fType').onchange = e => setFilters(f => ({ ...f, itemType: e.target.value, page: 1 }));
+    document.getElementById('fLow').onclick = () => setFilters(f => ({ ...f, lowOnly: !f.lowOnly, page: 1 }));
     document.getElementById('itCsv').onclick = () => exportCsv(res.data);
-    document.getElementById('itScan').onclick = () => scanDialog(el);
-    document.getElementById('itNew')?.addEventListener('click', () => itemForm(el, null));
+    document.getElementById('itScan').onclick = () => scanDialog();
+    document.getElementById('itNew')?.addEventListener('click', () => itemForm(null));
 
-    el.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openCard(el, b.dataset.open));
-    el.querySelectorAll('[data-edit]').forEach(b => b.onclick = async () => itemForm(el, await Api.item(b.dataset.edit)));
-    el.querySelectorAll('[data-in]').forEach(b => b.onclick = () => stockInDialog(el, res.data.find(x => x.id === b.dataset.in)));
-    el.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    document.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openCard(b.dataset.open));
+    document.querySelectorAll('[data-edit]').forEach(b => b.onclick = async () => itemForm(await Api.item(b.dataset.edit)));
+    document.querySelectorAll('[data-in]').forEach(b => b.onclick = () => stockInDialog(res.data.find(x => x.id === b.dataset.in)));
+    document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
       const it = res.data.find(x => x.id === b.dataset.del);
       UI.confirmDialog(`"${it.name}" — ${t('confirmDelete')}`, async () => {
-        try { await Api.deleteItem(it.id); UI.ok(t('deleted')); load(el); } catch (e) { UI.err(e); }
+        try { await Api.deleteItem(it.id); UI.ok(t('deleted')); reload(); } catch (e) { UI.err(e); }
       }, { danger: true, confirmLabel: t('del') });
     });
-  }
+  }, [phase]);
 
   function exportCsv(rows) {
     UI.exportCsv('urunler.csv',
@@ -95,9 +104,11 @@ const ViewItems = (() => {
       rows.map(r => [r.name, r.code, r.barcode, r.category, r.itemType, r.origin, r.qty, r.unit, r.minStock, r.avgCost]));
   }
 
-  /* ---------- barcode scan ---------- */
-  let stopWedge = null;
-  function scanDialog(el) {
+  /* ---------- barkod tarama ---------- */
+  // ref: bileşen her yeniden render olduğunda fonksiyon gövdesi baştan
+  // çalışır — düz `let` kullanılsaydı tarama sırasında bir render daha
+  // olması durumunda kamera/dinleyici referansı sessizce sıfırlanırdı.
+  function scanDialog() {
     modal({
       title: UI.getLang() === 'tr' ? 'Barkod Tara' : 'Scan Barcode',
       sub: UI.getLang() === 'tr' ? 'Okuyucu ile okutun veya elle girin' : 'Scan with a reader or type manually',
@@ -111,26 +122,25 @@ const ViewItems = (() => {
         inp.focus();
         inp.onkeydown = e => { if (e.key === 'Enter' && inp.value.trim()) { e.preventDefault(); lookup(inp.value.trim()); } };
         // USB okuyucu: alan odakta olmasa bile yakalanır
-        stopWedge = UI.onBarcodeScan(code => { inp.value = code; lookup(code); });
+        stopWedgeRef.current = UI.onBarcodeScan(code => { inp.value = code; lookup(code); });
         startCamera(box.querySelector('#scanArea'), lookup);
       }
     });
     async function lookup(code) {
       stopCamera();
-      if (stopWedge) { stopWedge(); stopWedge = null; }
+      if (stopWedgeRef.current) { stopWedgeRef.current(); stopWedgeRef.current = null; }
       try {
         const item = await Api.itemByBarcode(code);
         closeModal();
-        openCard(el, item.id);
+        openCard(item.id);
       } catch {
         closeModal();
         UI.toast(UI.getLang() === 'tr' ? 'Barkod bulunamadı, yeni ürün olarak ekleyebilirsiniz.' : 'Barcode not found — you can add it as a new item.');
-        if (can('write')) itemForm(el, null, code);
+        if (can('write')) itemForm(null, code);
       }
     }
   }
 
-  let scanStream = null, scanTimer = null;
   async function startCamera(area, onCode) {
     if (!('BarcodeDetector' in window)) {
       area.innerHTML = `<div style="padding:18px;text-align:center;line-height:1.6">${UI.esc(UI.getLang() === 'tr'
@@ -139,13 +149,13 @@ const ViewItems = (() => {
       return;
     }
     try {
-      scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      scanStreamRef.current = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
       const v = document.createElement('video');
-      v.autoplay = true; v.playsInline = true; v.muted = true; v.srcObject = scanStream;
+      v.autoplay = true; v.playsInline = true; v.muted = true; v.srcObject = scanStreamRef.current;
       v.style.cssText = 'width:100%;height:100%;object-fit:cover';
       area.innerHTML = ''; area.appendChild(v);
       const det = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code'] });
-      scanTimer = setInterval(async () => {
+      scanTimerRef.current = setInterval(async () => {
         try { const c = await det.detect(v); if (c && c[0]?.rawValue) onCode(c[0].rawValue); } catch {}
       }, 350);
     } catch {
@@ -155,12 +165,15 @@ const ViewItems = (() => {
     }
   }
   function stopCamera() {
-    if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
-    if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
+    if (scanTimerRef.current) { clearInterval(scanTimerRef.current); scanTimerRef.current = null; }
+    if (scanStreamRef.current) { scanStreamRef.current.getTracks().forEach(tr => tr.stop()); scanStreamRef.current = null; }
   }
 
-  /* ---------- item form (with BOM) ---------- */
-  function itemForm(el, item, prefillBarcode) {
+  /* ---------- ürün formu (BOM dahil) ---------- */
+  function itemForm(item, prefillBarcode) {
+    const allItems = allItemsRef.current;
+    const warehouses = warehousesRef.current;
+    const suppliers = suppliersRef.current;
     let bom = item?.bom ? item.bom.map(b => ({ ...b })) : [];
     const isEdit = !!item;
 
@@ -197,7 +210,7 @@ const ViewItems = (() => {
           ${field(t('salePrice'), input('iSale', { type: 'number', step: '0.01', value: item?.salePrice ?? 0, min: 0 }))}
           ${field(t('hsCode'), input('iHs', { value: item?.hsCode || '' }))}
         </div>
-        ${field(t('defaultSupplier'), select('iSup', [{ v: '', l: t('none') }, ...suppliers.map(s => ({ v: s.id, l: s.name }))], item?.defaultSupplierId || ''))}
+        ${field(t('defaultSupplier'), select('iSup', [{ v: '', l: t('none') }, ...suppliers.map(sp => ({ v: sp.id, l: sp.name }))], item?.defaultSupplierId || ''))}
         ${checkbox('iLot', t('lotTracked'), item ? item.isLotTracked : true)}
         ${checkbox('iInsp', t('requiresInspection'), item?.requiresIncomingInspection || false)}
         ${field(t('description'), textarea('iDesc', { value: item?.description || '' }))}
@@ -233,7 +246,7 @@ const ViewItems = (() => {
           if (!isEdit) payload.qty = 0;
           try {
             if (isEdit) await Api.updateItem(item.id, payload); else await Api.createItem(payload);
-            closeModal(); UI.ok(t('saved')); load(el);
+            closeModal(); UI.ok(t('saved')); reload();
           } catch (e) { UI.err(e); }
         };
       }
@@ -259,8 +272,9 @@ const ViewItems = (() => {
     }
   }
 
-  /* ---------- stock in ---------- */
-  function stockInDialog(el, item) {
+  /* ---------- stok girişi ---------- */
+  function stockInDialog(item) {
+    const warehouses = warehousesRef.current;
     modal({
       title: (UI.getLang() === 'tr' ? 'Stok girişi' : 'Stock in') + ' — ' + item.name,
       sub: `${t('available')}: ${num(item.qty)} ${item.unit}`,
@@ -286,15 +300,15 @@ const ViewItems = (() => {
               lotNo: val('sLot') || undefined, expiryDate: val('sExp') || undefined,
               unitCost: numVal('sCost'), status: checked('sQuar') ? 'quarantine' : 'available', note: val('sNote')
             });
-            closeModal(); UI.ok(t('saved')); load(el);
+            closeModal(); UI.ok(t('saved')); reload();
           } catch (e) { UI.err(e); }
         };
       }
     });
   }
 
-  /* ---------- item card ---------- */
-  async function openCard(el, id) {
+  /* ---------- ürün kartı ---------- */
+  async function openCard(id) {
     let item, movements, docs, prices;
     try {
       item = await Api.item(id);
@@ -347,9 +361,9 @@ const ViewItems = (() => {
         <div class="section-title">${t('priceHistory')}</div>
         ${prices.length ? table([
           { key: 'supplierName', label: t('supplierName'), render: r => esc(r.supplierName || '—') },
-          { key: 'price', label: t('price'), num: true, render: r => `${num(r.price, 2)} ${cur(r.currency)}` },
+          { key: 'price', label: t('price'), num: true, render: r => `${num(r.price, 2)} ${UI.cur(r.currency)}` },
           { key: 'priceBase', label: '₺', num: true, render: r => '₺' + num(r.priceBase, 2) },
-          { key: 'recordedAt', label: t('date'), render: r => ts(r.recordedAt) }
+          { key: 'recordedAt', label: t('date'), render: r => UI.ts(r.recordedAt) }
         ], prices.slice(0, 10)) : `<div class="empty" style="padding:18px">${t('noData')}</div>`}
 
         <div class="section-title">${t('recentMovements')}</div>
@@ -367,20 +381,20 @@ const ViewItems = (() => {
         ${docs.data && docs.data.length ? table([
           { key: 'title', label: t('itemName'), render: d => `<a href="${esc(d.downloadUrl)}" target="_blank">${esc(d.title)}</a>` },
           { key: 'docType', label: t('itemType'), render: d => `<span class="badge plain">${esc(d.docType)}</span>` },
-          { key: 'uploadedAt', label: t('date'), render: d => ts(d.uploadedAt) }
+          { key: 'uploadedAt', label: t('date'), render: d => UI.ts(d.uploadedAt) }
         ], docs.data) : `<div class="empty" style="padding:18px">${t('noData')}</div>`}
         ${can('write') ? `<div style="margin-top:10px"><input type="file" id="docFile" style="font-size:12px">
           <button class="btn btn-ghost btn-sm" id="docUp" style="margin-left:6px">${t('uploadDoc')}</button></div>` : ''}`,
       footer: `<button class="btn btn-ghost" data-close>${t('close')}</button>
                ${can('write') ? `<button class="btn btn-primary" id="cardEdit">${t('edit')}</button>` : ''}`,
       onOpen: (box) => {
-        box.querySelector('#cardEdit')?.addEventListener('click', () => { closeModal(); itemForm(el, item); });
+        box.querySelector('#cardEdit')?.addEventListener('click', () => { closeModal(); itemForm(item); });
         box.querySelector('#docUp')?.addEventListener('click', async () => {
           const f = box.querySelector('#docFile').files[0];
           if (!f) return UI.toast(UI.getLang() === 'tr' ? 'Dosya seçin.' : 'Choose a file.');
           const fd = new FormData();
           fd.append('file', f); fd.append('title', f.name); fd.append('refType', 'item'); fd.append('refId', id); fd.append('docType', 'other');
-          try { await Api.uploadDocument(fd); UI.ok(t('saved')); closeModal(); openCard(el, id); } catch (e) { UI.err(e); }
+          try { await Api.uploadDocument(fd); UI.ok(t('saved')); closeModal(); openCard(id); } catch (e) { UI.err(e); }
         });
       }
     });
@@ -396,5 +410,52 @@ const ViewItems = (() => {
     return m.type;
   };
 
-  return { render, openCard };
-})();
+  if (phase.status === 'loading') {
+    return <div dangerouslySetInnerHTML={{ __html: loading() }} />;
+  }
+
+  const { res } = phase;
+  const categories = [...new Set(res.facets?.categories || res.data.map(i => i.category).filter(Boolean))].sort();
+  const html = `
+    <div class="topbar">
+      <div><h2>${t('itemsTitle')}</h2><div class="sub">${t('itemsSub')} · ${res.total}</div></div>
+      <div class="topbar-actions">
+        <div class="search-box">${UI.icon(UI.ICONS.search)}<input id="itSearch" placeholder="${t('search')}" value="${esc(filters.q)}"></div>
+        <button class="btn btn-ghost btn-sm" id="itScan">${UI.icon(UI.ICONS.eye)}${UI.getLang() === 'tr' ? 'Barkod' : 'Barcode'}</button>
+        <button class="btn btn-ghost btn-sm" id="itCsv">${UI.icon(UI.ICONS.download)}CSV</button>
+        ${can('write') ? `<button class="btn btn-primary btn-sm" id="itNew">${UI.icon(UI.ICONS.plus)}${t('newItem')}</button>` : ''}
+      </div>
+    </div>
+
+    <div class="filters">
+      ${select('fCat', [{ v: '', l: t('all') + ' — ' + t('category') }, ...categories.map(c => ({ v: c, l: c }))], filters.category)}
+      ${select('fOrigin', [{ v: '', l: t('all') + ' — ' + t('origin') }, { v: 'Yurt İçi', l: t('originDomestic') }, { v: 'Yurt Dışı', l: t('originIntl') }], filters.origin)}
+      ${select('fWh', [{ v: '', l: t('all') + ' — ' + t('warehouse') }, ...warehousesRef.current.map(w => ({ v: w.id, l: w.name }))], filters.warehouseId)}
+      ${select('fType', [{ v: '', l: t('all') + ' — ' + t('itemType') },
+        { v: 'raw', l: t('typeRaw') }, { v: 'semi', l: t('typeSemi') }, { v: 'finished', l: t('typeFinished') }, { v: 'consumable', l: t('typeConsumable') }], filters.itemType)}
+      <button class="chip ${filters.lowOnly ? 'active' : ''}" id="fLow">${t('statusLow')}</button>
+    </div>
+
+    <div class="card">
+      ${table([
+        { key: 'name', label: t('itemName'), render: r => `
+            <button class="link-btn" data-open="${esc(r.id)}">${esc(r.name)}</button>
+            <div class="sub-line mono">${esc(r.code || '')}${r.barcode ? ' · ' + esc(r.barcode) : ''}</div>` },
+        { key: 'itemType', label: t('itemType'), render: r => `<span class="badge plain">${t('type' + r.itemType.charAt(0).toUpperCase() + r.itemType.slice(1))}</span>` },
+        { key: 'origin', label: t('origin'), render: r => UI.originBadge(r.origin) },
+        { key: 'category', label: t('category'), render: r => esc(r.category || '—') },
+        { key: 'qty', label: t('available'), num: true, render: r => `${num(r.qty)} <span style="color:var(--text-faint);font-size:11px">${esc(r.unit)}</span>` },
+        { key: 'quarantineQty', label: t('quarantine'), num: true, render: r => r.quarantineQty ? `<span style="color:var(--accent)">${num(r.quarantineQty)}</span>` : '—' },
+        { key: 'avgCost', label: t('avgCost'), num: true, render: r => '₺' + num(r.avgCost, 2) },
+        { key: 'status', label: t('status'), render: r => UI.stockStatus(r.qty, r.minStock) },
+        { key: 'act', label: t('actions'), render: r => `<div class="row-actions">
+            ${can('write') ? `<button class="icon-btn ok" data-in="${esc(r.id)}" title="${UI.getLang() === 'tr' ? 'Stok girişi' : 'Stock in'}">${UI.icon(UI.ICONS.plus)}</button>` : ''}
+            ${can('write') ? `<button class="icon-btn" data-edit="${esc(r.id)}" title="${t('edit')}">${UI.icon(UI.ICONS.edit)}</button>` : ''}
+            ${can('delete') ? `<button class="icon-btn danger" data-del="${esc(r.id)}" title="${t('del')}">${UI.icon(UI.ICONS.trash)}</button>` : ''}
+          </div>` }
+      ], res.data)}
+      ${pager(res, p => setFilters(f => ({ ...f, page: p })))}
+    </div>`;
+
+  return <div dangerouslySetInnerHTML={{ __html: html }} />;
+}

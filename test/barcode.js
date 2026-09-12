@@ -120,16 +120,21 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
   console.log('\n=== KAMERA YOKKEN / WITHOUT A CAMERA ===');
   ok('BarcodeDetector bu ortamda yok (beklenen)', typeof window.BarcodeDetector === 'undefined');
-  const itemsSrc = fs.readFileSync(path.join(ROOT, 'public', 'js', 'views', 'items.js'), 'utf8');
+  // Kaynak artık public/js/views/items.js'de değil, React'e taşındı
+  // (frontend-react/ItemsView.jsx) — bkz. PROJECT_STATUS.md. Kamera akışı/
+  // zamanlayıcı artık düz `let` değil `useRef` üzerinden tutuluyor (bileşen
+  // her yeniden render olduğunda fonksiyon gövdesi baştan çalıştığından);
+  // desenler buna göre güncellendi.
+  const itemsSrc = fs.readFileSync(path.join(ROOT, 'frontend-react', 'ItemsView.jsx'), 'utf8');
   ok('kod BarcodeDetector varlığını kontrol ediyor', itemsSrc.includes("'BarcodeDetector' in window"));
   ok('kamera yoksa elle giriş yolu açıklanıyor',
     /USB okuyucu|USB reader/.test(itemsSrc) && /Elle|type it in/i.test(itemsSrc));
   ok('kamera izni reddedilirse ayrı mesaj var',
     /izin verilmemiş|permission denied/i.test(itemsSrc));
   ok('kamera akışı kapatılıyor (getTracks/stop)',
-    /getTracks\(\)\.forEach\(t => t\.stop\(\)\)/.test(itemsSrc),
+    /getTracks\(\)\.forEach\(\w+ => \w+\.stop\(\)\)/.test(itemsSrc),
     'kapatılmazsa kamera ışığı açık kalır');
-  ok('tarama döngüsü temizleniyor (clearInterval)', /clearInterval\(scanTimer\)/.test(itemsSrc));
+  ok('tarama döngüsü temizleniyor (clearInterval)', /clearInterval\(scanTimerRef\.current\)/.test(itemsSrc));
 
   console.log('\n=== BARKOD BİÇİMLERİ / SUPPORTED FORMATS ===');
   const formats = /formats:\s*\[([^\]]*)\]/.exec(itemsSrc);

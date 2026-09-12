@@ -85,12 +85,13 @@ async function until(fn, timeout = 6000, step = 60) {
   window.URL.revokeObjectURL = () => {};
 
   // Load application scripts in the same order index.html does. Dashboard is now
-  // React (frontend-react/DashboardView.jsx) — the built bundle is loaded here,
-  // same as the browser loads it, so this test exercises the actual production
-  // artifact rather than superseded source.
+  // React (frontend-react/{DashboardView,ItemsView}.jsx) — the built bundle is
+  // loaded here, same as the browser loads it, so this test exercises the
+  // actual production artifact rather than superseded source. One bundle now
+  // defines both ViewDashboard and ViewItems.
   const files = [
     'js/i18n.js', 'js/api.js', 'js/ui.js',
-    'dist/react-views.js', 'js/views/items.js', 'js/views/lots.js', 'js/views/counts.js',
+    'dist/react-views.js', 'js/views/lots.js', 'js/views/counts.js',
     'js/views/production.js', 'js/views/purchasing.js', 'js/views/sales.js', 'js/views/planning.js',
     'js/views/quality.js', 'js/views/reports.js', 'js/views/admin.js', 'js/app.js'
   ];
@@ -103,14 +104,14 @@ async function until(fn, timeout = 6000, step = 60) {
     el.textContent = fs.readFileSync(path.join(ROOT, 'public', f), 'utf8');
     window.document.body.appendChild(el);
     const name = f.split('/').pop().replace('.js', '');
-    const globalName = {
-      'i18n': 'I18N', 'api': 'Api', 'ui': 'UI', 'app': 'App',
-      'react-views': 'ViewDashboard', // frontend-react/main.jsx defines this global
-      'dashboard': 'ViewDashboard', 'items': 'ViewItems', 'lots': 'ViewLots', 'counts': 'ViewCounts',
-      'production': 'ViewProduction', 'purchasing': 'ViewPurchasing', 'sales': 'ViewSales',
-      'quality': 'ViewQuality', 'reports': 'ViewReports', 'admin': 'ViewAdmin', 'planning': 'ViewPlanning'
+    const globalNames = {
+      'i18n': ['I18N'], 'api': ['Api'], 'ui': ['UI'], 'app': ['App'],
+      'react-views': ['ViewDashboard', 'ViewItems'], // frontend-react/main.jsx defines these globals
+      'lots': ['ViewLots'], 'counts': ['ViewCounts'],
+      'production': ['ViewProduction'], 'purchasing': ['ViewPurchasing'], 'sales': ['ViewSales'],
+      'quality': ['ViewQuality'], 'reports': ['ViewReports'], 'admin': ['ViewAdmin'], 'planning': ['ViewPlanning']
     }[name];
-    const loaded = window.eval(`typeof ${globalName} !== 'undefined'`);
+    const loaded = globalNames.every(g => window.eval(`typeof ${g} !== 'undefined'`));
     check(f, loaded && jsErrors.length === before, jsErrors.slice(before).join(' | '));
   }
 
