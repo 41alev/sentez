@@ -1,5 +1,67 @@
 # PROJECT_STATUS.md
 
+## 2026-09-12 (devam) — Sertleştirme (hardening) turu: 4 aşama tamamlandı
+
+Bağımsız doğrulama turunun ardından kullanıcı "gerçekten kusursuza yakın" bir
+proje istedi ve teknik kararları tarafımıza bıraktı. `C:\Users\ilker\.claude\plans\peppy-puzzling-plum.md`
+planına göre 4 aşama uygulandı; her aşama kendi git commit'i olarak kaydedildi
+ve her commit'ten önce tam test paketi (`node test/run-all.js`) çalıştırılıp
+doğrulandı.
+
+**Aşama 1 — Test izolasyonu + CI (`6225305`).** `test/run-all.js` yazıldı:
+sunucu gerektiren her paket için `data/` sıfırlanır, taze migration+seed ile
+sunucu ayağa kaldırılır, YALNIZCA o paket çalıştırılır, sonra kapatılır.
+Öncesinde paketler zincirlenerek çalıştırıldığında paylaşılan durum sahte
+hatalar üretiyordu (bkz. bir önceki bölüm). `package.json`'un eksik `test:all`
+script'i bunu çağıracak şekilde güncellendi. `.github/workflows/ci.yml`
+eklendi — ubuntu+windows, node 20+22 matrisi (Windows matrisi kasıtlı: bugün
+bulunan Windows'a özgü EBUSY hatası CI hiç Windows'ta çalışmadığı için
+kaçmıştı). **Not:** CI dosyası eklendi ama bu oturumda uzak bir GitHub deposu
+yok, dolayısıyla gerçek bir Actions çalıştırması bu ortamda görülemedi —
+kullanıcı push ettiğinde ilk kez çalışacak.
+
+**Aşama 2+3 — Tip güvenliği ağı + UTC/yerel saat hata sınıfının kapatılması
+(`bf568ed`, birleştirildi çünkü aynı fonksiyonlara dokunuyorlardı).**
+
+- `tsconfig.json` (checkJs+noEmit, **build adımı yok** — mevcut build'siz
+  frontend mimarisi korundu), `typescript` devDependency, `npm run typecheck`
+  CI'a eklendi.
+- `server/types/better-sqlite3-shim.d.ts`: better-sqlite3'ün resmi tipleri
+  `.get()/.all()` için `unknown` döndürüyor; ham SQL'e dayalı bu kod
+  tabanında bu, yüzlerce sorgu için ayrı satır şekli tanımlamayı
+  zorunlu kılardı. Bilinçli olarak gevşek bir beyan yazıldı (`any`); asıl
+  tip denetimi `server/db.js`, `server/lib/core.js` ve
+  `server/services/*.js`'deki dokümante edilmiş fonksiyon imzalarında.
+  Kalan ~65 dosya `// @ts-nocheck` ile işaretli — kapsam zamanla genişleyebilir.
+- **`server/services/mrp.js`'de `capacity.js` ile BİREBİR AYNI hata bulundu**
+  (tarih string'i UTC üretilip yerel saat olarak geri okunuyordu). MRP'de bu,
+  sonsuz döngü değil ama BOM seviyeleri arasında **birikerek büyüyen** bir
+  hataydı (her seviyede bir gün erken bırakma tarihi). `server/lib/dates.js`
+  yazıldı (tek paylaşılan kaynak: `toLocalDateStr/today/addDays/isoWeekday/
+  daysBetween`); `capacity.js` ve `mrp.js` kendi kopyalarını silip oradan
+  import ediyor. `test/dates.js` (20 test) eklendi — asıl hatanın kendisini
+  regrese eden bir test dahil.
+- Aynı örüntünün daha hafif izleri şurada da bulunup düzeltildi: e-Belge
+  `issueDate` (resmî belge), tedarikçi zamanında-teslimat metriği, kapasite
+  panosu varsayılan aralığı, tarihsel kur lookup, ve ~10 dosyada "bugün"ün
+  UTC'den hesaplanması (çoğu kendi kendini düzelten, gece yarısı sonrası
+  ~3 saatlik dar bir pencerede etkili — ayrıntı git log'da).
+
+**Aşama 4 — Correlation/Request ID (`b1d2836`).** `server/index.js`'e
+istek başına `req.id` (gelen `X-Request-Id` korunur, yoksa üretilir),
+yanıt header'ına ve tüm hata yanıtlarıyla log satırlarına eklendi.
+
+**Toplam doğrulama:** `npx tsc --noEmit` temiz · `node test/run-all.js`
+**892/892** (872 + yeni `test/dates.js`) · her commit öncesi ayrı ayrı
+çalıştırılıp doğrulandı, davranış hiçbir yerde değişmedi.
+
+**Ertelenen/yapılmayan (gerekçeli, plan dosyasında tam detay):**
+PostgreSQL'e geçiş, frontend'i gerçek TypeScript+bundler'a taşımak,
+Jest/Vitest'e tam göç, OpenAPI şeması, çok şirketlilik (multi-tenant —
+kullanıcıyla mutabık kalınarak bu turdan sonraya bırakıldı).
+
+---
+
 ## 2026-09-12 — Bağımsız doğrulama turu + 2 gerçek hata düzeltildi
 
 Bu proje daha önce hiç gerçek bir ortamda kurulup çalıştırılmamıştı (geliştirme
