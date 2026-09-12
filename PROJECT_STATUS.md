@@ -1,5 +1,75 @@
 # PROJECT_STATUS.md
 
+## 2026-09-12 (devam 6) — Rekabet eksiklerini kapatma turu: Aşama 3 (React — Ürünler/Items)
+
+Dashboard pilotu onayının ardından kullanıcı devam kararı verdi. Plan
+dosyasındaki öncelik sırasına göre (Aşama 3: "Stok/Ürünler gibi en çok
+kullanılan ekranlar") ikinci ekran olarak **Ürünler (Items)** React'e
+taşındı — barkod tarama (kamera + USB okuyucu), ürün formu (dinamik BOM
+editörü), stok girişi diyaloğu, ürün kartı (hareketler/belgeler/fiyat
+geçmişi) ve CSV dışa aktarım dahil, listedeki EN KARMAŞIK ekranlardan biri.
+
+**Önceden netleştirilen mimari karar:** vanilla `items.js`'de filtre/sayfa
+durumu (kategori, arama, sayfa no) modül kapsamında tutuluyor ve ekrandan
+ayrılıp geri dönünce KORUNUYORDU. Kullanıcıya bu davranışı koruyup
+korumamak soruldu (korumak, tüm liste ekranları için yeni bir "yenile
+sinyali" altyapısı gerektirirdi); kullanıcı **Dashboard'daki gibi her
+navigasyonda sıfırlanmasını** seçti — daha basit, ek altyapı yok. Bu karar
+tüm gelecek liste ekranları (Lots, Counts, Purchasing, Sales, Quality,
+Reports, Admin) için de geçerli sayılacak.
+
+**Yapılanlar:**
+- `frontend-react/mountView.jsx` (yeni, küçük refactor): Dashboard'daki
+  root/mountCount tekrar-mount deseni artık iki view'da da kullanıldığı
+  için ortak bir yardımcıya çıkarıldı (`mountView(Component)`); prematüre
+  değil, ikinci gerçek kullanım noktasıyla haklı çıkan bir soyutlama.
+- `frontend-react/ItemsView.jsx` (yeni): `public/js/views/items.js`'nin
+  neredeyse birebir portu — iş mantığı, `UI`/`Api` çağrıları, HTML üretimi
+  DEĞİŞMEDİ. Yalnızca dış kabuk React'leşti: modül-seviyesi `let
+  state/warehouses/suppliers/allItems` → `useState`/`useRef`, `render(el)/
+  load(el)` → veri-çekme `useEffect`'i + `dangerouslySetInnerHTML` + DOM-
+  bağlama `useEffect`'i (Dashboard'daki desenle aynı). Diyaloglar (barkod
+  tarama, ürün formu, stok girişi, ürün kartı) `UI.modal()` gibi GLOBAL bir
+  overlay sistemini kullandığı için değişmeden taşındı.
+- **Gerçek bulunan/düzeltilen risk:** ilk portta kamera akışı/zamanlayıcı
+  (`scanStream`/`scanTimer`/`stopWedge`) düz `let` olarak bileşen gövdesine
+  konmuştu — ama React bir bileşeni her yeniden render ettiğinde fonksiyon
+  gövdesi BAŞTAN çalışır, bu da tarama sırasında beklenmedik bir render
+  olursa kamera referansının sessizce sıfırlanabileceği (ve kameranın asla
+  kapatılamayacağı) anlamına gelirdi. `useRef`'e taşınarak düzeltildi —
+  vanilla sürümdeki modül-seviyesi (kalıcı) kapsamla aynı garanti sağlandı.
+- `public/index.html`: `/js/views/items.js` script etiketi kaldırıldı
+  (artık `/dist/react-views.js` içinde, Dashboard'la aynı bundle).
+- `frontend-react/main.jsx`: `window.ViewItems = mountView(ItemsView)`.
+- `public/js/views/items.js` silindi (React'e taşındı, artık ölü kod).
+- `test/ui-smoke.js`: script-yükleme listesi güncellendi; tek bundle artık
+  hem `ViewDashboard` hem `ViewItems` tanımladığından kontrol iki global'i
+  birden doğruluyor.
+- **Gerçek bulunan ikinci regresyon:** `test/barcode.js` — kamera
+  mantığının kaynak metnini STATİK OLARAK `public/js/views/items.js`'den
+  okuyup desen arıyordu (ör. `getTracks().forEach(t => t.stop())`,
+  `clearInterval(scanTimer)`). Dosya silinince test `ENOENT` ile
+  patlıyordu; `node test/run-all.js`'in özetinde "barcode" satırının
+  sessizce KAYBOLDUĞU fark edilerek yakalandı. `frontend-react/
+  ItemsView.jsx`'i okuyacak ve `useRef` tabanlı yeni değişken adlarını
+  (`scanStreamRef.current`, `scanTimerRef.current`) tanıyacak şekilde
+  güncellendi.
+
+**Doğrulama:** `npx tsc --noEmit` temiz. `npx eslint .` 0 hata (49 uyarı,
+öncesinde de vardı + 1 yeni `card` unused — vanilla dosyada da vardı,
+davranış değişikliği değil). `node test/run-all.js` 19/19 paket geçti
+(ui-smoke'taki "items renders", "item card opens", "new item form opens",
+"stock-in dialog opens" dahil — gerçek React bundle'ına karşı). Tarayıcıda
+elle doğrulama: ürün listesi gerçek verilerle render edildi, filtre
+uygulanıp (9→1 ürün) başka ekrana geçilip geri dönüldüğünde filtrenin
+kararlaştırıldığı gibi sıfırlandığı, ürün kartı/yeni ürün formu (BOM
+dahil)/stok girişi diyaloglarının açıldığı doğrulandı.
+
+**Sırada:** Kullanıcıyla anlaşılan kontrol noktası — bir sonraki ekran
+(veya Aşama 4-8'e geçiş) için tekrar teyit alınacak.
+
+---
+
 ## 2026-09-12 (devam 5) — Rekabet eksiklerini kapatma turu: Aşama 2 Faz 1 (React pilotu — Panel/Dashboard)
 
 **Kapsam:** Arayüz modernizasyonuna kademeli (strangler-fig) geçişin ilk
