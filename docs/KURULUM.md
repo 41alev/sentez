@@ -129,7 +129,30 @@ otomatik geri alınır.
 > **Sunucuyu durdurmadan geri yükleme yapmayın.** Script WAL dosyasına bakıp uyarır.
 
 **Yedekleri başka bir makineye kopyalayın.** Aynı diskte duran yedek, disk
-arızasında işe yaramaz.
+arızasında, yangında veya hırsızlıkta işe yaramaz.
+
+### Off-site senkronizasyon (otomatik)
+
+`.env` içinde `BACKUP_OFFSITE_CMD` tanımlanırsa, her başarılı yerel yedekten
+hemen sonra bu komut otomatik çalışır (`{file}` yedek dosyasının tam yoluyla
+değiştirilir). Başarısız olursa sunucu loguna **açıkça** yazılır — sessizce
+yutulmaz (bkz. e-posta bildirimlerinde daha önce bulunan aynı sınıf hata).
+
+```bash
+# rclone ile S3-uyumlu depolamaya (Backblaze B2, S3, vb.)
+BACKUP_OFFSITE_CMD=rclone copy "{file}" remote:depo-takip-yedek/
+
+# Windows ağ paylaşımına
+BACKUP_OFFSITE_CMD=robocopy /* önce dosyayı kopyalayacak bir .bat/.ps1 script'e yönlendirin */
+
+# Basit rsync (Linux/Mac, SSH anahtarı önceden kurulmuş olmalı)
+BACKUP_OFFSITE_CMD=rsync -az "{file}" yedek-sunucu:/var/backups/depo-takip/
+```
+
+Bu, yerel yedeğin YERİNE geçmez — geri yükleme hâlâ yerel `data/backups/`
+klasöründen yapılır (`npm run restore`). Off-site kopya yalnızca "sunucunun
+kendisi kaybolursa" senaryosu içindir; o durumda dosyayı uzak depodan geri
+indirip `npm run restore -- <indirilen-dosya>` ile geri yüklersiniz.
 
 ---
 

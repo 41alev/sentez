@@ -142,7 +142,7 @@ function restore(file, { force = false } = {}) {
   } catch (e) {
     // Kopyalama başarısızsa eski veritabanını geri koy: sistemi yarım bırakma.
     if (moved.length) fs.renameSync(safety, dbPath);
-    throw new Error(`Geri yükleme başarısız, eski veritabanı korundu / Restore failed, previous database kept: ${e.message}`);
+    throw new Error(`Geri yükleme başarısız, eski veritabanı korundu / Restore failed, previous database kept: ${e.message}`, { cause: e });
   }
 
   const after = verifyBackup(dbPath);

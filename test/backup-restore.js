@@ -71,6 +71,32 @@ const restore = require(path.join(ROOT, 'server', 'scripts', 'restore'));
     Math.abs((v1.stockValue || 0) - before.stockValue) < 0.01,
     `${v1.stockValue} vs ${before.stockValue}`);
 
+  console.log('\n=== OFF-SITE SENKRONİZASYON KANCASI / OFFSITE SYNC HOOK ===');
+  // Yerel yedek sunucuyla aynı diskte durur; BACKUP_OFFSITE_CMD bunu ikinci
+  // bir konuma kopyalar. Kancanın gerçekten çalıştığı ve gerçek yedek dosya
+  // yolunu aldığı doğrulanmalı — aksi halde "yapılandırdım" sanılıp hiç
+  // çalışmayan bir özellik olur.
+  const offsiteMarker = path.join(tmpRoot, 'offsite-marker.txt');
+  process.env.BACKUP_OFFSITE_CMD = `node -e "require('fs').writeFileSync(process.env.OFFSITE_MARKER, process.argv[1])" "{file}"`;
+  process.env.OFFSITE_MARKER = offsiteMarker;
+  const bHook = await backup.runBackup({ keep: 5 });
+  ok('offsite kancası tetiklendi', bHook.offsite.attempted === true, JSON.stringify(bHook.offsite));
+  ok('offsite kancası başarılı raporlandı', bHook.offsite.ok === true, JSON.stringify(bHook.offsite));
+  ok('offsite komutu gerçek yedek dosya yolunu aldı',
+    fs.existsSync(offsiteMarker) && fs.readFileSync(offsiteMarker, 'utf8') === bHook.file,
+    fs.existsSync(offsiteMarker) ? fs.readFileSync(offsiteMarker, 'utf8') : 'marker dosyası oluşmadı');
+
+  console.log('\n=== OFF-SITE BAŞARISIZLIK AÇIKÇA GÖRÜNMELİ / FAILURE MUST BE VISIBLE ===');
+  process.env.BACKUP_OFFSITE_CMD = 'node -e "process.exit(1)"';
+  const bFail = await backup.runBackup({ keep: 5 });
+  ok('offsite başarısız olsa da yerel yedek oluşuyor', fs.existsSync(bFail.file));
+  ok('offsite başarısızlığı sessizce yutulmuyor',
+    bFail.offsite.attempted === true && bFail.offsite.ok === false && !!bFail.offsite.error,
+    JSON.stringify(bFail.offsite));
+
+  delete process.env.BACKUP_OFFSITE_CMD;
+  delete process.env.OFFSITE_MARKER;
+
   console.log('\n=== 2. YEDEK SONRASI DEĞİŞİKLİK / CHANGES AFTER BACKUP ===');
   // Yedek alındıktan sonra yapılan iş: geri dönüldüğünde KAYBOLMASI beklenir.
   const { uuid } = require(path.join(ROOT, 'server', 'lib', 'core'));
