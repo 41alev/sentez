@@ -1,76 +1,60 @@
-// @ts-nocheck
-const ViewProduction = (() => {
-  const { t, esc, num, dt, ts, card, table, pager, loading, modal, closeModal,
-          field, input, select, textarea, val, numVal, intVal, can } = UI;
+/**
+ * Üretim (Production) — React'e kademeli geçişin bir sonraki ekranı.
+ * Items/Counts/Lots ile aynı desen — bkz. o dosyalardaki üst açıklamalar.
+ */
+import { useEffect, useState, useRef } from 'react';
 
-  let state = { page: 1, status: '' };
-  let items = [], warehouses = [], settings = {};
+const DEFAULT_FILTERS = { page: 1, status: '' };
 
-  async function render(el) {
-    el.innerHTML = loading();
-    try {
-      const [it, wh, st] = await Promise.all([
-        Api.items({ pageSize: 300 }), Api.warehouses(), Api.settings().catch(() => ({}))
-      ]);
-      items = it.data; warehouses = wh; settings = st;
-    } catch (e) { UI.err(e); }
-    await load(el);
-  }
+export default function ProductionView() {
+  const { t, esc, num, dt, card, table, pager, loading, modal, closeModal,
+          field, input, select, val, numVal, intVal, can } = UI;
 
-  async function load(el) {
-    let res;
-    try { res = await Api.production({ ...state, pageSize: 25 }); } catch (e) { UI.err(e); return; }
-    const rows = res.data || res;
+  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [phase, setPhase] = useState({ status: 'loading', res: null, error: null });
+  const itemsRef = useRef([]);
+  const warehousesRef = useRef([]);
+  const settingsRef = useRef({});
+  const firstLoadRef = useRef(true);
 
-    el.innerHTML = `
-      <div class="topbar">
-        <div><h2>${t('prodTitle')}</h2><div class="sub">${t('prodSub')}</div></div>
-        <div class="topbar-actions">
-          ${can('write') ? `<button class="btn btn-primary btn-sm" id="pNew">${UI.icon(UI.ICONS.plus)}${t('newProd')}</button>` : ''}
-        </div>
-      </div>
+  function reload() { setFilters(f => ({ ...f })); }
 
-      <div class="filters">
-        ${select('pStatus', [{ v: '', l: t('all') },
-          { v: 'Planlandı', l: t('prodPlanned') }, { v: 'Devam Ediyor', l: t('prodInProgress') },
-          { v: 'Tamamlandı', l: t('prodDone') }, { v: 'İptal Edildi', l: t('prodCancelled') }], state.status)}
-      </div>
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (firstLoadRef.current) {
+        firstLoadRef.current = false;
+        try {
+          const [it, wh, st] = await Promise.all([
+            Api.items({ pageSize: 300 }), Api.warehouses(), Api.settings().catch(() => ({}))
+          ]);
+          itemsRef.current = it.data; warehousesRef.current = wh; settingsRef.current = st;
+        } catch (e) { UI.err(e); }
+      }
+      if (cancelled) return;
+      let res;
+      try { res = await Api.production({ ...filters, pageSize: 25 }); } catch (e) { UI.err(e); return; }
+      if (cancelled) return;
+      setPhase({ status: 'ready', res, error: null });
+    })();
+    return () => { cancelled = true; };
+  }, [filters]);
 
-      <div class="card">
-        ${table([
-          { key: 'orderNo', label: t('prodOrderNo'), render: r => `<button class="link-btn" data-open="${esc(r.id)}">${esc(r.orderNo)}</button>
-              <div class="sub-line">${esc(r.itemName)}</div>` },
-          { key: 'qty', label: t('prodQty'), num: true, render: r => num(r.qty) },
-          { key: 'producedQty', label: t('producedQty'), num: true, render: r => r.producedQty ? num(r.producedQty) : '—' },
-          { key: 'scrapQty', label: t('scrapQty'), num: true, render: r => r.scrapQty ? `<span style="color:var(--danger)">${num(r.scrapQty)}</span>` : '—' },
-          { key: 'yield', label: t('yieldPct'), num: true, render: r => {
-              const tot = (r.producedQty || 0) + (r.scrapQty || 0);
-              return tot > 0 ? num((r.producedQty / tot) * 100, 1) + '%' : '—';
-            } },
-          { key: 'lotNo', label: t('prodLot'), render: r => r.lotNo ? `<span class="mono">${esc(r.lotNo)}</span>` : '—' },
-          { key: 'unitCost', label: t('unitCostLabel'), num: true, render: r => r.unitCost ? '₺' + num(r.unitCost, 2) : '—' },
-          { key: 'status', label: t('status'), render: r => UI.prodStatusBadge(r.status) },
-          { key: 'date', label: t('date'), render: r => dt(r.date), cls: 'nowrap' },
-          { key: 'act', label: t('actions'), render: r => `<div class="row-actions">
-              ${r.status === 'Planlandı' && can('write') ? `<button class="btn btn-primary btn-sm" data-complete="${esc(r.id)}">${t('complete')}</button>` : ''}
-              ${r.status !== 'Tamamlandı' && can('delete') ? `<button class="icon-btn danger" data-del="${esc(r.id)}">${UI.icon(UI.ICONS.trash)}</button>` : ''}
-            </div>` }
-        ], rows)}
-        ${res.totalPages ? pager(res, p => { state.page = p; load(el); }) : ''}
-      </div>`;
-
-    document.getElementById('pStatus').onchange = e => { state.status = e.target.value; state.page = 1; load(el); };
-    document.getElementById('pNew')?.addEventListener('click', () => newProd(el));
-    el.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openProd(el, b.dataset.open));
-    el.querySelectorAll('[data-complete]').forEach(b => b.onclick = () => completeDialog(el, b.dataset.complete));
-    el.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+  useEffect(() => {
+    if (phase.status !== 'ready') return;
+    document.getElementById('pStatus').onchange = e => setFilters(f => ({ ...f, status: e.target.value, page: 1 }));
+    document.getElementById('pNew')?.addEventListener('click', () => newProd());
+    document.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openProd(b.dataset.open));
+    document.querySelectorAll('[data-complete]').forEach(b => b.onclick = () => completeDialog(b.dataset.complete));
+    document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
       UI.confirmDialog(t('confirmDelete'), async () => {
-        try { await Api.deleteProduction(b.dataset.del); UI.ok(t('deleted')); load(el); } catch (e) { UI.err(e); }
+        try { await Api.deleteProduction(b.dataset.del); UI.ok(t('deleted')); reload(); } catch (e) { UI.err(e); }
       }, { danger: true, confirmLabel: t('del') });
     });
-  }
+  }, [phase]);
 
-  function newProd(el) {
+  function newProd() {
+    const items = itemsRef.current, warehouses = warehousesRef.current, settings = settingsRef.current;
     const producible = items.filter(i => i.bom && i.bom.length);
     if (!producible.length) {
       return UI.toast(t('noBomWarn'), 'err');
@@ -116,7 +100,7 @@ const ViewProduction = (() => {
               lotNo: val('prLot') || undefined, date: val('prDate'),
               laborCost: numVal('prLabor'), overheadPct: numVal('prOh'), note: val('prNote')
             });
-            closeModal(); UI.ok(t('saved')); load(el);
+            closeModal(); UI.ok(t('saved')); reload();
           } catch (e) { UI.err(e); }
         };
       }
@@ -134,7 +118,7 @@ const ViewProduction = (() => {
     ], reqs);
   };
 
-  async function openProd(el, id) {
+  async function openProd(id) {
     let p;
     try { p = await Api.productionOrder(id); } catch (e) { UI.err(e); return; }
     modal({
@@ -172,13 +156,14 @@ const ViewProduction = (() => {
                ${p.status === 'Planlandı' && can('write') ? `<button class="btn btn-primary" id="pComp">${t('completeProd')}</button>` : ''}
                ${p.outputLotId ? `<button class="btn btn-ghost" id="pTrace">${t('traceability')}</button>` : ''}`,
       onOpen: (box) => {
-        box.querySelector('#pComp')?.addEventListener('click', () => { closeModal(); completeDialog(el, p.id); });
+        box.querySelector('#pComp')?.addEventListener('click', () => { closeModal(); completeDialog(p.id); });
         box.querySelector('#pTrace')?.addEventListener('click', () => { closeModal(); ViewLots.traceDialog(p.outputLotId); });
       }
     });
   }
 
-  async function completeDialog(el, id) {
+  async function completeDialog(id) {
+    const settings = settingsRef.current;
     let p, reqs;
     try {
       p = await Api.productionOrder(id);
@@ -214,12 +199,55 @@ const ViewProduction = (() => {
               producedQty: numVal('coProd'), scrapQty: numVal('coScrap'), reworkQty: numVal('coRework'),
               lotNo: val('coLot') || undefined, laborCost: numVal('coLabor'), overheadPct: numVal('coOh')
             });
-            closeModal(); UI.ok(t('saved')); load(el);
+            closeModal(); UI.ok(t('saved')); reload();
           } catch (e) { UI.err(e); }
         };
       }
     });
   }
 
-  return { render };
-})();
+  if (phase.status === 'loading') {
+    return <div dangerouslySetInnerHTML={{ __html: loading() }} />;
+  }
+
+  const { res } = phase;
+  const rows = res.data || res;
+  const html = `
+    <div class="topbar">
+      <div><h2>${t('prodTitle')}</h2><div class="sub">${t('prodSub')}</div></div>
+      <div class="topbar-actions">
+        ${can('write') ? `<button class="btn btn-primary btn-sm" id="pNew">${UI.icon(UI.ICONS.plus)}${t('newProd')}</button>` : ''}
+      </div>
+    </div>
+
+    <div class="filters">
+      ${select('pStatus', [{ v: '', l: t('all') },
+        { v: 'Planlandı', l: t('prodPlanned') }, { v: 'Devam Ediyor', l: t('prodInProgress') },
+        { v: 'Tamamlandı', l: t('prodDone') }, { v: 'İptal Edildi', l: t('prodCancelled') }], filters.status)}
+    </div>
+
+    <div class="card">
+      ${table([
+        { key: 'orderNo', label: t('prodOrderNo'), render: r => `<button class="link-btn" data-open="${esc(r.id)}">${esc(r.orderNo)}</button>
+            <div class="sub-line">${esc(r.itemName)}</div>` },
+        { key: 'qty', label: t('prodQty'), num: true, render: r => num(r.qty) },
+        { key: 'producedQty', label: t('producedQty'), num: true, render: r => r.producedQty ? num(r.producedQty) : '—' },
+        { key: 'scrapQty', label: t('scrapQty'), num: true, render: r => r.scrapQty ? `<span style="color:var(--danger)">${num(r.scrapQty)}</span>` : '—' },
+        { key: 'yield', label: t('yieldPct'), num: true, render: r => {
+            const tot = (r.producedQty || 0) + (r.scrapQty || 0);
+            return tot > 0 ? num((r.producedQty / tot) * 100, 1) + '%' : '—';
+          } },
+        { key: 'lotNo', label: t('prodLot'), render: r => r.lotNo ? `<span class="mono">${esc(r.lotNo)}</span>` : '—' },
+        { key: 'unitCost', label: t('unitCostLabel'), num: true, render: r => r.unitCost ? '₺' + num(r.unitCost, 2) : '—' },
+        { key: 'status', label: t('status'), render: r => UI.prodStatusBadge(r.status) },
+        { key: 'date', label: t('date'), render: r => dt(r.date), cls: 'nowrap' },
+        { key: 'act', label: t('actions'), render: r => `<div class="row-actions">
+            ${r.status === 'Planlandı' && can('write') ? `<button class="btn btn-primary btn-sm" data-complete="${esc(r.id)}">${t('complete')}</button>` : ''}
+            ${r.status !== 'Tamamlandı' && can('delete') ? `<button class="icon-btn danger" data-del="${esc(r.id)}">${UI.icon(UI.ICONS.trash)}</button>` : ''}
+          </div>` }
+      ], rows)}
+      ${res.totalPages ? pager(res, p => setFilters(f => ({ ...f, page: p }))) : ''}
+    </div>`;
+
+  return <div dangerouslySetInnerHTML={{ __html: html }} />;
+}

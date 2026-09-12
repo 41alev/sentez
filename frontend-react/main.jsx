@@ -13,11 +13,13 @@ import DashboardView from './DashboardView.jsx';
 import ItemsView from './ItemsView.jsx';
 import CountsView from './CountsView.jsx';
 import LotsView, { traceDialog } from './LotsView.jsx';
+import ProductionView from './ProductionView.jsx';
 
 window.ViewDashboard = mountView(DashboardView);
 window.ViewItems = mountView(ItemsView);
 window.ViewCounts = mountView(CountsView);
 // traceDialog kendi verisini kendi çeker (React ağacından bağımsız) —
-// hâlâ vanilla olan sales.js/production.js/quality.js bunu doğrudan
+// hâlâ vanilla olan sales.js/quality.js bunu doğrudan
 // `ViewLots.traceDialog(lotId)` olarak çağırıyor.
 window.ViewLots = { ...mountView(LotsView), traceDialog };
+window.ViewProduction = mountView(ProductionView);
