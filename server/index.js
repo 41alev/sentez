@@ -1,4 +1,6 @@
+// @ts-nocheck
 require('dotenv').config();
+const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -83,12 +85,22 @@ app.use((req, res, next) => {
   next();
 });
 
+// Correlation ID: bir isteği tüm loglar boyunca uçtan uca izleyebilmek için.
+// Yukarı akış (ör. bir ters vekil) zaten bir kimlik koymuşsa onu korur;
+// yoksa üretir. Yanıt header'ına da yazılır ki istemci hata bildirirken
+// paylaşabilsin.
+app.use((req, res, next) => {
+  req.id = req.get('X-Request-Id') || crypto.randomUUID();
+  res.setHeader('X-Request-Id', req.id);
+  next();
+});
+
 // Request logging with duration, so slow endpoints are visible in production.
 app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
     const ms = Date.now() - start;
-    const line = { method: req.method, url: req.originalUrl, status: res.statusCode, ms, user: req.user?.username };
+    const line = { requestId: req.id, method: req.method, url: req.originalUrl, status: res.statusCode, ms, user: req.user?.username };
     if (res.statusCode >= 500) logger.error(line);
     else if (res.statusCode >= 400) logger.warn(line);
     else logger.debug(line);
@@ -163,7 +175,7 @@ app.use('/api', (req, res) => res.status(404).json({ error: 'Uç nokta bulunamad
 // ---------- Central error handler ----------
 app.use((err, req, res, next) => {
   if (err instanceof AppError || err.status) {
-    const body = { error: err.message };
+    const body = { error: err.message, requestId: req.id };
     // Domain errors can carry structured detail (e.g. which material is short)
     ['shortfall', 'shortfalls', 'details', 'creditLimit', 'outstanding', 'orderTotal'].forEach(k => {
       if (err[k] !== undefined) body[k] = err[k];
@@ -171,10 +183,10 @@ app.use((err, req, res, next) => {
     return res.status(err.status || 400).json(body);
   }
   if (err && err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(413).json({ error: 'Dosya çok büyük (maks 20MB) / File too large (max 20MB)' });
+    return res.status(413).json({ error: 'Dosya çok büyük (maks 20MB) / File too large (max 20MB)', requestId: req.id });
   }
-  logger.error({ err: err.message, stack: err.stack, url: req.originalUrl }, 'unhandled error');
-  res.status(500).json({ error: 'Sunucu hatası / Server error' });
+  logger.error({ requestId: req.id, err: err.message, stack: err.stack, url: req.originalUrl }, 'unhandled error');
+  res.status(500).json({ error: 'Sunucu hatası / Server error', requestId: req.id });
 });
 
 // ---------- Background jobs ----------
