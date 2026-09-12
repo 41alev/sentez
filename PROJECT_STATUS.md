@@ -1,5 +1,42 @@
 # PROJECT_STATUS.md
 
+## 2026-09-12 (devam 4) — Rekabet eksiklerini kapatma turu: Aşama 1 (muhasebe köprüsü)
+
+Kullanıcıya rakip ürünlere (Logo/Netsis/Mikro, Odoo/SAP B1) karşı geride
+kalınan 8 alan konusunda dürüst bir değerlendirme sunuldu; kullanıcı hepsini
+eklemek istedi. Gerçekçi sıralama netleştirildi (bkz.
+`C:\Users\ilker\.claude\plans\peppy-puzzling-plum.md`): muhasebe köprüsü
+**genel** formatta (belirli bir programa özel değil), e-Fatura gerçek
+entegratör testi entegratör hesabı olmadığı için **ertelendi**, arayüz
+modernizasyonu **React** ile başlatılacak.
+
+**Aşama 1 — Genel muhasebe dışa aktarım köprüsü (TAMAMLANDI, `af46eca`).**
+`account_code_mappings` tablosu (tekdüzen hesap planı varsayılanları: 600
+Yurtiçi Satışlar, 391 Hesaplanan KDV, 120 Alıcılar, 191 İndirilecek KDV,
+320 Satıcılar, 153 Ticari Mallar — hangi programa geçilirse geçilsin
+yalnızca bu kodlar güncellenir). `services/accounting-export.js`: satış
+faturalarından (zaten subtotal/vat_total tutuyor) ve alış faturalarından
+(yalnızca KDV hariç net tutar tutuyor — KDV oranı bağlı PO kalemlerinin
+`items.vat_rate`'inden ağırlıklı ortalama olarak türetiliyor, açıkça
+belgelenmiş bir varsayım) çift taraflı (borç=alacak) yevmiye satırları
+üretir; borç≠alacak olursa sessizce yanlış sonuç yerine açıkça hata verir.
+
+Yönetim > Muhasebe Aktarımı sekmesi: tarih aralığı, önizleme, CSV indirme,
+hesap kodu eşleme editörü. Tarayıcıda uçtan uca doğrulandı (borç=alacak
+dengesi canlı olarak teyit edildi — bu oturumda `computer` aracının
+tıklama/ekran görüntüsü kararsızdı, doğrudan DOM/JS incelemesiyle
+doğrulandı).
+
+`test/accounting-export.js` (22 test) + `test/ui-smoke.js` güncellendi
+(admin sekme sayısı 10→11). Doğrulama: `tsc` temiz, `eslint` 0 hata,
+`node test/run-all.js` **1068/1068**.
+
+**Sırada — Aşama 2:** Arayüz modernizasyonu, React'e kademeli
+(strangler-fig) geçiş, Faz 1: Vite kurulumu + Panel (Dashboard) ekranının
+React'e taşınması. Detaylar plan dosyasında.
+
+---
+
 ## 2026-09-12 (devam 3) — Çok şirketlilik altyapı hazırlığı: Aşama A + B (tamamlandı)
 
 **Kullanıcının nihai hedefi:** bu ürünü ayrı ayrı fabrikalara/şirketlere
