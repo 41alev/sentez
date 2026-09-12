@@ -1,43 +1,47 @@
-// @ts-nocheck
-const ViewCounts = (() => {
-  const { t, esc, num, ts, dt, card, table, pager, loading, modal, closeModal,
+/**
+ * Sayımlar (Counts) — React'e kademeli geçişin bir sonraki ekranı.
+ *
+ * Items/Dashboard ile aynı disiplin: iş mantığı YENİDEN YAZILMADI, bu
+ * dosya `public/js/views/counts.js`'nin (artık silindi) neredeyse birebir
+ * portu. Diyaloglar (yeni sayım, sayım detayı/onay) `UI.modal()` gibi
+ * global bir overlay sistemini kullandığı için değişmeden taşındı.
+ * Filtre/sayfa durumu yok (Items'taki gibi bir "korunmalı mı" sorusu
+ * gerektirmiyor) — her navigasyonda taze veri çekilir (bkz. mountView.jsx).
+ */
+import { useEffect, useState, useRef, useCallback } from 'react';
+
+export default function CountsView() {
+  const { t, esc, num, ts, card, table, pager, loading, modal, closeModal,
           field, input, select, val, intVal, can } = UI;
 
-  let warehouses = [];
+  const [reloadToken, setReloadToken] = useState(0);
+  const [phase, setPhase] = useState({ status: 'loading', res: null, error: null });
+  const warehousesRef = useRef([]);
+  const firstLoadRef = useRef(true);
 
-  async function render(el) {
-    el.innerHTML = loading();
-    try { warehouses = await Api.warehouses(); } catch { warehouses = []; }
-    await load(el);
-  }
+  const reload = useCallback(() => setReloadToken(x => x + 1), []);
 
-  async function load(el) {
-    let res;
-    try { res = await Api.counts({ pageSize: 25 }); } catch (e) { UI.err(e); return; }
-    const rows = res.data || res;
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (firstLoadRef.current) {
+        firstLoadRef.current = false;
+        try { warehousesRef.current = await Api.warehouses(); } catch { warehousesRef.current = []; }
+      }
+      if (cancelled) return;
+      let res;
+      try { res = await Api.counts({ pageSize: 25 }); } catch (e) { UI.err(e); return; }
+      if (cancelled) return;
+      setPhase({ status: 'ready', res, error: null });
+    })();
+    return () => { cancelled = true; };
+  }, [reloadToken]);
 
-    el.innerHTML = `
-      <div class="topbar">
-        <div><h2>${t('countsTitle')}</h2><div class="sub">${t('countsSub')}</div></div>
-        <div class="topbar-actions">
-          ${can('write') ? `<button class="btn btn-primary btn-sm" id="cNew">${UI.icon(UI.ICONS.plus)}${t('newCount')}</button>` : ''}
-        </div>
-      </div>
-      <div class="card">
-        ${table([
-          { key: 'countNo', label: t('countNo'), render: r => `<button class="link-btn" data-open="${esc(r.id)}">${esc(r.countNo)}</button>` },
-          { key: 'warehouse', label: t('warehouse'), render: r => esc(r.warehouse || '—') },
-          { key: 'status', label: t('status'), render: r => statusBadge(r.status) },
-          { key: 'lineCount', label: UI.getLang() === 'tr' ? 'Satır' : 'Lines', num: true, render: r => num(r.lineCount || 0) },
-          { key: 'startedAt', label: t('date'), render: r => ts(r.startedAt) },
-          { key: 'approvedAt', label: t('countApproved'), render: r => r.approvedAt ? ts(r.approvedAt) : '—' }
-        ], rows)}
-        ${pager(res, p => load(el))}
-      </div>`;
-
-    document.getElementById('cNew')?.addEventListener('click', () => newCount(el));
-    el.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openCount(el, b.dataset.open));
-  }
+  useEffect(() => {
+    if (phase.status !== 'ready') return;
+    document.getElementById('cNew')?.addEventListener('click', () => newCount());
+    document.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openCount(b.dataset.open));
+  }, [phase]);
 
   const statusBadge = (s) => {
     const m = { open: ['info', t('countOpen')], counted: ['warn', t('countCounted')], approved: ['ok', t('countApproved')], cancelled: ['plain', t('countCancelled')] };
@@ -45,7 +49,8 @@ const ViewCounts = (() => {
     return `<span class="badge ${esc(c)}">${esc(l)}</span>`;
   };
 
-  function newCount(el) {
+  function newCount() {
+    const warehouses = warehousesRef.current;
     modal({
       title: t('newCount'),
       body: `${field(t('warehouse'), select('nWh', warehouses.map(w => ({ v: w.id, l: w.name }))))}
@@ -56,14 +61,14 @@ const ViewCounts = (() => {
         box.querySelector('#nGo').onclick = async () => {
           try {
             const c = await Api.createCount({ warehouseId: intVal('nWh'), notes: val('nNote') });
-            closeModal(); UI.ok(t('saved')); openCount(el, c.id);
+            closeModal(); UI.ok(t('saved')); openCount(c.id);
           } catch (e) { UI.err(e); }
         };
       }
     });
   }
 
-  async function openCount(el, id) {
+  async function openCount(id) {
     let c;
     try { c = await Api.count(id); } catch (e) { UI.err(e); return; }
     const editable = c.status === 'open' || c.status === 'counted';
@@ -126,7 +131,7 @@ const ViewCounts = (() => {
             const reason = box.querySelector(`.cnt-r[data-id="${inp.dataset.id}"]`)?.value || '';
             lines.push({ id: Number(inp.dataset.id), countedQty: Number(inp.value), reason });
           });
-          try { await Api.saveCountLines(c.id, lines); UI.ok(t('saved')); closeModal(); load(el); } catch (e) { UI.err(e); }
+          try { await Api.saveCountLines(c.id, lines); UI.ok(t('saved')); closeModal(); reload(); } catch (e) { UI.err(e); }
         });
 
         box.querySelector('#cntApprove')?.addEventListener('click', () => {
@@ -140,7 +145,7 @@ const ViewCounts = (() => {
             try {
               if (lines.length) await Api.saveCountLines(c.id, lines);
               await Api.approveCount(c.id);
-              closeModal(); UI.ok(t('saved')); load(el);
+              closeModal(); UI.ok(t('saved')); reload();
             } catch (e) { UI.err(e); }
           }, { danger: true, confirmLabel: t('approve') });
         });
@@ -153,5 +158,30 @@ const ViewCounts = (() => {
     return `<span style="color:${d < 0 ? 'var(--danger)' : 'var(--accent)'}">${d > 0 ? '+' : ''}${num(d)}</span>`;
   };
 
-  return { render };
-})();
+  if (phase.status === 'loading') {
+    return <div dangerouslySetInnerHTML={{ __html: loading() }} />;
+  }
+
+  const { res } = phase;
+  const rows = res.data || res;
+  const html = `
+    <div class="topbar">
+      <div><h2>${t('countsTitle')}</h2><div class="sub">${t('countsSub')}</div></div>
+      <div class="topbar-actions">
+        ${can('write') ? `<button class="btn btn-primary btn-sm" id="cNew">${UI.icon(UI.ICONS.plus)}${t('newCount')}</button>` : ''}
+      </div>
+    </div>
+    <div class="card">
+      ${table([
+        { key: 'countNo', label: t('countNo'), render: r => `<button class="link-btn" data-open="${esc(r.id)}">${esc(r.countNo)}</button>` },
+        { key: 'warehouse', label: t('warehouse'), render: r => esc(r.warehouse || '—') },
+        { key: 'status', label: t('status'), render: r => statusBadge(r.status) },
+        { key: 'lineCount', label: UI.getLang() === 'tr' ? 'Satır' : 'Lines', num: true, render: r => num(r.lineCount || 0) },
+        { key: 'startedAt', label: t('date'), render: r => ts(r.startedAt) },
+        { key: 'approvedAt', label: t('countApproved'), render: r => r.approvedAt ? ts(r.approvedAt) : '—' }
+      ], rows)}
+      ${pager(res, () => reload())}
+    </div>`;
+
+  return <div dangerouslySetInnerHTML={{ __html: html }} />;
+}

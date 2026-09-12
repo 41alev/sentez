@@ -11,6 +11,8 @@
 import { mountView } from './mountView.jsx';
 import DashboardView from './DashboardView.jsx';
 import ItemsView from './ItemsView.jsx';
+import CountsView from './CountsView.jsx';
 
 window.ViewDashboard = mountView(DashboardView);
 window.ViewItems = mountView(ItemsView);
+window.ViewCounts = mountView(CountsView);
