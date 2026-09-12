@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * El terminali / mobil depo uçları.
  *

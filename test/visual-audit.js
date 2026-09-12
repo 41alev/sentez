@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Visual audit — the measurable part.
  *

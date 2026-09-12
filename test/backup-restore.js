@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Yedekleme ve geri yükleme provası.
  *

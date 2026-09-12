@@ -1,3 +1,4 @@
+// @ts-nocheck
 const { z } = require('zod');
 
 /** Validate req.body against a zod schema; returns 422 with field-level details. */

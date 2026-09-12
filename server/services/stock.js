@@ -1,5 +1,6 @@
 const db = require('../db');
 const { AppError, uuid } = require('../lib/core');
+const { today, addDays } = require('../lib/dates');
 
 /**
  * All stock lives in `stock_lots`. Nothing outside this service should write to
@@ -21,6 +22,14 @@ function recalcItemQty(itemId) {
   return row.q;
 }
 
+/**
+ * @param {{
+ *   itemId: number|string, itemName?: string, lotId?: string, lotNo?: string,
+ *   warehouseId?: number|string, type: string, qty: number, unitCost?: number,
+ *   fromStatus?: string, toStatus?: string, note?: string, refType?: string,
+ *   refId?: number|string, userId?: number|string
+ * }} movement
+ */
 function recordMovement({ itemId, itemName, lotId, lotNo, warehouseId, type, qty, unitCost, fromStatus, toStatus, note, refType, refId, userId }) {
   const id = uuid();
   db.prepare(`INSERT INTO movements
@@ -60,8 +69,7 @@ function receiveLot({ itemId, warehouseId, qty, lotNo, serialNo, expiryDate, uni
 
   let expiry = expiryDate || null;
   if (!expiry && item.shelf_life_days) {
-    const d = new Date(); d.setDate(d.getDate() + item.shelf_life_days);
-    expiry = d.toISOString().slice(0, 10);
+    expiry = addDays(today(), item.shelf_life_days);
   }
 
   const lotId = uuid();

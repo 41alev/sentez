@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Excel'den veri aktarımı.
  *

@@ -1,3 +1,4 @@
+// @ts-nocheck
 const Api = (() => {
   const TOKEN_KEY = 'dt_token', USER_KEY = 'dt_user';
   const getToken = () => localStorage.getItem(TOKEN_KEY);

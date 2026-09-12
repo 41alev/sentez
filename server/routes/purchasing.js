@@ -1,6 +1,8 @@
+// @ts-nocheck
 const express = require('express');
 const db = require('../db');
 const { AppError, uuid, nextNumber, logAudit, diff, fxRate } = require('../lib/core');
+const { toLocalDateStr } = require('../lib/dates');
 const { requireAuth, requirePermission } = require('../middleware/auth');
 const { validate, validateQuery, z, pageQuery, currency } = require('../middleware/validate');
 const stock = require('../services/stock');
@@ -69,7 +71,7 @@ function supplierPerformance(supplierId) {
   const receipts = db.prepare(`SELECT r.received_at, po.expected FROM po_receipts r
     JOIN purchase_orders po ON po.id = r.po_id WHERE po.supplier_id = ?`).all(supplierId);
   const withExpected = receipts.filter(r => r.expected);
-  const onTime = withExpected.filter(r => new Date(r.received_at).toISOString().slice(0, 10) <= r.expected).length;
+  const onTime = withExpected.filter(r => toLocalDateStr(r.received_at) <= r.expected).length;
 
   const qty = db.prepare(`SELECT COALESCE(SUM(pi.received_qty),0) recv, COALESCE(SUM(pi.rejected_qty),0) rej
     FROM po_items pi JOIN purchase_orders po ON po.id = pi.po_id WHERE po.supplier_id = ?`).get(supplierId);

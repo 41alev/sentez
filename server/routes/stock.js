@@ -1,6 +1,8 @@
+// @ts-nocheck
 const express = require('express');
 const db = require('../db');
 const { AppError, uuid, nextNumber, logAudit, paginate } = require('../lib/core');
+const { today, addDays } = require('../lib/dates');
 const { requireAuth, requirePermission } = require('../middleware/auth');
 const { validate, validateQuery, z, pageQuery } = require('../middleware/validate');
 const stock = require('../services/stock');
@@ -24,7 +26,7 @@ router.get('/lots', validateQuery(lotQuery), (req, res) => {
   if (q.warehouseId) { where.push('sl.warehouse_id = ?'); params.push(q.warehouseId); }
   if (q.status) { where.push('sl.status = ?'); params.push(q.status); }
   if (q.expiringDays != null) {
-    const limit = new Date(Date.now() + q.expiringDays * 86400000).toISOString().slice(0, 10);
+    const limit = addDays(today(), q.expiringDays);
     where.push('sl.expiry_date IS NOT NULL AND sl.expiry_date <= ?'); params.push(limit);
   }
   if (q.q) { where.push('(i.name LIKE ? OR sl.lot_no LIKE ? OR sl.serial_no LIKE ?)'); const l = `%${q.q}%`; params.push(l, l, l); }

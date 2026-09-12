@@ -1,3 +1,4 @@
+// @ts-nocheck
 const ViewItems = (() => {
   const { t, esc, num, money, cur, dt, ts, card, table, pager, loading, modal, closeModal,
           field, input, select, textarea, checkbox, val, numVal, intVal, checked, can } = UI;

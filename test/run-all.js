@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-nocheck
 /**
  * Tüm test paketlerini, her biri kendi taze veritabanıyla, tek tek çalıştırır.
  *
@@ -27,7 +28,7 @@ const SERVER_SUITES = [
   'data-health', 'einvoice', 'planning', 'ui-smoke', 'security', 'load'
 ];
 // Sunucu gerektirmez — kendi geçici durumunu kendi kurar/söker.
-const STANDALONE_SUITES = ['visual-audit', 'backup-restore', 'email', 'barcode'];
+const STANDALONE_SUITES = ['visual-audit', 'backup-restore', 'email', 'barcode', 'dates'];
 // Kendi izole geçici dizinlerini kullanır (execFileSync ile alt süreç açar),
 // ana data/ klasörüne hiç dokunmaz.
 const CHILD_ISOLATED_SUITES = ['setup-upgrade'];

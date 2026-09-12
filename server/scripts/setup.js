@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-nocheck
 /**
  * İlk kurulum.
  *
@@ -17,6 +18,7 @@ const readline = require('readline');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
 const { runMigrations } = require('../migrate');
+const { today } = require('../lib/dates');
 
 /* ---------- Parametre ayrıştırma ---------- */
 function parseArgs(argv) {
@@ -170,9 +172,8 @@ async function setup(args) {
       VALUES (1, 'D1', ?, 1)`).run(warehouse);
 
     // Kurulum günü kuru: tarihsel kur tablosu boş kalırsa dövizli işlem yapılamaz
-    const today = new Date().toISOString().slice(0, 10);
     db.prepare(`INSERT OR IGNORE INTO exchange_rates (currency, rate, rate_date, source, created_at)
-      VALUES (?,1,?, 'setup', ?)`).run(currency, today, Date.now());
+      VALUES (?,1,?, 'setup', ?)`).run(currency, today(), Date.now());
 
     const setS = db.prepare('INSERT OR REPLACE INTO settings (key,value) VALUES (?,?)');
     setS.run('baseCurrency', currency);

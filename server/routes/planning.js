@@ -1,8 +1,10 @@
+// @ts-nocheck
 const express = require('express');
 const db = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { validate, z } = require('../middleware/validate');
 const { AppError, logAudit, diff, paginate } = require('../lib/core');
+const dates = require('../lib/dates');
 const capacity = require('../services/capacity');
 const mrp = require('../services/mrp');
 
@@ -193,8 +195,8 @@ router.put('/routings/:itemId', MANAGER, validate(z.object({
 
 router.get('/capacity', (req, res) => {
   const { from, to, workCenterId } = req.query;
-  const start = from || new Date().toISOString().slice(0, 10);
-  const end = to || new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  const start = from || dates.today();
+  const end = to || dates.addDays(dates.today(), 30);
   res.json({ from: start, to: end, data: capacity.capacityLoad({ from: start, to: end, workCenterId: workCenterId || null }) });
 });
 

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * UBL-TR 1.2 belge üreticisi.
  *

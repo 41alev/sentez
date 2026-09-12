@@ -1,14 +1,15 @@
+// @ts-nocheck
 const express = require('express');
 const db = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { toBase } = require('../lib/core');
+const { today: todayStr, addDays, toLocalDateStr } = require('../lib/dates');
 
 const router = express.Router();
 router.use(requireAuth);
 
 const DAY = 86400000;
-const todayStr = () => new Date().toISOString().slice(0, 10);
-function daysAgoStr(n) { return new Date(Date.now() - n * DAY).toISOString().slice(0, 10); }
+function daysAgoStr(n) { return addDays(todayStr(), -n); }
 
 /* ---------- helper: stock value at lot cost (already in base currency) ---------- */
 function stockValueBase(where = '', params = []) {
@@ -32,7 +33,7 @@ router.get('/summary', (req, res) => {
   const warnDays = Number(db.prepare("SELECT value FROM settings WHERE key='expiryWarningDays'").get()?.value || 30);
   const expiring = db.prepare(`SELECT sl.*, i.name AS item_name, i.unit FROM stock_lots sl JOIN items i ON i.id = sl.item_id
     WHERE sl.status IN ('available','quarantine') AND sl.qty > 0 AND sl.expiry_date IS NOT NULL AND sl.expiry_date <= ?
-    ORDER BY sl.expiry_date`).all(new Date(Date.now() + warnDays * DAY).toISOString().slice(0, 10));
+    ORDER BY sl.expiry_date`).all(addDays(todayStr(), warnDays));
 
   const pendingPO = db.prepare(`SELECT COALESCE(SUM((pi.qty - pi.received_qty) * pi.price * po.fx_rate),0) v
     FROM po_items pi JOIN purchase_orders po ON po.id = pi.po_id
@@ -46,7 +47,7 @@ router.get('/summary', (req, res) => {
   const openProduction = db.prepare("SELECT COUNT(*) c FROM production_orders WHERE status IN ('Planlandı','Devam Ediyor')").get().c;
   const pendingApprovals = db.prepare("SELECT COUNT(*) c FROM purchase_orders WHERE approval_status = 'pending'").get().c;
   const calibrationDue = db.prepare(`SELECT COUNT(*) c FROM equipment
-    WHERE status='active' AND next_calibration_date IS NOT NULL AND next_calibration_date <= ?`).get(new Date(Date.now() + 30 * DAY).toISOString().slice(0, 10)).c;
+    WHERE status='active' AND next_calibration_date IS NOT NULL AND next_calibration_date <= ?`).get(addDays(todayStr(), 30)).c;
 
   const categoryValue = db.prepare(`SELECT COALESCE(i.category,'Genel') category, SUM(sl.qty * sl.unit_cost) value
     FROM stock_lots sl JOIN items i ON i.id = sl.item_id WHERE sl.status='available'
@@ -314,7 +315,7 @@ router.get('/price-history/:itemId', (req, res) => {
     WHERE ph.item_id = ? ORDER BY ph.recorded_at DESC LIMIT 200`).all(req.params.itemId);
   res.json(rows.map(r => ({
     supplierId: r.supplier_id, supplierName: r.supplier_name, price: r.price, currency: r.currency,
-    priceBase: toBase(r.price, r.currency, new Date(r.recorded_at).toISOString().slice(0, 10)),
+    priceBase: toBase(r.price, r.currency, toLocalDateStr(r.recorded_at)),
     source: r.source, sourceId: r.source_id, recordedAt: r.recorded_at
   })));
 });

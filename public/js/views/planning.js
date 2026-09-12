@@ -1,3 +1,4 @@
+// @ts-nocheck
 const ViewPlanning = (() => {
   const { t, esc, num, money, dt, ts, table, pager, loading, modal, closeModal,
           field, input, select, textarea, checkbox, val, numVal, intVal, checked, can } = UI;
@@ -153,7 +154,7 @@ const ViewPlanning = (() => {
 
   /* ================= KAPASİTE ================= */
   let capFrom = UI.today();
-  let capTo = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  let capTo = UI.addDays(capFrom, 30);
 
   async function capacityTab(el, body, actions) {
     const cap = await Api.capacity({ from: capFrom, to: capTo });
@@ -473,8 +474,8 @@ const ViewPlanning = (() => {
 
   /* ================= VARDİYA & OEE ================= */
   async function shiftTab(el, body, actions) {
-    const from = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
     const to = UI.today();
+    const from = UI.addDays(to, -30);
     const [logs, oee] = await Promise.all([
       Api.shiftLogs({ from, to, pageSize: 50 }),
       Api.oee({ from, to })

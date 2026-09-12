@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * End-to-end smoke test. Boots nothing itself — expects the server on BASE.
  * Run:  node test/e2e.js

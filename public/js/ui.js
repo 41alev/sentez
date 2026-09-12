@@ -1,3 +1,4 @@
+// @ts-nocheck
 const UI = (() => {
   let lang = localStorage.getItem('dt_lang') || 'tr';
   const t = (k) => (I18N[lang] && I18N[lang][k]) || I18N.tr[k] || k;
@@ -26,7 +27,19 @@ const UI = (() => {
     if (h < 24) return lang === 'tr' ? `${h} sa önce` : `${h}h ago`;
     return lang === 'tr' ? `${Math.floor(h / 24)} gün önce` : `${Math.floor(h / 24)}d ago`;
   };
-  const today = () => new Date().toISOString().slice(0, 10);
+  // toISOString() UTC döner; tarayıcının yerel saat dilimi UTC'nin doğusundaysa
+  // (ör. Türkiye, UTC+3) gece yarısından sonraki birkaç saat "dün" gösterir.
+  // Yerel tarih bileşenleriyle üretmek bunu önler (bkz. server/lib/dates.js).
+  const today = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  /** YYYY-MM-DD tarihine N gün ekler (negatif olabilir), yerel takvim gününe göre. */
+  const addDays = (dateStr, n) => {
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + n);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
 
   /* ---------- toast ---------- */
   let toastTimer;
@@ -438,7 +451,7 @@ const UI = (() => {
   }
 
   return {
-    t, setLang, getLang, esc, money, num, cur, dt, ts, ago, today, locale,
+    t, setLang, getLang, esc, money, num, cur, dt, ts, ago, today, addDays, locale,
     toast, ok, err, modal, closeModal, confirmDialog,
     field, input, textarea, select, checkbox, val, numVal, intVal, checked,
     table, pager, card, stat, loading, tabs,

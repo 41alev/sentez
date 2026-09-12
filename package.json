@@ -28,7 +28,9 @@
     "test:health": "node test/data-health.js",
     "setup": "node server/scripts/setup.js",
     "upgrade": "node server/scripts/upgrade.js",
-    "test:setup": "node test/setup-upgrade.js"
+    "test:setup": "node test/setup-upgrade.js",
+    "test:dates": "node test/dates.js",
+    "typecheck": "tsc --noEmit"
   },
   "engines": {
     "node": ">=18"
@@ -50,7 +52,9 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "jsdom": "^25.0.1"
+    "@types/node": "^22.20.2",
+    "jsdom": "^25.0.1",
+    "typescript": "^7.0.2"
   },
   "overrides": {
     "uuid": "^11.1.1"

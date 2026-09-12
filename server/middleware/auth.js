@@ -1,3 +1,4 @@
+// @ts-nocheck
 const jwt = require('jsonwebtoken');
 const db = require('../db');
 const { AppError } = require('../lib/core');

@@ -1,3 +1,4 @@
+// @ts-nocheck
 const ViewSales = (() => {
   const { t, esc, num, money, cur, dt, ts, table, pager, loading, modal, closeModal,
           field, input, select, textarea, val, numVal, intVal, can } = UI;

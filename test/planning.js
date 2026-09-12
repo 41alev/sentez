@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Üretim planlama testleri: kapasite, çizelgeleme, MRP ve OEE.
  *

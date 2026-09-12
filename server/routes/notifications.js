@@ -1,3 +1,4 @@
+// @ts-nocheck
 const express = require('express');
 const db = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');

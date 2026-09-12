@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * E-posta bildirimi testi.
  *

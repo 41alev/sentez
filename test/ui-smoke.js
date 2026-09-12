@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * UI smoke test. Loads the real index.html into a DOM, runs the actual view code
  * against the running server, walks every screen and opens the main dialogs.

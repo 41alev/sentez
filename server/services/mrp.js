@@ -14,10 +14,9 @@
  */
 const db = require('../db');
 const { uuid, nextNumber, getSetting } = require('../lib/core');
+const { toLocalDateStr: dstr, addDays } = require('../lib/dates');
 
 const DAY = 86400000;
-const dstr = (ms) => new Date(ms).toISOString().slice(0, 10);
-const addDays = (dateStr, n) => dstr(new Date(dateStr + 'T00:00:00').getTime() + n * DAY);
 
 /**
  * Reçeteyi açarak her ürünün seviyesini bulur.
@@ -69,6 +68,7 @@ function applyLotSizing(qty, item) {
  * MRP çalıştırır ve önerileri kaydeder.
  * Sadece hesaplar; hiçbir sipariş veya emir otomatik açılmaz — öneriler
  * kullanıcı onayıyla belgeye dönüşür.
+ * @param {{ horizonDays?: number, userId?: number|string, notes?: string }} [options]
  */
 function runMrp({ horizonDays, userId, notes } = {}) {
   const horizon = Number(horizonDays || getSetting('mrpHorizonDays') || 90);

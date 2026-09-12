@@ -1,3 +1,4 @@
+// @ts-nocheck
 const ViewDashboard = (() => {
   const { t, esc, money, num, dt, card, stat, table, loading, chart, PALETTE } = UI;
 

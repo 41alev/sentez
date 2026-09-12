@@ -1,3 +1,4 @@
+// @ts-nocheck
 const ViewAdmin = (() => {
   const { t, esc, num, money, dt, ts, table, pager, loading, modal, closeModal,
           field, input, select, textarea, checkbox, val, numVal, intVal, checked, can } = UI;

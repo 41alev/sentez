@@ -1,3 +1,4 @@
+// @ts-nocheck
 const I18N = {
 tr: {
   brandSub:"Stok · Üretim · Satın Alma · Kalite", demoAccounts:"Demo hesaplar",

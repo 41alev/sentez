@@ -1,3 +1,4 @@
+// @ts-nocheck
 const App = (() => {
   const VIEWS = {
     dashboard: ViewDashboard, items: ViewItems, lots: ViewLots, counts: ViewCounts,

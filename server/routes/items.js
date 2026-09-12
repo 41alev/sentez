@@ -1,3 +1,4 @@
+// @ts-nocheck
 const express = require('express');
 const db = require('../db');
 const { AppError, uuid, logAudit, diff } = require('../lib/core');

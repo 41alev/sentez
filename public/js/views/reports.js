@@ -1,3 +1,4 @@
+// @ts-nocheck
 const ViewReports = (() => {
   const { t, esc, num, money, dt, ts, table, loading, select } = UI;
 

@@ -1,5 +1,6 @@
 const db = require('../db');
 const { uuid, getSetting } = require('../lib/core');
+const { today, addDays } = require('../lib/dates');
 
 let mailer = null;
 // Son gönderim sonucu: e-postalar sessizce düşerse kimsenin haberi olmaz,
@@ -103,14 +104,14 @@ function runScan() {
   const expRule = ruleFor('expiry');
   if (expRule) {
     const days = expRule.threshold_days || 30;
-    const limit = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+    const limit = addDays(today(), days);
     const rows = db.prepare(`
       SELECT sl.id, sl.lot_no, sl.expiry_date, sl.qty, i.name, i.unit
       FROM stock_lots sl JOIN items i ON i.id = sl.item_id
       WHERE sl.status IN ('available','quarantine') AND sl.qty > 0
         AND sl.expiry_date IS NOT NULL AND sl.expiry_date <= ?`).all(limit);
     rows.forEach(r => {
-      const expired = r.expiry_date < new Date().toISOString().slice(0, 10);
+      const expired = r.expiry_date < today();
       created.push(push({
         ruleType: 'expiry', severity: expired ? 'critical' : 'warning',
         title: `${expired ? 'SKT geçti' : 'SKT yaklaşıyor'}: ${r.name}`,
@@ -122,10 +123,9 @@ function runScan() {
 
   // --- Overdue purchase orders
   if (ruleFor('overdue_po')) {
-    const today = new Date().toISOString().slice(0, 10);
     const rows = db.prepare(`
       SELECT id, po_no, supplier_name, expected FROM purchase_orders
-      WHERE status IN ('approved','partially_received') AND expected IS NOT NULL AND expected < ?`).all(today);
+      WHERE status IN ('approved','partially_received') AND expected IS NOT NULL AND expected < ?`).all(today());
     rows.forEach(r => {
       created.push(push({
         ruleType: 'overdue_po', severity: 'warning',
@@ -140,7 +140,7 @@ function runScan() {
   const calRule = ruleFor('calibration_due');
   if (calRule) {
     const days = calRule.threshold_days || 30;
-    const limit = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+    const limit = addDays(today(), days);
     const rows = db.prepare(`SELECT id, name, next_calibration_date FROM equipment
       WHERE status = 'active' AND next_calibration_date IS NOT NULL AND next_calibration_date <= ?`).all(limit);
     rows.forEach(r => {

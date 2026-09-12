@@ -15,6 +15,7 @@ const path = require('path');
 const db = require('../db');
 const ubl = require('../lib/ubl');
 const { AppError, uuid, getSetting } = require('../lib/core');
+const { toLocalDateStr } = require('../lib/dates');
 
 /* ============================ ADAPTÖRLER ============================ */
 
@@ -82,10 +83,7 @@ function httpProvider(config) {
     try { data = JSON.parse(text); } catch { data = { raw: text }; }
     if (!res.ok) {
       const msg = (data && (data.message || data.error)) || `HTTP ${res.status}`;
-      const err = new Error(msg);
-      err.providerStatus = res.status;
-      err.providerBody = data;
-      throw err;
+      throw Object.assign(new Error(msg), { providerStatus: res.status, providerBody: data });
     }
     return data;
   };
@@ -193,6 +191,10 @@ function customerParty(customerId) {
  * Alıcı e-Fatura mükellefiyse e-Fatura, değilse e-Arşiv düzenlenir — bu seçim
  * mükellefin tercihine bırakılamaz, GİB kuralıdır.
  */
+/**
+ * @param {number|string} invoiceId
+ * @param {{ userId?: number|string }} [options]
+ */
 function buildFromInvoice(invoiceId, { userId } = {}) {
   const inv = db.prepare('SELECT * FROM customer_invoices WHERE id = ?').get(invoiceId);
   if (!inv) throw new AppError('Fatura bulunamadı / Invoice not found', 404);
@@ -233,7 +235,7 @@ function buildFromInvoice(invoiceId, { userId } = {}) {
     docType,
     ettn: ubl.newEttn(),
     documentNo: nextDocumentNo(docType),
-    issueDate: inv.invoice_date || now.toISOString().slice(0, 10),
+    issueDate: inv.invoice_date || toLocalDateStr(now),
     issueTime: now.toTimeString().slice(0, 8),
     profileId: docType === 'earchive' ? 'EARSIVFATURA' : 'TICARIFATURA',
     invoiceType: (inv.invoice_type || 'satis').toUpperCase(),
@@ -269,6 +271,10 @@ function buildFromInvoice(invoiceId, { userId } = {}) {
 }
 
 /** Sevkiyattan e-İrsaliye üretir. */
+/**
+ * @param {number|string} shipmentId
+ * @param {{ userId?: number|string, plateNo?: string, driverName?: string }} [options]
+ */
 function buildFromShipment(shipmentId, { userId, plateNo, driverName } = {}) {
   const sh = db.prepare('SELECT * FROM shipments WHERE id = ?').get(shipmentId);
   if (!sh) throw new AppError('Sevkiyat bulunamadı / Shipment not found', 404);
@@ -291,7 +297,7 @@ function buildFromShipment(shipmentId, { userId, plateNo, driverName } = {}) {
   const payload = {
     ettn: ubl.newEttn(),
     documentNo: nextDocumentNo('edespatch'),
-    issueDate: sh.date || now.toISOString().slice(0, 10),
+    issueDate: sh.date || toLocalDateStr(now),
     issueTime: now.toTimeString().slice(0, 8),
     supplier, customer,
     lines: items.map(i => ({ itemName: i.item_name, itemCode: i.item_code, qty: i.qty, unit: i.unit, lotNo: i.lot_no })),
@@ -319,6 +325,10 @@ function buildFromShipment(shipmentId, { userId, plateNo, driverName } = {}) {
 
 /* ============================ GÖNDERİM ============================ */
 
+/**
+ * @param {number|string} docId
+ * @param {{ userId?: number|string }} [options]
+ */
 async function sendDocument(docId, { userId } = {}) {
   const doc = db.prepare('SELECT * FROM e_documents WHERE id = ?').get(docId);
   if (!doc) throw new AppError('e-Belge bulunamadı / e-Document not found', 404);
@@ -346,6 +356,10 @@ async function sendDocument(docId, { userId } = {}) {
   return db.prepare('SELECT * FROM e_documents WHERE id = ?').get(docId);
 }
 
+/**
+ * @param {number|string} docId
+ * @param {{ userId?: number|string }} [options]
+ */
 async function refreshStatus(docId, { userId } = {}) {
   const doc = db.prepare('SELECT * FROM e_documents WHERE id = ?').get(docId);
   if (!doc) throw new AppError('e-Belge bulunamadı / e-Document not found', 404);
@@ -370,6 +384,10 @@ async function refreshStatus(docId, { userId } = {}) {
  * Alıcının e-Fatura mükellefi olup olmadığını entegratörden sorar ve müşteri
  * kaydını günceller. Bu bilgi değişkendir; fatura kesmeden önce tazelenmelidir.
  */
+/**
+ * @param {number|string} customerId
+ * @param {{ userId?: number|string }} [options]
+ */
 async function checkTaxpayer(customerId, { userId } = {}) {
   const c = db.prepare('SELECT * FROM customers WHERE id = ?').get(customerId);
   if (!c) throw new AppError('Müşteri bulunamadı / Customer not found', 404);
@@ -389,6 +407,11 @@ async function checkTaxpayer(customerId, { userId } = {}) {
   return { customerId, isEinvoiceUser: !!r.isEinvoiceUser, alias: r.alias || null };
 }
 
+/**
+ * @param {number|string} docId
+ * @param {string} reason
+ * @param {{ userId?: number|string }} [options]
+ */
 function cancelDocument(docId, reason, { userId } = {}) {
   const doc = db.prepare('SELECT * FROM e_documents WHERE id = ?').get(docId);
   if (!doc) throw new AppError('e-Belge bulunamadı / e-Document not found', 404);

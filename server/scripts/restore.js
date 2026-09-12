@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Yedekten geri yükleme.
  *

@@ -1,3 +1,4 @@
+// @ts-nocheck
 const ViewProduction = (() => {
   const { t, esc, num, dt, ts, card, table, pager, loading, modal, closeModal,
           field, input, select, textarea, val, numVal, intVal, can } = UI;

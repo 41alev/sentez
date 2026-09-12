@@ -1,3 +1,4 @@
+// @ts-nocheck
 const bcrypt = require('bcryptjs');
 const db = require('./db');
 const { uuid } = require('./lib/core');

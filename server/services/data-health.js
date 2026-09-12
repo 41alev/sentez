@@ -15,6 +15,7 @@
  */
 const db = require('../db');
 const { AppError, uuid } = require('../lib/core');
+const { today, addDays } = require('../lib/dates');
 
 const CHECKS = [];
 const check = (def) => CHECKS.push(def);
@@ -104,22 +105,21 @@ check({
   fixable: true,
   fixAction: 'Bu partiler bloke durumuna alınır ve hareket kaydı bırakılır.',
   run() {
-    const today = new Date().toISOString().slice(0, 10);
     return db.prepare(`SELECT sl.id, sl.lot_no, sl.qty, sl.expiry_date, i.name AS item_name
       FROM stock_lots sl JOIN items i ON i.id = sl.item_id
       WHERE sl.status = 'available' AND sl.qty > 0
-        AND sl.expiry_date IS NOT NULL AND sl.expiry_date < ?`).all(today)
+        AND sl.expiry_date IS NOT NULL AND sl.expiry_date < ?`).all(today())
       .map(r => ({
         key: r.id, label: `${r.item_name} · ${r.lot_no || '—'}`,
         detail: `SKT ${r.expiry_date}, miktar ${r.qty}`
       }));
   },
   fix() {
-    const today = new Date().toISOString().slice(0, 10);
+    const cutoffToday = today();
     const lots = db.prepare(`SELECT sl.*, i.name AS item_name FROM stock_lots sl
       JOIN items i ON i.id = sl.item_id
       WHERE sl.status = 'available' AND sl.qty > 0
-        AND sl.expiry_date IS NOT NULL AND sl.expiry_date < ?`).all(today);
+        AND sl.expiry_date IS NOT NULL AND sl.expiry_date < ?`).all(cutoffToday);
     const upd = db.prepare("UPDATE stock_lots SET status = 'blocked' WHERE id = ?");
     const mv = db.prepare(`INSERT INTO movements (id,item_id,item_name,lot_id,lot_no,warehouse_id,type,qty,
         from_status,to_status,note,ref_type,ts) VALUES (?,?,?,?,?,?,'status_change',?, 'available','blocked',?,'data_health',?)`);
@@ -377,7 +377,7 @@ check({
     'Çoğu unutulmuştur ve açık kaldıkça MRP hesabını ve raporları bozar.',
   fixable: false,
   run() {
-    const cutoff = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+    const cutoff = addDays(today(), -90);
     const pos = db.prepare(`SELECT po_no AS no, date FROM purchase_orders
       WHERE status IN ('draft','approved','partially_received') AND date < ?`).all(cutoff)
       .map(r => ({ key: 'po-' + r.no, label: `Satın alma ${r.no}`, detail: r.date }));

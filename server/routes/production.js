@@ -1,6 +1,8 @@
+// @ts-nocheck
 const express = require('express');
 const db = require('../db');
 const { AppError, uuid, nextNumber, logAudit } = require('../lib/core');
+const { today } = require('../lib/dates');
 const { requireAuth, requirePermission } = require('../middleware/auth');
 const { validate, validateQuery, z, pageQuery } = require('../middleware/validate');
 const stock = require('../services/stock');
@@ -107,7 +109,7 @@ router.post('/', requirePermission('production.write'), validate(createSchema), 
       db.prepare(`INSERT INTO production_orders (id,order_no,item_id,item_name,warehouse_id,qty,status,date,lot_no,
         labor_cost,overhead_cost,note,created_by) VALUES (?,?,?,?,?,?, 'Planlandı',?,?,?,?,?,?)`).run(
         poId, no, item.id, item.name, b.warehouseId || item.default_warehouse_id, b.qty,
-        b.date || new Date().toISOString().slice(0, 10), b.lotNo || '', b.laborCost, b.overheadCost,
+        b.date || today(), b.lotNo || '', b.laborCost, b.overheadCost,
         b.note || '', req.user.id);
 
       const ins = db.prepare('INSERT INTO production_order_components (production_order_id,component_item_id,component_name,qty_used) VALUES (?,?,?,?)');

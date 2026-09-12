@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const db = require('../db');
+const { today: todayLocal } = require('./dates');
 
 /** Domain error with an HTTP status; routes translate these into responses. */
 class AppError extends Error {
@@ -70,7 +71,7 @@ function setSetting(key, value) {
  */
 function fxRate(currency, dateStr) {
   if (!currency || currency === 'TRY') return 1;
-  const date = dateStr || new Date().toISOString().slice(0, 10);
+  const date = dateStr || todayLocal();
   const row = db.prepare('SELECT rate FROM exchange_rates WHERE currency = ? AND rate_date <= ? ORDER BY rate_date DESC LIMIT 1')
     .get(currency, date);
   if (row) return row.rate;

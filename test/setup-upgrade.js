@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Kurulum ve sürüm yükseltme testleri.
  *

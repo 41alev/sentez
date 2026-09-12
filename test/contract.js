@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Contract test: asserts that each endpoint actually returns the field names the
  * frontend views read. The e2e suite proves the backend *works*; this proves the

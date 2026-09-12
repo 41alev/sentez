@@ -1,3 +1,4 @@
+// @ts-nocheck
 const ViewLots = (() => {
   const { t, esc, num, dt, ts, card, table, pager, loading, modal, closeModal,
           field, input, select, val, numVal, intVal, can } = UI;

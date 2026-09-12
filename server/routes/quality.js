@@ -1,7 +1,9 @@
+// @ts-nocheck
 const express = require('express');
 const crypto = require('crypto');
 const db = require('../db');
 const { AppError, uuid, nextNumber, logAudit } = require('../lib/core');
+const { today } = require('../lib/dates');
 const { requireAuth, requirePermission } = require('../middleware/auth');
 const { validate, validateQuery, z, pageQuery } = require('../middleware/validate');
 const stock = require('../services/stock');
@@ -393,7 +395,7 @@ router.get('/equipment', (req, res) => {
     id: r.id, code: r.code, name: r.name, serialNo: r.serial_no, location: r.location,
     calibrationIntervalDays: r.calibration_interval_days, lastCalibrationDate: r.last_calibration_date,
     nextCalibrationDate: r.next_calibration_date, status: r.status, notes: r.notes,
-    overdue: r.next_calibration_date ? r.next_calibration_date < new Date().toISOString().slice(0, 10) : false,
+    overdue: r.next_calibration_date ? r.next_calibration_date < today() : false,
     history: db.prepare('SELECT * FROM calibrations WHERE equipment_id = ? ORDER BY calibration_date DESC LIMIT 20').all(r.id)
       .map(c => ({ id: c.id, date: c.calibration_date, nextDue: c.next_due_date, performedBy: c.performed_by,
         certificateNo: c.certificate_no, result: c.result, notes: c.notes }))

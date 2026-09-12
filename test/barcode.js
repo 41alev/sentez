@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Barkod okuma testi.
  *

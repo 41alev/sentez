@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * 001 — Core ERP schema.
  *

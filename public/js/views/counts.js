@@ -1,3 +1,4 @@
+// @ts-nocheck
 const ViewCounts = (() => {
   const { t, esc, num, ts, dt, card, table, pager, loading, modal, closeModal,
           field, input, select, val, intVal, can } = UI;

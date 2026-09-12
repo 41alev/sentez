@@ -11,32 +11,10 @@
  */
 const db = require('../db');
 const { AppError } = require('../lib/core');
+const { toLocalDateStr: toDateStr, isoWeekday } = require('../lib/dates');
 
 const MIN = 60000;
 const DAY_MS = 86400000;
-
-/**
- * Bir zaman damgasını YEREL takvim gününe çevirir.
- *
- * Kasıtlı olarak toISOString() KULLANILMAZ: bu fonksiyonun ürettiği string,
- * bu dosyada başka yerlerde `new Date(dateStr + 'T00:00:00')` ve
- * `new Date(dateStr + 'T12:00:00')` ile YEREL saat olarak geri parse ediliyor.
- * toISOString() UTC döndürdüğü için, UTC'nin doğusundaki saat dilimlerinde
- * (ör. Türkiye, UTC+3) bu ikisi arasında gün kayması oluşuyordu: findSlot()
- * bir sonraki güne geçtiğini sanıp aslında AYNI günü tekrar üretiyor ve
- * ufuk (180 gün) boyunca hiç ilerlemeden "kapasite bulunamadı" hatası
- * veriyordu — iş merkezi, vardiya, tatil fark etmeksizin HER ZAMAN.
- * Yerel tarih bileşenleriyle üretmek bu tutarsızlığı ortadan kaldırır.
- */
-const toDateStr = (d) => {
-  const dt = new Date(d);
-  const y = dt.getFullYear();
-  const m = String(dt.getMonth() + 1).padStart(2, '0');
-  const day = String(dt.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
-/** JS'te Pazar 0'dır; ISO'da Pazartesi 1, Pazar 7. */
-const isoWeekday = (d) => { const w = new Date(d).getDay(); return w === 0 ? 7 : w; };
 
 function parseHM(s) {
   const [h, m] = String(s).split(':').map(Number);
@@ -68,7 +46,7 @@ function availableMinutes(workCenterId, dateStr) {
     if (exc.available_hours != null) return exc.available_hours * 60 * wc.capacity_units;
   }
 
-  const weekday = isoWeekday(dateStr + 'T12:00:00');
+  const weekday = isoWeekday(dateStr);
   const shifts = db.prepare(`SELECT s.* FROM shifts s
     JOIN work_center_shifts wcs ON wcs.shift_id = s.id
     WHERE wcs.work_center_id = ? AND s.is_active = 1`).all(workCenterId);
@@ -173,6 +151,8 @@ function findSlot(workCenterId, earliestMs, neededMinutes, horizonDays = 180) {
  * Üretim emrini rotasına göre çizelgeler.
  * Operasyonlar sıralıdır: bir sonraki, bir öncekinin bitişinden ve bekleme
  * süresinden sonra başlar. Her operasyon kendi iş merkezinin boş kapasitesine oturur.
+ * @param {number|string} orderId
+ * @param {{ startFrom?: number|string }} [options]
  */
 function scheduleOrder(orderId, { startFrom } = {}) {
   const order = db.prepare('SELECT * FROM production_orders WHERE id = ?').get(orderId);

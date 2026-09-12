@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Excel aktarım testleri.
  *
