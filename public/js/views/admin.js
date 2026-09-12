@@ -17,13 +17,14 @@ const ViewAdmin = (() => {
         { k: 'users', l: t('tabUsers') }, { k: 'warehouses', l: t('tabWarehouses') },
         { k: 'fx', l: t('tabFx') }, { k: 'rules', l: t('tabRules') },
         { k: 'audit', l: t('tabAudit') }, { k: 'settings', l: t('tabSettings') },
-        { k: 'import', l: t('tabImport') }, { k: 'templates', l: t('tabTemplates') }, { k: 'health', l: t('tabDataHealth') }, { k: 'edoc', l: t('edocSettings') }
+        { k: 'import', l: t('tabImport') }, { k: 'templates', l: t('tabTemplates') }, { k: 'health', l: t('tabDataHealth') }, { k: 'edoc', l: t('edocSettings') },
+        { k: 'accounting', l: t('tabAccounting') }
       ], tab, k => { tab = k; load(el); })}
       <div id="adBody">${loading()}</div>`;
 
     const body = document.getElementById('adBody');
     const actions = document.getElementById('adActions');
-    const fns = { users: usersTab, warehouses: whTab, fx: fxTab, rules: rulesTab, audit: auditTab, settings: settingsTab, edoc: edocTab, import: importTab, templates: templatesTab, health: healthTab };
+    const fns = { users: usersTab, warehouses: whTab, fx: fxTab, rules: rulesTab, audit: auditTab, settings: settingsTab, edoc: edocTab, import: importTab, templates: templatesTab, health: healthTab, accounting: accountingTab };
     try { await fns[tab](el, body, actions); }
     catch (e) { UI.err(e); body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   }
@@ -1138,6 +1139,89 @@ const ViewAdmin = (() => {
         });
       } catch (e) { UI.err(e); }
     });
+  }
+
+  /* ================= MUHASEBE AKTARIMI ================= */
+  let accFrom = UI.addDays(UI.today(), -30);
+  let accTo = UI.today();
+  let accResult = null;
+
+  async function accountingTab(el, body, actions) {
+    actions.innerHTML = '';
+    const mappings = await Api.accountingMappings();
+
+    body.innerHTML = `
+      <div class="alert info">${UI.getLang() === 'tr'
+        ? 'Bu bir muhasebe programı değildir. Satış ve alış faturalarından çift taraflı (borç=alacak) yevmiye satırları üretir; hangi muhasebe programına aktarılacaksa hesap kodları aşağıdan o programa göre ayarlanmalıdır.'
+        : 'This is not an accounting program. It produces double-entry journal rows from sales/purchase invoices; set the account codes below to match whichever accounting software you import into.'}</div>
+
+      <div class="card">
+        <div class="section-title">${t('tabAccounting')}</div>
+        <div class="field-row">
+          ${field(UI.getLang() === 'tr' ? 'Başlangıç' : 'From', input('accFrom', { type: 'date', value: accFrom }))}
+          ${field(UI.getLang() === 'tr' ? 'Bitiş' : 'To', input('accTo', { type: 'date', value: accTo }))}
+        </div>
+        <button class="btn btn-primary btn-sm" id="accPreview">${UI.getLang() === 'tr' ? 'Önizle' : 'Preview'}</button>
+        <button class="btn btn-ghost btn-sm" id="accCsv" ${accResult ? '' : 'disabled'}>${UI.icon(UI.ICONS.print)}${UI.getLang() === 'tr' ? 'CSV İndir' : 'Download CSV'}</button>
+        <div id="accResultBox" style="margin-top:16px">${accResult ? renderAccResult(accResult) : ''}</div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">${UI.getLang() === 'tr' ? 'Hesap Kodu Eşlemesi' : 'Account Code Mapping'}</div>
+        <div class="sub">${UI.getLang() === 'tr'
+          ? 'Muhasebe programı değiştiğinde yalnızca burayı güncelleyin — dışa aktarım mantığı değişmez.'
+          : 'When you switch accounting software, update only this — the export logic stays the same.'}</div>
+        ${table([
+          { key: 'key', label: UI.getLang() === 'tr' ? 'Kalem' : 'Item', render: r => `<span class="mono">${esc(r.key)}</span>` },
+          { key: 'accountCode', label: UI.getLang() === 'tr' ? 'Hesap Kodu' : 'Account Code',
+            render: r => input(`accCode_${r.key}`, { value: r.accountCode, style: 'width:100px' }) },
+          { key: 'accountName', label: UI.getLang() === 'tr' ? 'Hesap Adı' : 'Account Name',
+            render: r => input(`accName_${r.key}`, { value: r.accountName }) }
+        ], mappings)}
+        <button class="btn btn-primary btn-sm" id="accMapSave">${t('save')}</button>
+      </div>`;
+
+    document.getElementById('accPreview').onclick = async () => {
+      accFrom = val('accFrom'); accTo = val('accTo');
+      try {
+        accResult = await Api.accountingExport(accFrom, accTo);
+        document.getElementById('accResultBox').innerHTML = renderAccResult(accResult);
+        document.getElementById('accCsv').disabled = false;
+      } catch (e) { UI.err(e); }
+    };
+
+    document.getElementById('accCsv').onclick = () => {
+      if (!accResult) return;
+      UI.exportCsv(`muhasebe-fisi-${accResult.from}-${accResult.to}.csv`,
+        [UI.getLang() === 'tr' ? 'Tarih' : 'Date', UI.getLang() === 'tr' ? 'Belge No' : 'Doc No', 'Hesap Kodu', 'Hesap Adı', 'Açıklama', 'Borç', 'Alacak'],
+        accResult.rows.map(r => [r.date, r.docNo, r.accountCode, r.accountName, r.description, r.debit || '', r.credit || '']));
+    };
+
+    document.getElementById('accMapSave').onclick = async () => {
+      try {
+        const keys = mappings.map(m => m.key);
+        const payload = keys.map(k => ({ key: k, accountCode: val(`accCode_${k}`), accountName: val(`accName_${k}`) }));
+        await Api.setAccountingMappings(payload);
+        UI.ok(t('saved'));
+      } catch (e) { UI.err(e); }
+    };
+  }
+
+  function renderAccResult(r) {
+    return `
+      <div class="stat-row">
+        ${UI.stat(UI.getLang() === 'tr' ? 'Satır' : 'Rows', num(r.count))}
+        ${UI.stat(UI.getLang() === 'tr' ? 'Toplam Borç' : 'Total Debit', money(r.totalDebit))}
+        ${UI.stat(UI.getLang() === 'tr' ? 'Toplam Alacak' : 'Total Credit', money(r.totalCredit))}
+      </div>
+      ${table([
+        { key: 'date', label: UI.getLang() === 'tr' ? 'Tarih' : 'Date', render: x => dt(x.date) },
+        { key: 'docNo', label: UI.getLang() === 'tr' ? 'Belge No' : 'Doc No', render: x => esc(x.docNo) },
+        { key: 'accountCode', label: UI.getLang() === 'tr' ? 'Hesap' : 'Account', render: x => `${esc(x.accountCode)} — ${esc(x.accountName)}` },
+        { key: 'description', label: UI.getLang() === 'tr' ? 'Açıklama' : 'Description', render: x => esc(x.description) },
+        { key: 'debit', label: UI.getLang() === 'tr' ? 'Borç' : 'Debit', num: true, render: x => x.debit ? money(x.debit) : '' },
+        { key: 'credit', label: UI.getLang() === 'tr' ? 'Alacak' : 'Credit', num: true, render: x => x.credit ? money(x.credit) : '' }
+      ], r.rows)}`;
   }
 
   return { render };

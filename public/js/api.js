@@ -257,6 +257,9 @@ const Api = (() => {
     notificationRules: () => req('GET', '/notification-rules'),
     createNotificationRule: (d) => req('POST', '/notification-rules', d),
     deleteNotificationRule: (id) => req('DELETE', '/notification-rules/' + id),
+    accountingMappings: () => req('GET', '/accounting/mappings'),
+    setAccountingMappings: (mappings) => req('PUT', '/accounting/mappings', { mappings }),
+    accountingExport: (from, to) => req('GET', `/accounting/export${qs({ from, to })}`),
     audit: (p) => req('GET', '/audit' + qs(p)),
   };
 })();

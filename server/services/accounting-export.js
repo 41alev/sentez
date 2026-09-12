@@ -1,0 +1,125 @@
+/**
+ * Muhasebe dışa aktarım köprüsü.
+ *
+ * Satış ve alış faturalarından çift taraflı (borç=alacak) yevmiye satırları
+ * üretir. Hesap kodları `account_code_mappings` tablosundan gelir — hangi
+ * muhasebe programına geçilirse geçilsin yalnızca o tablo güncellenir,
+ * burada satır üretme mantığı değişmez.
+ *
+ * Satış tarafı: customer_invoices zaten subtotal/vat_total/amount alanlarını
+ * tutuyor (bkz. 002_einvoice.js) — yeniden hesaplanmaz, sistemin kendi
+ * otoriter değerleri kullanılır.
+ *
+ * Alış tarafı: supplier_invoices yalnızca KDV HARİÇ tek bir `amount` tutuyor
+ * (bkz. routes/purchasing.js — 3'lü eşleştirme net tutar üzerinden yapılıyor).
+ * KDV ayrı saklanmadığı için, faturanın bağlı olduğu satın alma siparişinin
+ * kalemlerindeki ürünlerin `items.vat_rate` değeri, kalem tutarına göre
+ * AĞIRLIKLI ORTALAMA alınarak KDV oranı türetilir. Bu bir varsayımdır —
+ * KDV oranı satın alma faturasında ayrıca saklanmadığı sürece kesin değer
+ * bilinemez; çoğu sipariş tek bir KDV oranı taşıdığı için pratikte doğru
+ * sonuç verir.
+ */
+const db = require('../db');
+const { AppError } = require('../lib/core');
+
+function getMappings(companyId = 1) {
+  const rows = db.prepare('SELECT mapping_key, account_code, account_name FROM account_code_mappings WHERE company_id = ?')
+    .all(companyId);
+  const byKey = {};
+  rows.forEach(r => { byKey[r.mapping_key] = { code: r.account_code, name: r.account_name }; });
+  const required = ['sales_revenue', 'sales_vat', 'accounts_receivable', 'purchase_vat', 'accounts_payable', 'inventory'];
+  const missing = required.filter(k => !byKey[k]);
+  if (missing.length) {
+    throw new AppError(`Hesap kodu eşlemesi eksik / Missing account code mapping: ${missing.join(', ')}`, 400);
+  }
+  return byKey;
+}
+
+/** Bir satın alma faturasının bağlı olduğu PO kalemlerinden ağırlıklı ortalama KDV oranı. */
+function purchaseVatRate(poId) {
+  const lines = db.prepare(`
+    SELECT pi.qty * pi.price AS line_value, COALESCE(i.vat_rate, 20) AS vat_rate
+    FROM po_items pi LEFT JOIN items i ON i.id = pi.item_id
+    WHERE pi.po_id = ?
+  `).all(poId);
+  const totalValue = lines.reduce((s, l) => s + (l.line_value || 0), 0);
+  if (totalValue <= 0) return 20; // varsayılan genel oran
+  const weighted = lines.reduce((s, l) => s + (l.line_value || 0) * (l.vat_rate || 0), 0);
+  return weighted / totalValue;
+}
+
+/**
+ * Verilen tarih aralığındaki satış ve alış faturalarından yevmiye satırları üretir.
+ * @param {{ from: string, to: string, companyId?: number }} params
+ */
+function generateJournalEntries({ from, to, companyId = 1 }) {
+  if (!from || !to || from > to) throw new AppError('Geçersiz tarih aralığı / Invalid date range', 400);
+  const map = getMappings(companyId);
+  const rows = [];
+
+  const sales = db.prepare(`
+    SELECT ci.*, c.name AS customer_name FROM customer_invoices ci
+    LEFT JOIN customers c ON c.id = ci.customer_id
+    WHERE ci.status != 'cancelled' AND ci.invoice_date BETWEEN ? AND ?
+    ORDER BY ci.invoice_date, ci.invoice_no
+  `).all(from, to);
+
+  sales.forEach(inv => {
+    const rate = inv.fx_rate || 1;
+    const grossBase = Math.round(inv.amount * rate * 100) / 100;
+    const vatBase = Math.round(inv.vat_total * rate * 100) / 100;
+    const revenueBase = Math.round((grossBase - vatBase) * 100) / 100;
+    const desc = `Satış faturası ${inv.invoice_no} — ${inv.customer_name || ''}`;
+    rows.push({ date: inv.invoice_date, docNo: inv.invoice_no, accountCode: map.accounts_receivable.code,
+      accountName: map.accounts_receivable.name, description: desc, debit: grossBase, credit: 0,
+      sourceType: 'customer_invoice', sourceId: inv.id });
+    rows.push({ date: inv.invoice_date, docNo: inv.invoice_no, accountCode: map.sales_revenue.code,
+      accountName: map.sales_revenue.name, description: desc, debit: 0, credit: revenueBase,
+      sourceType: 'customer_invoice', sourceId: inv.id });
+    if (vatBase > 0) {
+      rows.push({ date: inv.invoice_date, docNo: inv.invoice_no, accountCode: map.sales_vat.code,
+        accountName: map.sales_vat.name, description: desc, debit: 0, credit: vatBase,
+        sourceType: 'customer_invoice', sourceId: inv.id });
+    }
+  });
+
+  const purchases = db.prepare(`
+    SELECT si.*, s.name AS supplier_name FROM supplier_invoices si
+    LEFT JOIN suppliers s ON s.id = si.supplier_id
+    WHERE si.invoice_date BETWEEN ? AND ?
+    ORDER BY si.invoice_date, si.invoice_no
+  `).all(from, to);
+
+  purchases.forEach(inv => {
+    const rate = inv.fx_rate || 1;
+    const netBase = Math.round(inv.amount * rate * 100) / 100;
+    const vatRate = purchaseVatRate(inv.po_id);
+    const vatBase = Math.round(netBase * (vatRate / 100) * 100) / 100;
+    const grossBase = Math.round((netBase + vatBase) * 100) / 100;
+    const desc = `Alış faturası ${inv.invoice_no} — ${inv.supplier_name || ''}`;
+    rows.push({ date: inv.invoice_date, docNo: inv.invoice_no, accountCode: map.inventory.code,
+      accountName: map.inventory.name, description: desc, debit: netBase, credit: 0,
+      sourceType: 'supplier_invoice', sourceId: inv.id });
+    if (vatBase > 0) {
+      rows.push({ date: inv.invoice_date, docNo: inv.invoice_no, accountCode: map.purchase_vat.code,
+        accountName: map.purchase_vat.name, description: desc, debit: vatBase, credit: 0,
+        sourceType: 'supplier_invoice', sourceId: inv.id });
+    }
+    rows.push({ date: inv.invoice_date, docNo: inv.invoice_no, accountCode: map.accounts_payable.code,
+      accountName: map.accounts_payable.name, description: desc, debit: 0, credit: grossBase,
+      sourceType: 'supplier_invoice', sourceId: inv.id });
+  });
+
+  // Dönem sonu kontrolü: toplam borç = toplam alacak. Aksi halde sessizce
+  // yanlış bir dışa aktarım üretmek yerine açıkça hata verilir.
+  const totalDebit = Math.round(rows.reduce((s, r) => s + r.debit, 0) * 100) / 100;
+  const totalCredit = Math.round(rows.reduce((s, r) => s + r.credit, 0) * 100) / 100;
+  if (Math.abs(totalDebit - totalCredit) > 0.01) {
+    throw new AppError(
+      `Borç/alacak dengesi tutmuyor / Debit-credit imbalance: ${totalDebit} vs ${totalCredit}`, 500);
+  }
+
+  return { from, to, rows, totalDebit, totalCredit, count: rows.length };
+}
+
+module.exports = { generateJournalEntries, getMappings, purchaseVatRate };

@@ -174,6 +174,7 @@ tr: {
   warehouseTerminal:"Depo Terminali",
   // veri sağlığı
   tabDataHealth:"Veri Sağlığı", dataHealthTitle:"Veri Sağlığı Denetimi",
+  tabAccounting:"Muhasebe Aktarımı",
   healthScore:"Sağlık puanı", runCheck:"Denetimi Çalıştır",
   sevWarning:"Uyarı", sevInfo:"Bilgi",
   findings:"bulgu", noFindings:"Bu kontrolde bulgu yok.",
@@ -484,6 +485,7 @@ en: {
   warehouseTerminal:"Warehouse Terminal",
   // data health
   tabDataHealth:"Data Health", dataHealthTitle:"Data Health Audit",
+  tabAccounting:"Accounting Export",
   healthScore:"Health score", runCheck:"Run Audit",
   sevWarning:"Warning", sevInfo:"Info",
   findings:"findings", noFindings:"No findings for this check.",
