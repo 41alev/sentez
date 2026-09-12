@@ -5,6 +5,7 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
+    "demo": "node server/scripts/demo.js",
     "migrate": "node server/migrate.js",
     "seed": "node server/seed.js",
     "backup": "node server/scripts/backup.js",
@@ -30,7 +31,8 @@
     "upgrade": "node server/scripts/upgrade.js",
     "test:setup": "node test/setup-upgrade.js",
     "test:dates": "node test/dates.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
   },
   "engines": {
     "node": ">=18"
@@ -52,7 +54,10 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22.20.2",
+    "eslint": "^10.10.0",
+    "globals": "^17.12.0",
     "jsdom": "^25.0.1",
     "typescript": "^7.0.2"
   },

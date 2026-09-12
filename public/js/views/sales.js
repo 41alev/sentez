@@ -695,7 +695,7 @@ const ViewSales = (() => {
   };
 
   async function renderEdocs(el, body, actions) {
-    let res, settings = {};
+    let res, settings;
     try {
       [res, settings] = await Promise.all([
         Api.edocs({ pageSize: 50 }),

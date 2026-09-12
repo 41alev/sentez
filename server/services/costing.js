@@ -26,7 +26,7 @@ function applyLandedCosts(receiptId, userId) {
     const amountBase = Number(cost.amount || 0) * Number(cost.fx_rate || 1);
     if (amountBase <= 0) continue;
     for (const line of lines) {
-      let share = 0;
+      let share;
       if (cost.allocation_method === 'qty') {
         share = totalQty > 0 ? (line.qty / totalQty) * amountBase : 0;
       } else {

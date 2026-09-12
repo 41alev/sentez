@@ -79,7 +79,7 @@ function httpProvider(config) {
       signal: AbortSignal.timeout(Number(config.timeoutMs || 30000))
     });
     const text = await res.text();
-    let data = null;
+    let data;
     try { data = JSON.parse(text); } catch { data = { raw: text }; }
     if (!res.ok) {
       const msg = (data && (data.message || data.error)) || `HTTP ${res.status}`;
@@ -132,7 +132,7 @@ function httpProvider(config) {
 function getProvider() {
   const name = getSetting('einvoiceProvider') || 'local';
   if (name === 'local') return localProvider;
-  let cfg = {};
+  let cfg;
   try { cfg = JSON.parse(getSetting('einvoiceProviderConfig') || '{}'); } catch { cfg = {}; }
   return httpProvider({ ...cfg, name, testMode: getSetting('einvoiceTestMode') !== '0' });
 }

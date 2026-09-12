@@ -179,7 +179,7 @@ const ViewProduction = (() => {
   }
 
   async function completeDialog(el, id) {
-    let p, reqs = [];
+    let p, reqs;
     try {
       p = await Api.productionOrder(id);
       reqs = await Api.productionRequirements(id).then(r => r.requirements || r).catch(() => []);

@@ -32,6 +32,9 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
+      - name: Lint
+        run: npm run lint
+
       - name: Run full test suite (872 checks, isolated per package)
         run: npm run test:all
 

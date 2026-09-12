@@ -24,7 +24,7 @@ async function api(method, path, { token, body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
   const r = await fetch(BASE + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
-  let d = null;
+  let d;
   const text = await r.text();
   try { d = JSON.parse(text); } catch { d = text; }
   return { status: r.status, data: d };

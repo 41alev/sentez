@@ -29,7 +29,7 @@ async function api(method, p, { token, body, headers = {}, raw } = {}) {
   const h = { 'Content-Type': 'application/json', ...headers };
   if (token) h.Authorization = `Bearer ${token}`;
   const r = await fetch(BASE + p, { method, headers: h, body: body ? (raw ? body : JSON.stringify(body)) : undefined });
-  let d = null;
+  let d;
   const text = await r.text();
   try { d = JSON.parse(text); } catch { d = text; }
   return { status: r.status, data: d, headers: r.headers, text };
@@ -161,7 +161,7 @@ async function api(method, p, { token, body, headers = {}, raw } = {}) {
 
     const payloads = [
       '<img src=x onerror=window.__xss=1>',
-      '<script>window.__xss=1<\/script>',
+      '<script>window.__xss=1</script>',
       '"><svg onload=window.__xss=1>',
       "'><iframe src=javascript:window.__xss=1>",
       '<a href="javascript:window.__xss=1">tık</a>'

@@ -295,7 +295,7 @@ const ViewItems = (() => {
 
   /* ---------- item card ---------- */
   async function openCard(el, id) {
-    let item, movements = [], docs = { data: [] }, prices = [];
+    let item, movements, docs, prices;
     try {
       item = await Api.item(id);
       [movements, docs, prices] = await Promise.all([
