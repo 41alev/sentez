@@ -91,7 +91,7 @@ async function until(fn, timeout = 6000, step = 60) {
   // defines both ViewDashboard and ViewItems.
   const files = [
     'js/i18n.js', 'js/api.js', 'js/ui.js',
-    'dist/react-views.js', 'js/views/lots.js',
+    'dist/react-views.js',
     'js/views/production.js', 'js/views/purchasing.js', 'js/views/sales.js', 'js/views/planning.js',
     'js/views/quality.js', 'js/views/reports.js', 'js/views/admin.js', 'js/app.js'
   ];
@@ -106,8 +106,7 @@ async function until(fn, timeout = 6000, step = 60) {
     const name = f.split('/').pop().replace('.js', '');
     const globalNames = {
       'i18n': ['I18N'], 'api': ['Api'], 'ui': ['UI'], 'app': ['App'],
-      'react-views': ['ViewDashboard', 'ViewItems', 'ViewCounts'], // frontend-react/main.jsx defines these globals
-      'lots': ['ViewLots'],
+      'react-views': ['ViewDashboard', 'ViewItems', 'ViewCounts', 'ViewLots'], // frontend-react/main.jsx defines these globals
       'production': ['ViewProduction'], 'purchasing': ['ViewPurchasing'], 'sales': ['ViewSales'],
       'quality': ['ViewQuality'], 'reports': ['ViewReports'], 'admin': ['ViewAdmin'], 'planning': ['ViewPlanning']
     }[name];
