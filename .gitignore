@@ -9,6 +9,3 @@ npm-debug.log*
 .DS_Store
 *.zip
 coverage/
-
-# Kabuk süslü parantez genişletmesinden kalan çöp klasörler
-*{*,*}*
