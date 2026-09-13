@@ -140,7 +140,6 @@ async function api(method, p, { token, body, headers = {}, raw } = {}) {
   ok('arayüzde HTML kaçış fonksiyonu var', /const esc = \(s\) =>/.test(uiSrc));
   ok('kaçış tüm tehlikeli karakterleri kapsıyor',
     /&/.test(uiSrc) && /&lt;/.test(uiSrc) && /&gt;/.test(uiSrc) && /&quot;/.test(uiSrc) && /&#39;/.test(uiSrc));
-  const viewFiles = fs.readdirSync(path.join(__dirname, '..', 'public', 'js', 'views'));
   // Statik tarama bu işi güvenilir yapamıyor: JS'teki `<` karşılaştırması HTML
   // sanılıyor, iç içe şablonlar bölünüyor, kendi kendini kaçışlayan yardımcılar
   // ayırt edilemiyor. Bunun yerine gerçek davranışı ölçüyoruz — payload'ı gerçek

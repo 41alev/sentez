@@ -307,6 +307,8 @@ server/
   scripts/backup.js     yedekleme
   seed.js               örnek fabrika verisi
 public/
-  index.html, css/, js/{api,ui,i18n,app}.js, js/views/  10 ekran
+  index.html, css/, js/{api,ui,i18n,app}.js
+  dist/react-views.js   derlenmiş React bundle'ı (10 ekranın tamamı)
+frontend-react/         React kaynağı (Vite ile public/dist/'e derlenir — bkz. vite.config.js)
 test/e2e.js             77 uçtan uca test
 ```

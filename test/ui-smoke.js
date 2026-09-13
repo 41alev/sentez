@@ -87,12 +87,13 @@ async function until(fn, timeout = 6000, step = 60) {
   // Load application scripts in the same order index.html does. Dashboard is now
   // React (frontend-react/*.jsx) — the built bundle is loaded here, same as
   // the browser loads it, so this test exercises the actual production
-  // artifact rather than superseded source. One bundle defines all the
-  // globals migrated so far (see the react-views list below).
+  // artifact rather than superseded source. All 10 views now live in this
+  // one bundle (see the react-views list below); public/js/views/ no
+  // longer exists.
   const files = [
     'js/i18n.js', 'js/api.js', 'js/ui.js',
     'dist/react-views.js',
-    'js/views/admin.js', 'js/app.js'
+    'js/app.js'
   ];
   console.log('\n=== BETİK YÜKLEME / SCRIPT LOADING ===');
   // Inject as real <script> elements so top-level `const` lands in the shared global
@@ -105,8 +106,7 @@ async function until(fn, timeout = 6000, step = 60) {
     const name = f.split('/').pop().replace('.js', '');
     const globalNames = {
       'i18n': ['I18N'], 'api': ['Api'], 'ui': ['UI'], 'app': ['App'],
-      'react-views': ['ViewDashboard', 'ViewItems', 'ViewCounts', 'ViewLots', 'ViewProduction', 'ViewReports', 'ViewPlanning', 'ViewPurchasing', 'ViewQuality', 'ViewSales'], // frontend-react/main.jsx defines these globals
-      'admin': ['ViewAdmin']
+      'react-views': ['ViewDashboard', 'ViewItems', 'ViewCounts', 'ViewLots', 'ViewProduction', 'ViewReports', 'ViewPlanning', 'ViewPurchasing', 'ViewQuality', 'ViewSales', 'ViewAdmin'] // frontend-react/main.jsx defines these globals
     }[name];
     const loaded = globalNames.every(g => window.eval(`typeof ${g} !== 'undefined'`));
     check(f, loaded && jsErrors.length === before, jsErrors.slice(before).join(' | '));

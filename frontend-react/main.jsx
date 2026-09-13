@@ -19,6 +19,7 @@ import PlanningView from './PlanningView.jsx';
 import PurchasingView from './PurchasingView.jsx';
 import QualityView from './QualityView.jsx';
 import SalesView from './SalesView.jsx';
+import AdminView from './AdminView.jsx';
 
 window.ViewDashboard = mountView(DashboardView);
 window.ViewItems = mountView(ItemsView);
@@ -33,3 +34,4 @@ window.ViewPlanning = mountView(PlanningView);
 window.ViewPurchasing = mountView(PurchasingView);
 window.ViewQuality = mountView(QualityView);
 window.ViewSales = mountView(SalesView);
+window.ViewAdmin = mountView(AdminView);

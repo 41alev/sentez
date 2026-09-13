@@ -1,36 +1,46 @@
-// @ts-nocheck
-const ViewAdmin = (() => {
+/**
+ * Yönetim (Admin) — React'e kademeli geçişin SON ekranı (Aşama 3 tamamlanıyor).
+ *
+ * En büyük ve en çok sekmeli (11) ekran: Kullanıcılar, Depolar, Döviz,
+ * Kurallar, Denetim, Ayarlar, e-Belge Ayarları, Veri Aktarımı, Belge
+ * Şablonları, Veri Sağlığı, Muhasebe Aktarımı. Diğer sekmeli ekranlarla
+ * (Reports/Planning/Purchasing/Quality/Sales) aynı desen: dış kabuk sabit,
+ * her sekme kendi body/actions konteynerini dolduran ayrı bir fonksiyon.
+ * Bu ekranda ön-koşul veri çekimi YOK (orijinalde de yoktu) — ilk sekme
+ * kendi verisini kendi çeker, `ready` kapısına gerek olmadan.
+ */
+import { useEffect, useState, useRef } from 'react';
+
+export default function AdminView() {
   const { t, esc, num, money, dt, ts, table, pager, loading, modal, closeModal,
           field, input, select, textarea, checkbox, val, numVal, intVal, checked, can } = UI;
 
-  let tab = 'users';
+  const [tab, setTab] = useState('users');
+  const [reloadToken, setReloadToken] = useState(0);
 
-  async function render(el) { await load(el); }
+  const auditFilterRef = useRef({ entityType: '', username: '', page: 1 });
+  const importTypeRef = useRef('items');
+  const importPreviewDataRef = useRef(null);
+  const tplTypeRef = useRef('shipment');
+  const accFromRef = useRef(UI.addDays(UI.today(), -30));
+  const accToRef = useRef(UI.today());
+  const accResultRef = useRef(null);
 
-  async function load(el) {
-    el.innerHTML = `
-      <div class="topbar">
-        <div><h2>${t('adminTitle')}</h2><div class="sub">${t('adminSub')}</div></div>
-        <div class="topbar-actions" id="adActions"></div>
-      </div>
-      ${UI.tabs([
-        { k: 'users', l: t('tabUsers') }, { k: 'warehouses', l: t('tabWarehouses') },
-        { k: 'fx', l: t('tabFx') }, { k: 'rules', l: t('tabRules') },
-        { k: 'audit', l: t('tabAudit') }, { k: 'settings', l: t('tabSettings') },
-        { k: 'import', l: t('tabImport') }, { k: 'templates', l: t('tabTemplates') }, { k: 'health', l: t('tabDataHealth') }, { k: 'edoc', l: t('edocSettings') },
-        { k: 'accounting', l: t('tabAccounting') }
-      ], tab, k => { tab = k; load(el); })}
-      <div id="adBody">${loading()}</div>`;
+  function reload() { setReloadToken(x => x + 1); }
 
+  useEffect(() => {
     const body = document.getElementById('adBody');
     const actions = document.getElementById('adActions');
+    if (!body || !actions) return;
     const fns = { users: usersTab, warehouses: whTab, fx: fxTab, rules: rulesTab, audit: auditTab, settings: settingsTab, edoc: edocTab, import: importTab, templates: templatesTab, health: healthTab, accounting: accountingTab };
-    try { await fns[tab](el, body, actions); }
-    catch (e) { UI.err(e); body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
-  }
+    (async () => {
+      try { await fns[tab](body, actions); }
+      catch (e) { UI.err(e); body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+    })();
+  }, [tab, reloadToken]);
 
   /* ================= USERS ================= */
-  async function usersTab(el, body, actions) {
+  async function usersTab(body, actions) {
     if (!can('admin')) {
       body.innerHTML = `<div class="empty">${UI.getLang() === 'tr' ? 'Bu bölüm yalnızca yöneticilere açıktır.' : 'This section is admin-only.'}</div>`;
       actions.innerHTML = ''; return;
@@ -60,19 +70,19 @@ const ViewAdmin = (() => {
           </div>` }
       ], rows)}</div>`;
 
-    document.getElementById('usNew').onclick = () => userForm(el, null);
-    body.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => userForm(el, rows.find(x => String(x.id) === b.dataset.edit)));
-    body.querySelectorAll('[data-pw]').forEach(b => b.onclick = () => pwDialog(el, b.dataset.pw));
+    document.getElementById('usNew').onclick = () => userForm(null);
+    body.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => userForm(rows.find(x => String(x.id) === b.dataset.edit)));
+    body.querySelectorAll('[data-pw]').forEach(b => b.onclick = () => pwDialog(b.dataset.pw));
     body.querySelectorAll('[data-unlock]').forEach(b => b.onclick = async () => {
-      try { await Api.unlockUser(b.dataset.unlock); UI.ok(t('saved')); load(el); } catch (e) { UI.err(e); }
+      try { await Api.unlockUser(b.dataset.unlock); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); }
     });
     body.querySelectorAll('[data-del]').forEach(b => b.onclick = () => UI.confirmDialog(
       UI.getLang() === 'tr' ? 'Kullanıcı pasifleştirilecek ve oturumları kapatılacak.' : 'The user will be deactivated and signed out.',
-      async () => { try { await Api.deleteUser(b.dataset.del); UI.ok(t('saved')); load(el); } catch (e) { UI.err(e); } },
+      async () => { try { await Api.deleteUser(b.dataset.del); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); } },
       { danger: true }));
   }
 
-  function userForm(el, u) {
+  function userForm(u) {
     const roles = [
       { v: 'admin', l: t('roleAdmin') }, { v: 'manager', l: t('roleManager') },
       { v: 'operator', l: t('roleOperator') }, { v: 'quality', l: t('roleQuality') }, { v: 'viewer', l: t('roleViewer') }
@@ -130,14 +140,14 @@ const ViewAdmin = (() => {
                 mustChangePassword: checked('usMust')
               });
             }
-            closeModal(); UI.ok(t('saved')); load(el);
+            closeModal(); UI.ok(t('saved')); reload();
           } catch (e) { UI.err(e); }
         };
       }
     });
   }
 
-  function pwDialog(el, id) {
+  function pwDialog(id) {
     modal({
       title: t('resetPassword'),
       body: `${field(t('password'), input('pwNew', { type: 'password' }), t('passwordHint'))}
@@ -148,7 +158,7 @@ const ViewAdmin = (() => {
                <button class="btn btn-primary" id="pwGo">${t('save')}</button>`,
       onOpen: (box) => {
         box.querySelector('#pwGo').onclick = async () => {
-          try { await Api.updateUser(id, { password: val('pwNew') }); closeModal(); UI.ok(t('saved')); load(el); }
+          try { await Api.updateUser(id, { password: val('pwNew') }); closeModal(); UI.ok(t('saved')); reload(); }
           catch (e) { UI.err(e); }
         };
       }
@@ -156,10 +166,9 @@ const ViewAdmin = (() => {
   }
 
   /* ================= WAREHOUSES ================= */
-  async function whTab(el, body, actions) {
+  async function whTab(body, actions) {
     const rows = await Api.warehouses();
-    if (can('approve')) actions.innerHTML = `<button class="btn btn-primary btn-sm" id="whNew">${UI.icon(UI.ICONS.plus)}${t('newWarehouse')}</button>`;
-    else actions.innerHTML = '';
+    actions.innerHTML = can('approve') ? `<button class="btn btn-primary btn-sm" id="whNew">${UI.icon(UI.ICONS.plus)}${t('newWarehouse')}</button>` : '';
 
     body.innerHTML = `<div class="card">${table([
       { key: 'code', label: t('warehouseCode'), render: r => `<span class="mono">${esc(r.code || '—')}</span>` },
@@ -171,11 +180,11 @@ const ViewAdmin = (() => {
           ? `<div class="row-actions"><button class="icon-btn" data-edit="${esc(r.id)}">${UI.icon(UI.ICONS.edit)}</button></div>` : '' }
     ], rows)}</div>`;
 
-    document.getElementById('whNew')?.addEventListener('click', () => whForm(el, null));
-    body.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => whForm(el, rows.find(x => String(x.id) === b.dataset.edit)));
+    document.getElementById('whNew')?.addEventListener('click', () => whForm(null));
+    body.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => whForm(rows.find(x => String(x.id) === b.dataset.edit)));
   }
 
-  function whForm(el, w) {
+  function whForm(w) {
     modal({
       title: w ? t('edit') : t('newWarehouse'),
       body: `
@@ -194,7 +203,7 @@ const ViewAdmin = (() => {
           if (w) p.isActive = checked('whActive');
           try {
             if (w) await Api.updateWarehouse(w.id, p); else await Api.createWarehouse(p);
-            closeModal(); UI.ok(t('saved')); load(el);
+            closeModal(); UI.ok(t('saved')); reload();
           } catch (e) { UI.err(e); }
         };
       }
@@ -202,10 +211,9 @@ const ViewAdmin = (() => {
   }
 
   /* ================= FX ================= */
-  async function fxTab(el, body, actions) {
+  async function fxTab(body, actions) {
     const [current, hist] = await Promise.all([Api.currentRates(), Api.exchangeRates({ pageSize: 100 })]);
-    if (can('approve')) actions.innerHTML = `<button class="btn btn-primary btn-sm" id="fxNew">${UI.icon(UI.ICONS.plus)}${t('addFxRate')}</button>`;
-    else actions.innerHTML = '';
+    actions.innerHTML = can('approve') ? `<button class="btn btn-primary btn-sm" id="fxNew">${UI.icon(UI.ICONS.plus)}${t('addFxRate')}</button>` : '';
 
     body.innerHTML = `
       <div class="alert info">${t('fxHint')}</div>
@@ -220,7 +228,7 @@ const ViewAdmin = (() => {
         { key: 'rate_date', label: t('fxDate'), render: r => dt(r.rate_date) },
         { key: 'source', label: UI.getLang() === 'tr' ? 'Kaynak' : 'Source', render: r => esc(r.source || '—') }
       ], hist.data || hist)}
-      ${hist.totalPages ? pager(hist, () => load(el)) : ''}</div>`;
+      ${hist.totalPages ? pager(hist, () => reload()) : ''}</div>`;
 
     document.getElementById('fxNew')?.addEventListener('click', () => {
       modal({
@@ -237,7 +245,7 @@ const ViewAdmin = (() => {
           box.querySelector('#fxGo').onclick = async () => {
             try {
               await Api.setRate({ currency: val('fxCur'), rate: numVal('fxVal'), rateDate: val('fxDate') });
-              closeModal(); UI.ok(t('saved')); load(el);
+              closeModal(); UI.ok(t('saved')); reload();
             } catch (e) { UI.err(e); }
           };
         }
@@ -246,7 +254,7 @@ const ViewAdmin = (() => {
   }
 
   /* ================= RULES ================= */
-  async function rulesTab(el, body, actions) {
+  async function rulesTab(body, actions) {
     const [ar, nr] = await Promise.all([Api.approvalRules(), Api.notificationRules()]);
     actions.innerHTML = '';
 
@@ -302,7 +310,7 @@ const ViewAdmin = (() => {
           box.querySelector('#arGo').onclick = async () => {
             try {
               await Api.createApprovalRule({ docType: val('arDoc'), thresholdBase: numVal('arAmt'), requiredRole: val('arRole') });
-              closeModal(); UI.ok(t('saved')); load(el);
+              closeModal(); UI.ok(t('saved')); reload();
             } catch (e) { UI.err(e); }
           };
         }
@@ -329,7 +337,7 @@ const ViewAdmin = (() => {
                 ruleType: val('nrType'), channel: val('nrCh'),
                 thresholdDays: intVal('nrDays'), recipients: val('nrRec')
               });
-              closeModal(); UI.ok(t('saved')); load(el);
+              closeModal(); UI.ok(t('saved')); reload();
             } catch (e) { UI.err(e); }
           };
         }
@@ -337,16 +345,16 @@ const ViewAdmin = (() => {
     });
 
     body.querySelectorAll('[data-ard]').forEach(b => b.onclick = () => UI.confirmDialog(t('confirmDelete'), async () => {
-      try { await Api.deleteApprovalRule(b.dataset.ard); UI.ok(t('deleted')); load(el); } catch (e) { UI.err(e); }
+      try { await Api.deleteApprovalRule(b.dataset.ard); UI.ok(t('deleted')); reload(); } catch (e) { UI.err(e); }
     }, { danger: true }));
     body.querySelectorAll('[data-nrd]').forEach(b => b.onclick = () => UI.confirmDialog(t('confirmDelete'), async () => {
-      try { await Api.deleteNotificationRule(b.dataset.nrd); UI.ok(t('deleted')); load(el); } catch (e) { UI.err(e); }
+      try { await Api.deleteNotificationRule(b.dataset.nrd); UI.ok(t('deleted')); reload(); } catch (e) { UI.err(e); }
     }, { danger: true }));
   }
 
   /* ================= AUDIT ================= */
-  let auditFilter = { entityType: '', username: '', page: 1 };
-  async function auditTab(el, body, actions) {
+  async function auditTab(body, actions) {
+    const auditFilter = auditFilterRef.current;
     const res = await Api.audit({ ...auditFilter, pageSize: 60 });
     actions.innerHTML = `<button class="btn btn-ghost btn-sm" id="auCsv">${UI.icon(UI.ICONS.download)}CSV</button>`;
     document.getElementById('auCsv').onclick = () => UI.exportCsv('denetim-kaydi.csv',
@@ -384,11 +392,11 @@ const ViewAdmin = (() => {
             }).filter(Boolean).join('') || '—';
           } }
       ], res.data)}
-      ${pager(res, p => { auditFilter.page = p; load(el); })}</div>`;
+      ${pager(res, p => { auditFilterRef.current.page = p; reload(); })}</div>`;
 
-    document.getElementById('auType').onchange = e => { auditFilter.entityType = e.target.value; auditFilter.page = 1; load(el); };
+    document.getElementById('auType').onchange = e => { auditFilterRef.current.entityType = e.target.value; auditFilterRef.current.page = 1; reload(); };
     const uInp = document.getElementById('auUser');
-    uInp.oninput = UI.debounce(() => { auditFilter.username = uInp.value; auditFilter.page = 1; load(el); }, 400);
+    uInp.oninput = UI.debounce(() => { auditFilterRef.current.username = uInp.value; auditFilterRef.current.page = 1; reload(); }, 400);
   }
 
   const fmtVal = (v) => {
@@ -400,7 +408,7 @@ const ViewAdmin = (() => {
   };
 
   /* ================= SETTINGS ================= */
-  async function settingsTab(el, body, actions) {
+  async function settingsTab(body, actions) {
     const s = await Api.settings();
     actions.innerHTML = '';
     const editable = can('approve');
@@ -442,7 +450,7 @@ const ViewAdmin = (() => {
   }
 
   /* ================= e-BELGE AYARLARI ================= */
-  async function edocTab(el, body, actions) {
+  async function edocTab(body, actions) {
     const s2 = await Api.edocSettings();
     actions.innerHTML = '';
     const editable = can('approve');
@@ -535,16 +543,13 @@ const ViewAdmin = (() => {
           },
           series
         });
-        UI.ok(t('saved')); load(el);
+        UI.ok(t('saved')); reload();
       } catch (e) { UI.err(e); }
     });
   }
 
   /* ================= VERİ AKTARIMI ================= */
-  let importType = 'items';
-  let importPreviewData = null;
-
-  async function importTab(el, body, actions) {
+  async function importTab(body, actions) {
     actions.innerHTML = '';
     if (!can('approve')) {
       body.innerHTML = `<div class="empty">${UI.getLang() === 'tr'
@@ -552,6 +557,7 @@ const ViewAdmin = (() => {
       return;
     }
 
+    const importType = importTypeRef.current;
     const [types, batches] = await Promise.all([
       Api.importTypes(),
       Api.importBatches({ pageSize: 15 }).catch(() => ({ data: [] }))
@@ -606,13 +612,13 @@ const ViewAdmin = (() => {
             </div>` }
         ], batches.data || [], { emptyText: t('noImports') })}</div>`;
 
-    document.getElementById('imType').onchange = e => { importType = e.target.value; load(el); };
+    document.getElementById('imType').onchange = e => { importTypeRef.current = e.target.value; reload(); };
     document.getElementById('imTpl').onclick = () => {
       // Yetkilendirme başlığı gerektiği için doğrudan bağlantı kullanılamaz
       downloadTemplate(importType);
     };
-    document.getElementById('imUpload').onclick = () => doUpload(el);
-    body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => showPreview(el, b.dataset.open));
+    document.getElementById('imUpload').onclick = () => doUpload();
+    body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => showPreview(b.dataset.open));
     body.querySelectorAll('[data-revert]').forEach(b => b.onclick = () => {
       UI.confirmDialog(t('importRevertHint'), async () => {
         try {
@@ -628,12 +634,12 @@ const ViewAdmin = (() => {
               footer: `<button class="btn btn-ghost" data-close>${t('close')}</button>`
             });
           }
-          load(el);
+          reload();
         } catch (e) { UI.err(e); }
       }, { danger: true, confirmLabel: t('importRevert') });
     });
 
-    if (importPreviewData) showPreviewInline(el, importPreviewData);
+    if (importPreviewDataRef.current) showPreviewInline(importPreviewDataRef.current);
   }
 
   const importStatusBadge = (st) => {
@@ -661,7 +667,7 @@ const ViewAdmin = (() => {
     } catch (e) { UI.err(e); }
   }
 
-  async function doUpload(el) {
+  async function doUpload() {
     const fileInput = document.getElementById('imFile');
     const file = fileInput.files[0];
     if (!file) return UI.toast(UI.getLang() === 'tr' ? 'Önce dosya seçin.' : 'Choose a file first.', 'err');
@@ -675,8 +681,8 @@ const ViewAdmin = (() => {
     btn.disabled = true;
     btn.innerHTML = `<span class="spinner"></span>${t('loading')}`;
     try {
-      importPreviewData = await Api.importPreview(fd);
-      load(el);
+      importPreviewDataRef.current = await Api.importPreview(fd);
+      reload();
     } catch (e) {
       UI.err(e);
       // Sütun bulunamadıysa dosyada hangi başlıklar olduğunu göstermek, kullanıcının
@@ -699,7 +705,7 @@ const ViewAdmin = (() => {
     }
   }
 
-  function showPreviewInline(el, p) {
+  function showPreviewInline(p) {
     const host = document.getElementById('imPreview');
     if (!host) return;
     const allGood = p.errorRows === 0;
@@ -744,16 +750,16 @@ const ViewAdmin = (() => {
     document.getElementById('imCommit').onclick = async () => {
       try {
         const r = await Api.importCommit(p.batchId);
-        importPreviewData = null;
+        importPreviewDataRef.current = null;
         UI.ok(`${r.created} ${t('importedRowsInfo')}, ${r.updated} ${t('updatedRowsInfo')}, ${r.skipped} ${t('skippedRowsInfo')}`);
-        load(el);
+        reload();
       } catch (e) { UI.err(e); }
     };
     document.getElementById('imDiscard').onclick = async () => {
-      try { await Api.importDiscard(p.batchId); importPreviewData = null; UI.ok(t('deleted')); load(el); }
+      try { await Api.importDiscard(p.batchId); importPreviewDataRef.current = null; UI.ok(t('deleted')); reload(); }
       catch (e) { UI.err(e); }
     };
-    document.getElementById('imAllRows').onclick = () => showPreview(el, p.batchId);
+    document.getElementById('imAllRows').onclick = () => showPreview(p.batchId);
   }
 
   const previewTable = (rows) => table([
@@ -770,7 +776,7 @@ const ViewAdmin = (() => {
         .slice(0, 2).map(x => `<div style="font-size:11.5px;color:var(--text-faint)">${esc(x)}</div>`).join('') }
   ], rows);
 
-  async function showPreview(el, batchId) {
+  async function showPreview(batchId) {
     let onlyErrors = false, page = 1;
     const render2 = async () => {
       const rows = await Api.importRows(batchId, { onlyErrors: onlyErrors ? '1' : '', page, pageSize: 50 });
@@ -791,9 +797,7 @@ const ViewAdmin = (() => {
   }
 
   /* ================= BELGE ŞABLONLARI ================= */
-  let tplType = 'shipment';
-
-  async function templatesTab(el, body, actions) {
+  async function templatesTab(body, actions) {
     actions.innerHTML = '';
     if (!can('approve')) {
       body.innerHTML = `<div class="empty">${UI.getLang() === 'tr'
@@ -802,8 +806,8 @@ const ViewAdmin = (() => {
     }
 
     const [all, branding] = await Promise.all([Api.templates(), Api.branding()]);
-    const tpl = all.find(x => x.docType === tplType) || all[0];
-    tplType = tpl.docType;
+    const tpl = all.find(x => x.docType === tplTypeRef.current) || all[0];
+    tplTypeRef.current = tpl.docType;
     const L = tpl.layout || {};
     const isLabel = L.paperSize === 'label';
 
@@ -852,7 +856,7 @@ const ViewAdmin = (() => {
 
       <div class="card"><div class="card-head"><h3>${t('templateTitle')}</h3></div><div class="card-body">
         <div class="filters">
-          ${select('tplType', all.map(x => ({ v: x.docType, l: typeLabel[x.docType] || x.name })), tplType)}
+          ${select('tplType', all.map(x => ({ v: x.docType, l: typeLabel[x.docType] || x.name })), tplTypeRef.current)}
         </div>
 
         <div class="section-title">${t('layout')}</div>
@@ -922,7 +926,7 @@ const ViewAdmin = (() => {
       sigs.push(''); drawSigs();
     };
 
-    document.getElementById('tplType').onchange = e => { tplType = e.target.value; load(el); };
+    document.getElementById('tplType').onchange = e => { tplTypeRef.current = e.target.value; reload(); };
 
     /* --- logo --- */
     const fileInput = document.getElementById('tplLogoFile');
@@ -934,12 +938,12 @@ const ViewAdmin = (() => {
       try {
         await Api.uploadLogo(fd);
         UI.clearPrintCache();          // önbellekteki eski logo kalmasın
-        UI.ok(t('saved')); load(el);
+        UI.ok(t('saved')); reload();
       } catch (e) { UI.err(e); }
     };
     document.getElementById('tplLogoDel')?.addEventListener('click', () => {
       UI.confirmDialog(t('confirmDelete'), async () => {
-        try { await Api.deleteLogo(); UI.clearPrintCache(); UI.ok(t('deleted')); load(el); }
+        try { await Api.deleteLogo(); UI.clearPrintCache(); UI.ok(t('deleted')); reload(); }
         catch (e) { UI.err(e); }
       }, { danger: true });
     });
@@ -950,7 +954,7 @@ const ViewAdmin = (() => {
           name: val('brName'), phone: val('brPhone'), email: val('brEmail'),
           website: val('brWeb'), address: val('brAddr'), printFooter: val('brFooter')
         });
-        UI.clearPrintCache(); UI.ok(t('saved')); load(el);
+        UI.clearPrintCache(); UI.ok(t('saved')); reload();
       } catch (e) { UI.err(e); }
     };
 
@@ -974,9 +978,9 @@ const ViewAdmin = (() => {
 
     document.getElementById('tplSave').onclick = async () => {
       try {
-        await Api.saveTemplate(tplType, collect());
+        await Api.saveTemplate(tplTypeRef.current, collect());
         UI.clearPrintCache();
-        UI.ok(t('templateSaved')); load(el);
+        UI.ok(t('templateSaved')); reload();
       } catch (e) { UI.err(e); }
     };
 
@@ -984,7 +988,7 @@ const ViewAdmin = (() => {
       UI.confirmDialog(UI.getLang() === 'tr'
         ? 'Bu şablon varsayılan ayarlara dönecek.' : 'This template will return to its defaults.',
         async () => {
-          try { await Api.resetTemplate(tplType); UI.clearPrintCache(); UI.ok(t('saved')); load(el); }
+          try { await Api.resetTemplate(tplTypeRef.current); UI.clearPrintCache(); UI.ok(t('saved')); reload(); }
           catch (e) { UI.err(e); }
         }, { danger: true });
     };
@@ -992,10 +996,10 @@ const ViewAdmin = (() => {
     // Önizleme: kaydetmeden önce nasıl göründüğünü görmek, deneme yanılmayı kısaltır
     document.getElementById('tplPreview').onclick = async () => {
       try {
-        await Api.saveTemplate(tplType, collect());
+        await Api.saveTemplate(tplTypeRef.current, collect());
         UI.clearPrintCache();
         const visible = collect().fields.filter(f => f.visible);
-        await UI.printDoc(tplType, typeLabel[tplType] || tpl.name, `
+        await UI.printDoc(tplTypeRef.current, typeLabel[tplTypeRef.current] || tpl.name, `
           <div class="doc-note">${UI.getLang() === 'tr'
             ? 'ÖRNEK BELGE — gerçek veri içermez, yalnızca düzeni gösterir.'
             : 'SAMPLE DOCUMENT — layout preview only, no real data.'}</div>
@@ -1013,7 +1017,7 @@ const ViewAdmin = (() => {
   }
 
   /* ================= VERİ SAĞLIĞI ================= */
-  async function healthTab(el, body, actions) {
+  async function healthTab(body, actions) {
     actions.innerHTML = `<button class="btn btn-ghost btn-sm" id="dhRun">${UI.icon(UI.ICONS.check)}${t('runCheck')}</button>`;
     const rep = await Api.healthReport();
 
@@ -1077,7 +1081,7 @@ const ViewAdmin = (() => {
           <button class="btn btn-ghost" id="mgPrev">${t('mergePreview')}</button>
         </div></div>` : ''}`;
 
-    document.getElementById('dhRun').onclick = () => load(el);
+    document.getElementById('dhRun').onclick = () => reload();
 
     body.querySelectorAll('[data-fix]').forEach(b => b.onclick = () => {
       const c = rep.checks.find(x => x.id === b.dataset.fix);
@@ -1085,7 +1089,7 @@ const ViewAdmin = (() => {
         try {
           const r = await Api.healthFix(c.id);
           UI.ok(`${r.resolved} ${UI.getLang() === 'tr' ? 'kayıt düzeltildi' : 'records fixed'}`);
-          load(el);
+          reload();
         } catch (e) { UI.err(e); }
       }, { confirmLabel: t('autoFix') });
     });
@@ -1132,7 +1136,7 @@ const ViewAdmin = (() => {
                 const r = await Api.mergeRecords(type, { sourceId, targetId, confirm: true });
                 closeModal();
                 UI.ok(`${r.totalMoved} ${t('referencesMoved')}`);
-                load(el);
+                reload();
               } catch (e) { UI.err(e); }
             };
           }
@@ -1142,13 +1146,10 @@ const ViewAdmin = (() => {
   }
 
   /* ================= MUHASEBE AKTARIMI ================= */
-  let accFrom = UI.addDays(UI.today(), -30);
-  let accTo = UI.today();
-  let accResult = null;
-
-  async function accountingTab(el, body, actions) {
+  async function accountingTab(body, actions) {
     actions.innerHTML = '';
     const mappings = await Api.accountingMappings();
+    const accFrom = accFromRef.current, accTo = accToRef.current, accResult = accResultRef.current;
 
     body.innerHTML = `
       <div class="alert info">${UI.getLang() === 'tr'
@@ -1182,19 +1183,20 @@ const ViewAdmin = (() => {
       </div>`;
 
     document.getElementById('accPreview').onclick = async () => {
-      accFrom = val('accFrom'); accTo = val('accTo');
+      accFromRef.current = val('accFrom'); accToRef.current = val('accTo');
       try {
-        accResult = await Api.accountingExport(accFrom, accTo);
-        document.getElementById('accResultBox').innerHTML = renderAccResult(accResult);
+        accResultRef.current = await Api.accountingExport(accFromRef.current, accToRef.current);
+        document.getElementById('accResultBox').innerHTML = renderAccResult(accResultRef.current);
         document.getElementById('accCsv').disabled = false;
       } catch (e) { UI.err(e); }
     };
 
     document.getElementById('accCsv').onclick = () => {
-      if (!accResult) return;
-      UI.exportCsv(`muhasebe-fisi-${accResult.from}-${accResult.to}.csv`,
+      if (!accResultRef.current) return;
+      const r = accResultRef.current;
+      UI.exportCsv(`muhasebe-fisi-${r.from}-${r.to}.csv`,
         [UI.getLang() === 'tr' ? 'Tarih' : 'Date', UI.getLang() === 'tr' ? 'Belge No' : 'Doc No', 'Hesap Kodu', 'Hesap Adı', 'Açıklama', 'Borç', 'Alacak'],
-        accResult.rows.map(r => [r.date, r.docNo, r.accountCode, r.accountName, r.description, r.debit || '', r.credit || '']));
+        r.rows.map(row => [row.date, row.docNo, row.accountCode, row.accountName, row.description, row.debit || '', row.credit || '']));
     };
 
     document.getElementById('accMapSave').onclick = async () => {
@@ -1224,5 +1226,19 @@ const ViewAdmin = (() => {
       ], r.rows)}`;
   }
 
-  return { render };
-})();
+  const html = `
+    <div class="topbar">
+      <div><h2>${t('adminTitle')}</h2><div class="sub">${t('adminSub')}</div></div>
+      <div class="topbar-actions" id="adActions"></div>
+    </div>
+    ${UI.tabs([
+      { k: 'users', l: t('tabUsers') }, { k: 'warehouses', l: t('tabWarehouses') },
+      { k: 'fx', l: t('tabFx') }, { k: 'rules', l: t('tabRules') },
+      { k: 'audit', l: t('tabAudit') }, { k: 'settings', l: t('tabSettings') },
+      { k: 'import', l: t('tabImport') }, { k: 'templates', l: t('tabTemplates') }, { k: 'health', l: t('tabDataHealth') }, { k: 'edoc', l: t('edocSettings') },
+      { k: 'accounting', l: t('tabAccounting') }
+    ], tab, k => setTab(k))}
+    <div id="adBody">${loading()}</div>`;
+
+  return <div dangerouslySetInnerHTML={{ __html: html }} />;
+}
