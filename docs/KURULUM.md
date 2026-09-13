@@ -9,7 +9,7 @@ Bu belge sistemi kuracak ve işletecek kişi içindir. Günlük kullanım için
 
 | | Asgari | Önerilen |
 |---|---|---|
-| Node.js | 18 | 20 LTS veya üstü |
+| Node.js | 22 | 22 LTS veya üstü |
 | RAM | 1 GB | 2 GB |
 | Disk | 2 GB | 10 GB (yedekler için) |
 | İşletim sistemi | Linux, macOS, Windows | Ubuntu 22.04 LTS |
