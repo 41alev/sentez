@@ -1,5 +1,84 @@
 # PROJECT_STATUS.md
 
+## 2026-09-13 (devam 6) — Genel gözden geçirme sonrası düzeltmeler (4 commit)
+
+5 maddelik yol haritası tamamlandıktan sonra kullanıcı "genel bir gözden
+geçirme yapalım, eksikleri ve eklesek iyi olur dediğin yerleri belirt"
+dedi. Bulunan öncelikli boşluklardan ikisi (OpenAPI güncel değildi, gerçek
+tarayıcı E2E testi yoktu) ve "bilinçli kapsam dışı ama hatırlatmaya değer"
+maddelerin tamamı ele alındı. Sırayla 4 ayrı commit:
+
+**1. Webhook otomatik yeniden deneme kuyruğu (`cb3a4ec`).** Webhook'lar
+Aşama 5'ten beri fire-and-forget'ti — tek deneme, otomatik retry yok.
+`webhook_deliveries`'e `retry_count`/`next_retry_at` eklendi (migration
+012); `sendDelivery` artık üstel geri çekilme + jitter ile (~1dk → ~16dk,
+5 deneme hakkı, sonra dead-letter) otomatik kuyruğa alıyor.
+`processRetryQueue()` her 60 saniyede kendiliğinden çalışıyor;
+`POST /webhooks/process-retry-queue` (admin) beklemeden tetiklemek için.
+**Gerçekten test edildi** (yalnızca "alan var" değil): izole bir webhook
+üzerinde başarısızlık → kuyruk tetikleme → GERÇEK yeni bir teslimat
+denemesinin oluştuğu (retryCount=1) ve ilk kaydın `next_retry_at`'inin
+temizlendiği (çift işleme yok) doğrudan kanıtlandı.
+
+**2. BI pivot'u satış/satın alma/kalite verisini de kesiştiriyor
+(`ca34c30`).** Aşama 8'in ilk sürümü yalnızca `movements`'a bakıyordu.
+`server/services/pivot.js`'e `sales`/`purchasing`/`quality` veri kaynakları
+eklendi (her biri kendi boyut/ölçü/tarih-filtresi whitelist'iyle — tarih
+temsilleri farklı olduğu için: movements/quality epoch ms, sales/purchasing
+'YYYY-MM-DD' string). Alan adları uydurulmadı, gerçek şemadan
+(`001_initial_schema.js`) doğrulandı. Frontend'e veri kaynağı seçici
+eklendi; kaynak değişince boyut/ölçü listeleri dinamik güncelleniyor.
+
+**3. OpenAPI şeması CRM + Özel Rapor + webhook retry ile güncellendi
+(`6bcb1c3`).** `server/lib/openapi.js` Aşama 5'te yazılmıştı; Aşama 7
+(CRM) ve Aşama 8 (pivot) eklendiğinde hiç güncellenmemişti — dış bir
+sistem bu iki modülün var olduğunu göremiyordu. 9 yeni path + 10 yeni
+şema eklendi; dosyaya "bu şema otomatik türetilmiyor, yeni route eklerken
+elle güncelle" notu düşüldü (aynı hatanın tekrarlanmaması için).
+
+**4. Gerçek tarayıcı E2E testleri — Playwright (`4fb1b5d`).** Şimdiye
+kadar tüm testler ya doğrudan API'ye vuruyordu ya da jsdom kullanıyordu —
+jsdom gerçek CSS cascade hesaplamıyor. Bunun somut kanıtı zaten bu
+projenin kendi tarihinde vardı: Aşama 6'daki `[hidden]{display:none}`
+eksikliği (kamera görünümünün giriş ekranını kapatması) YALNIZCA gerçek
+bir tarayıcıda ortaya çıkmıştı. `test/e2e-browser/` (5 dosya, 12 test):
+giriş/rol bazlı UI, stok girişinin gerçek sunucuya yazdığı, CRM'in
+fırsat→dönüştürme akışının uçtan uca çalıştığı, ve mobil terminaldeki
+`[hidden]` regresyon sınıfını doğrudan hedefleyen bir test. CI'a
+(`.github/workflows/ci.yml`) Chromium kurulumu + test adımı eklendi.
+**Gerçekten çalıştırıldı** (12/12) — yazılıp denenmeden bırakılmadı;
+geliştirme sırasında bulunan 3 kendi selector hatam da kök nedenine
+inilerek düzeltildi (bkz. commit mesajı).
+
+**Kasıtlı olarak YAPILMAYAN/reddedilen maddeler (dürüstçe belirtildi):**
+- **e-Fatura gerçek entegratör testi** — entegratör hesabı/GİB erişimi
+  yok, yapılamaz. Kullanıcı bunu edinirse ele alınabilir.
+- **PWA service worker'ın gerçek cihazda doğrulanması, kamerayla barkod
+  okuma, el terminalinin sahada denenmesi** — hepsi fiziksel cihaz/gerçek
+  ağ ortamı gerektiriyor, bu ortamda yapılamaz (YOL-HARITASI.md'nin
+  "yalnızca sahada çözülebilecekler" listesiyle tutarlı).
+- **Çok şirketlilik (multi-tenant) aktivasyonu** — kullanıcıya soruldu,
+  **"olduğu gibi bırak"** kararı verildi (tek tesis kullanımı hâlâ
+  geçerli; onlarca route'ta yüzlerce sorguya `company_id` filtresi eklemek,
+  şirket seçici arayüz, `/companies` CRUD, `number_sequences`'i şirket
+  bazlı yapmak gerektiren haftalarca sürecek, yanlış yapılırsa şirketler
+  arası veri sızıntısına yol açabilecek riskli bir iş — gerçek bir ikinci
+  müşteri onboard edilecekken ele alınmalı).
+
+**Hâlâ kapatılmamış, kullanıcının kendi kararını gerektiren boşluk:**
+proje hâlâ hiçbir uzak depoya (GitHub vb.) push edilmemiş — `git remote -v`
+boş. `.github/workflows/ci.yml` yazılı ama hiç gerçek bir Actions
+çalıştırması görmedi (bu commit'teki Playwright adımı dahil). Tek nokta
+arızası riski hâlâ geçerli; en ucuz düzeltme `git remote add` + ilk push.
+
+**Doğrulama (toplam):** `tsc`/`eslint` temiz. `node test/run-all.js` her
+3 backend değişiklikten sonra ayrı ayrı çalıştırıldı — yeni/değişen
+paketler (`webhooks` 32/32, `pivot` 29/29, `openapi` 10/10) dahil tüm
+paketler geçti; tek istisna yine `planning` (tarihe bağlı, önceden bilinen,
+bu turda dokunulmayan kırılganlık). `npx playwright test` 12/12.
+
+---
+
 ## 2026-09-13 (devam 5) — Aşama 8 TAMAMLANDI: BI / raporlama derinliği (`41281ef`)
 
 Kullanıcının "5 maddeyi sırayla yap" talimatının SON maddesi. 9 sabit
