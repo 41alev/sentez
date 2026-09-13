@@ -1,49 +1,62 @@
-// @ts-nocheck
-const ViewPurchasing = (() => {
-  const { t, esc, num, money, cur, dt, ts, card, table, pager, loading, modal, closeModal,
-          field, input, select, textarea, checkbox, val, numVal, intVal, checked, can } = UI;
+/**
+ * Satın Alma (Purchasing) — React'e kademeli geçişin bir sonraki ekranı.
+ * Planning/Reports ile aynı sekmeli desen + Items/Production gibi bir
+ * ön-koşul veri çekimi (items/suppliers/warehouses, tüm sekmelerde
+ * paylaşılıyor). Bu ekranda `fullReload()`'a gerek yok — orijinalde tüm
+ * kaydetme işlemleri yalnızca aktif sekmeyi yeniden çekiyordu (`load(el)`),
+ * paylaşılan ön-koşul veriyi değil.
+ */
+import { useEffect, useState, useRef } from 'react';
 
-  let tab = 'orders';
-  let items = [], suppliers = [], warehouses = [];
+export default function PurchasingView() {
+  const { t, esc, num, money, cur, dt, ts, table, pager, loading, modal, closeModal,
+          field, input, select, textarea, val, numVal, intVal, can } = UI;
 
-  async function render(el) {
-    el.innerHTML = loading();
-    try {
-      const [it, sp, wh] = await Promise.all([
-        Api.items({ pageSize: 300 }), Api.suppliers({ pageSize: 200 }), Api.warehouses()
-      ]);
-      items = it.data; suppliers = sp.data || sp; warehouses = wh;
-    } catch (e) { UI.err(e); }
-    await load(el);
-  }
+  const [tab, setTab] = useState('orders');
+  const [reloadToken, setReloadToken] = useState(0);
+  const [ready, setReady] = useState(false);
 
-  async function load(el) {
-    el.innerHTML = `
-      <div class="topbar">
-        <div><h2>${t('purchTitle')}</h2><div class="sub">${t('purchSub')}</div></div>
-        <div class="topbar-actions" id="purchActions"></div>
-      </div>
-      ${UI.tabs([
-        { k: 'orders', l: t('tabOrders') }, { k: 'suppliers', l: t('tabSuppliers') },
-        { k: 'requests', l: t('tabRequests') }, { k: 'rfqs', l: t('tabRfqs') }, { k: 'invoices', l: t('tabInvoices') }
-      ], tab, k => { tab = k; load(el); })}
-      <div id="purchBody">${loading()}</div>`;
+  const itemsRef = useRef([]);
+  const suppliersRef = useRef([]);
+  const warehousesRef = useRef([]);
+
+  function reload() { setReloadToken(x => x + 1); }
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [it, sp, wh] = await Promise.all([
+          Api.items({ pageSize: 300 }), Api.suppliers({ pageSize: 200 }), Api.warehouses()
+        ]);
+        if (cancelled) return;
+        itemsRef.current = it.data; suppliersRef.current = sp.data || sp; warehousesRef.current = wh;
+      } catch (e) { UI.err(e); }
+      if (cancelled) return;
+      setReady(true);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
     const body = document.getElementById('purchBody');
     const actions = document.getElementById('purchActions');
-    if (tab === 'orders') await renderOrders(el, body, actions);
-    if (tab === 'suppliers') await renderSuppliers(el, body, actions);
-    if (tab === 'requests') await renderRequests(el, body, actions);
-    if (tab === 'rfqs') await renderRfqs(el, body, actions);
-    if (tab === 'invoices') await renderInvoices(el, body, actions);
-  }
+    if (!body || !actions) return;
+    const fns = { orders: renderOrders, suppliers: renderSuppliers, requests: renderRequests, rfqs: renderRfqs, invoices: renderInvoices };
+    (async () => {
+      try { await fns[tab](body, actions); }
+      catch (e) { UI.err(e); body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+    })();
+  }, [ready, tab, reloadToken]);
 
   /* ================= ORDERS ================= */
-  async function renderOrders(el, body, actions) {
+  async function renderOrders(body, actions) {
     let res;
     try { res = await Api.purchaseOrders({ pageSize: 25 }); } catch (e) { UI.err(e); return; }
     const rows = res.data || res;
 
-    if (can('write')) actions.innerHTML = `<button class="btn btn-primary btn-sm" id="poNew">${UI.icon(UI.ICONS.plus)}${t('newPO')}</button>`;
+    actions.innerHTML = can('write') ? `<button class="btn btn-primary btn-sm" id="poNew">${UI.icon(UI.ICONS.plus)}${t('newPO')}</button>` : '';
 
     body.innerHTML = `<div class="card">${table([
       { key: 'poNo', label: t('poNo'), render: r => `<button class="link-btn" data-open="${esc(r.id)}">${esc(r.poNo)}</button>
@@ -73,27 +86,28 @@ const ViewPurchasing = (() => {
           ${['approved', 'partially_received'].includes(r.status) && can('write') ? `<button class="btn btn-ghost btn-sm" data-receive="${esc(r.id)}">${t('receive')}</button>` : ''}
           <button class="icon-btn" data-print="${esc(r.id)}" title="${t('print')}">${UI.icon(UI.ICONS.print)}</button>
         </div>` }
-    ], rows)}${res.totalPages ? pager(res, () => load(el)) : ''}</div>`;
+    ], rows)}${res.totalPages ? pager(res, () => reload()) : ''}</div>`;
 
-    document.getElementById('poNew')?.addEventListener('click', () => poForm(el));
-    body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openPO(el, b.dataset.open));
+    document.getElementById('poNew')?.addEventListener('click', () => poForm());
+    body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openPO(b.dataset.open));
     body.querySelectorAll('[data-approve]').forEach(b => b.onclick = async () => {
-      try { await Api.approvePO(b.dataset.approve); UI.ok(t('saved')); load(el); App.refreshBadges(); } catch (e) { UI.err(e); }
+      try { await Api.approvePO(b.dataset.approve); UI.ok(t('saved')); reload(); App.refreshBadges(); } catch (e) { UI.err(e); }
     });
     body.querySelectorAll('[data-reject]').forEach(b => b.onclick = () => {
       modal({
         title: t('reject'), body: field(t('rejectReason'), textarea('rjR')),
         footer: `<button class="btn btn-ghost" data-close>${t('cancel')}</button><button class="btn btn-danger" id="rjGo">${t('reject')}</button>`,
         onOpen: (bx) => bx.querySelector('#rjGo').onclick = async () => {
-          try { await Api.rejectPO(b.dataset.reject, val('rjR')); closeModal(); UI.ok(t('saved')); load(el); App.refreshBadges(); } catch (e) { UI.err(e); }
+          try { await Api.rejectPO(b.dataset.reject, val('rjR')); closeModal(); UI.ok(t('saved')); reload(); App.refreshBadges(); } catch (e) { UI.err(e); }
         }
       });
     });
-    body.querySelectorAll('[data-receive]').forEach(b => b.onclick = () => receiveDialog(el, b.dataset.receive));
+    body.querySelectorAll('[data-receive]').forEach(b => b.onclick = () => receiveDialog(b.dataset.receive));
     body.querySelectorAll('[data-print]').forEach(b => b.onclick = async () => printPO(await Api.purchaseOrder(b.dataset.print)));
   }
 
-  function poForm(el, prefill) {
+  function poForm(prefill) {
+    const items = itemsRef.current, suppliers = suppliersRef.current, warehouses = warehousesRef.current;
     let lines = prefill?.lines || [{ itemId: items[0]?.id || '', qty: 1, price: 0 }];
     modal({
       title: t('newPO'), size: 'wide',
@@ -149,14 +163,14 @@ const ViewPurchasing = (() => {
               expected: val('poExp') || undefined, currency: val('poCur'), incoterm: val('poInco'),
               notes: val('poNote'), items: lines.filter(l => l.itemId && l.qty > 0)
             });
-            closeModal(); UI.ok(t('saved')); load(el); App.refreshBadges();
+            closeModal(); UI.ok(t('saved')); reload(); App.refreshBadges();
           } catch (e) { UI.err(e); }
         };
       }
     });
   }
 
-  async function openPO(el, id) {
+  async function openPO(id) {
     let po;
     try { po = await Api.purchaseOrder(id); } catch (e) { UI.err(e); return; }
     modal({
@@ -206,13 +220,14 @@ const ViewPurchasing = (() => {
                ${['approved', 'partially_received'].includes(po.status) && can('write') ? `<button class="btn btn-primary" id="poRec">${t('receive')}</button>` : ''}`,
       onOpen: (box) => {
         box.querySelector('#poPrint').onclick = () => printPO(po);
-        box.querySelector('#poRec')?.addEventListener('click', () => { closeModal(); receiveDialog(el, po.id); });
-        box.querySelectorAll('[data-landed]').forEach(b => b.onclick = () => { closeModal(); landedDialog(el, b.dataset.landed); });
+        box.querySelector('#poRec')?.addEventListener('click', () => { closeModal(); receiveDialog(po.id); });
+        box.querySelectorAll('[data-landed]').forEach(b => b.onclick = () => { closeModal(); landedDialog(b.dataset.landed); });
       }
     });
   }
 
-  async function receiveDialog(el, poId) {
+  async function receiveDialog(poId) {
+    const warehouses = warehousesRef.current;
     let po;
     try { po = await Api.purchaseOrder(poId); } catch (e) { UI.err(e); return; }
     const open = (po.items || []).filter(i => i.qty - (i.receivedQty || 0) > 1e-9);
@@ -262,14 +277,14 @@ const ViewPurchasing = (() => {
               warehouseId: intVal('rcWh'), waybillNo: val('rcWaybill'),
               customsDeclNo: val('rcCustoms'), notes: val('rcNote'), lines
             });
-            closeModal(); UI.ok(t('saved')); load(el);
+            closeModal(); UI.ok(t('saved')); reload();
           } catch (e) { UI.err(e); }
         };
       }
     });
   }
 
-  function landedDialog(el, receiptId) {
+  function landedDialog(receiptId) {
     modal({
       title: t('addLandedCost'),
       body: `
@@ -296,7 +311,7 @@ const ViewPurchasing = (() => {
               costType: val('lcType'), amount: numVal('lcAmt'), currency: val('lcCur'),
               allocationMethod: val('lcAlloc'), notes: val('lcNote')
             });
-            closeModal(); UI.ok(t('saved')); load(el);
+            closeModal(); UI.ok(t('saved')); reload();
           } catch (e) { UI.err(e); }
         };
       }
@@ -317,11 +332,11 @@ const ViewPurchasing = (() => {
   }
 
   /* ================= SUPPLIERS ================= */
-  async function renderSuppliers(el, body, actions) {
+  async function renderSuppliers(body, actions) {
     let res;
     try { res = await Api.suppliers({ pageSize: 50 }); } catch (e) { UI.err(e); return; }
     const rows = res.data || res;
-    if (can('write')) actions.innerHTML = `<button class="btn btn-primary btn-sm" id="supNew">${UI.icon(UI.ICONS.plus)}${t('newSupplier')}</button>`;
+    actions.innerHTML = can('write') ? `<button class="btn btn-primary btn-sm" id="supNew">${UI.icon(UI.ICONS.plus)}${t('newSupplier')}</button>` : '';
 
     body.innerHTML = `<div class="card">${table([
       { key: 'name', label: t('supplierName'), render: r => `<button class="link-btn" data-open="${r.id}">${esc(r.name)}</button>
@@ -336,15 +351,15 @@ const ViewPurchasing = (() => {
           ${can('delete') ? `<button class="icon-btn danger" data-del="${r.id}">${UI.icon(UI.ICONS.trash)}</button>` : ''}</div>` }
     ], rows)}</div>`;
 
-    document.getElementById('supNew')?.addEventListener('click', () => supForm(el, null));
+    document.getElementById('supNew')?.addEventListener('click', () => supForm(null));
     body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openSupplier(b.dataset.open));
-    body.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => supForm(el, rows.find(x => String(x.id) === b.dataset.edit)));
+    body.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => supForm(rows.find(x => String(x.id) === b.dataset.edit)));
     body.querySelectorAll('[data-del]').forEach(b => b.onclick = () => UI.confirmDialog(t('confirmDelete'), async () => {
-      try { await Api.deleteSupplier(b.dataset.del); UI.ok(t('deleted')); load(el); } catch (e) { UI.err(e); }
+      try { await Api.deleteSupplier(b.dataset.del); UI.ok(t('deleted')); reload(); } catch (e) { UI.err(e); }
     }, { danger: true }));
   }
 
-  function supForm(el, s) {
+  function supForm(s) {
     modal({
       title: s ? t('edit') : t('newSupplier'), size: 'wide',
       body: `
@@ -384,7 +399,7 @@ const ViewPurchasing = (() => {
           };
           try {
             if (s) await Api.updateSupplier(s.id, p); else await Api.createSupplier(p);
-            closeModal(); UI.ok(t('saved')); load(el);
+            closeModal(); UI.ok(t('saved')); reload();
           } catch (e) { UI.err(e); }
         };
       }
@@ -436,11 +451,11 @@ const ViewPurchasing = (() => {
   }
 
   /* ================= REQUESTS ================= */
-  async function renderRequests(el, body, actions) {
+  async function renderRequests(body, actions) {
     let res;
     try { res = await Api.requests({ pageSize: 50 }); } catch (e) { UI.err(e); return; }
     const rows = res.data || res;
-    if (can('write')) actions.innerHTML = `<button class="btn btn-primary btn-sm" id="reqNew">${UI.icon(UI.ICONS.plus)}${t('newRequest')}</button>`;
+    actions.innerHTML = can('write') ? `<button class="btn btn-primary btn-sm" id="reqNew">${UI.icon(UI.ICONS.plus)}${t('newRequest')}</button>` : '';
 
     body.innerHTML = `<div class="card">${table([
       { key: 'requestNo', label: t('requestNo'), render: r => `<span class="mono">${esc(r.requestNo || r.request_no)}</span>` },
@@ -454,16 +469,17 @@ const ViewPurchasing = (() => {
         </div>` }
     ], rows)}</div>`;
 
-    document.getElementById('reqNew')?.addEventListener('click', () => reqForm(el));
+    document.getElementById('reqNew')?.addEventListener('click', () => reqForm());
     body.querySelectorAll('[data-ap]').forEach(b => b.onclick = async () => {
-      try { await Api.approveRequest(b.dataset.ap); UI.ok(t('saved')); load(el); } catch (e) { UI.err(e); }
+      try { await Api.approveRequest(b.dataset.ap); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); }
     });
     body.querySelectorAll('[data-rj]').forEach(b => b.onclick = async () => {
-      try { await Api.rejectRequest(b.dataset.rj, ''); UI.ok(t('saved')); load(el); } catch (e) { UI.err(e); }
+      try { await Api.rejectRequest(b.dataset.rj, ''); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); }
     });
   }
 
-  function reqForm(el) {
+  function reqForm() {
+    const items = itemsRef.current;
     let lines = [{ itemId: items[0]?.id || '', qty: 1 }];
     modal({
       title: t('newRequest'), size: 'wide',
@@ -496,7 +512,7 @@ const ViewPurchasing = (() => {
         box.querySelector('#rqGo').onclick = async () => {
           try {
             await Api.createRequest({ department: val('rqDept'), neededBy: val('rqNeed') || undefined, notes: val('rqNote'), lines });
-            closeModal(); UI.ok(t('saved')); load(el);
+            closeModal(); UI.ok(t('saved')); reload();
           } catch (e) { UI.err(e); }
         };
       }
@@ -504,11 +520,11 @@ const ViewPurchasing = (() => {
   }
 
   /* ================= RFQ ================= */
-  async function renderRfqs(el, body, actions) {
+  async function renderRfqs(body, actions) {
     let res;
     try { res = await Api.rfqs({ pageSize: 50 }); } catch (e) { UI.err(e); return; }
     const rows = res.data || res;
-    if (can('write')) actions.innerHTML = `<button class="btn btn-primary btn-sm" id="rfqNew">${UI.icon(UI.ICONS.plus)}${t('newRfq')}</button>`;
+    actions.innerHTML = can('write') ? `<button class="btn btn-primary btn-sm" id="rfqNew">${UI.icon(UI.ICONS.plus)}${t('newRfq')}</button>` : '';
 
     body.innerHTML = `<div class="card">${table([
       { key: 'rfqNo', label: t('rfqNo'), render: r => `<span class="mono">${esc(r.rfqNo || r.rfq_no)}</span>` },
@@ -520,12 +536,13 @@ const ViewPurchasing = (() => {
           ${can('write') ? `<button class="btn btn-ghost btn-sm" data-q="${esc(r.id)}">${t('addQuote')}</button>` : ''}</div>` }
     ], rows)}</div>`;
 
-    document.getElementById('rfqNew')?.addEventListener('click', () => rfqForm(el));
-    body.querySelectorAll('[data-cmp]').forEach(b => b.onclick = () => compareDialog(el, b.dataset.cmp));
-    body.querySelectorAll('[data-q]').forEach(b => b.onclick = () => quoteForm(el, rows.find(x => x.id === b.dataset.q)));
+    document.getElementById('rfqNew')?.addEventListener('click', () => rfqForm());
+    body.querySelectorAll('[data-cmp]').forEach(b => b.onclick = () => compareDialog(b.dataset.cmp));
+    body.querySelectorAll('[data-q]').forEach(b => b.onclick = () => quoteForm(rows.find(x => x.id === b.dataset.q)));
   }
 
-  function rfqForm(el) {
+  function rfqForm() {
+    const items = itemsRef.current;
     let lines = [{ itemId: items[0]?.id || '', qty: 1 }];
     modal({
       title: t('newRfq'), size: 'wide',
@@ -551,14 +568,15 @@ const ViewPurchasing = (() => {
         box.querySelector('#rfAdd').onclick = () => { lines.push({ itemId: items[0]?.id || '', qty: 1 }); draw(); };
         draw();
         box.querySelector('#rfGo').onclick = async () => {
-          try { await Api.createRfq({ dueDate: val('rfDue') || undefined, notes: val('rfNote'), lines }); closeModal(); UI.ok(t('saved')); load(el); }
+          try { await Api.createRfq({ dueDate: val('rfDue') || undefined, notes: val('rfNote'), lines }); closeModal(); UI.ok(t('saved')); reload(); }
           catch (e) { UI.err(e); }
         };
       }
     });
   }
 
-  function quoteForm(el, rfq) {
+  function quoteForm(rfq) {
+    const suppliers = suppliersRef.current;
     modal({
       title: t('addQuote'), sub: rfq.rfqNo || rfq.rfq_no,
       body: `
@@ -574,14 +592,14 @@ const ViewPurchasing = (() => {
         box.querySelector('#qGo').onclick = async () => {
           try {
             await Api.addQuote(rfq.id, { supplierId: intVal('qSup'), itemId: val('qItem'), unitPrice: numVal('qPrice'), currency: val('qCur'), leadTimeDays: intVal('qLead') });
-            closeModal(); UI.ok(t('saved')); load(el);
+            closeModal(); UI.ok(t('saved')); reload();
           } catch (e) { UI.err(e); }
         };
       }
     });
   }
 
-  async function compareDialog(el, rfqId) {
+  async function compareDialog(rfqId) {
     let cmp;
     try { cmp = await Api.compareQuotes(rfqId); } catch (e) { UI.err(e); return; }
     const rows = cmp.comparison || cmp.quotes || cmp.data || [];
@@ -600,11 +618,11 @@ const ViewPurchasing = (() => {
   }
 
   /* ================= INVOICES (3-way match) ================= */
-  async function renderInvoices(el, body, actions) {
+  async function renderInvoices(body, actions) {
     let res;
     try { res = await Api.supplierInvoices({ pageSize: 50 }); } catch (e) { UI.err(e); return; }
     const rows = res.data || res;
-    if (can('write')) actions.innerHTML = `<button class="btn btn-primary btn-sm" id="invNew">${UI.icon(UI.ICONS.plus)}${t('newInvoice')}</button>`;
+    actions.innerHTML = can('write') ? `<button class="btn btn-primary btn-sm" id="invNew">${UI.icon(UI.ICONS.plus)}${t('newInvoice')}</button>` : '';
 
     body.innerHTML = `
       <div class="alert info">${UI.getLang() === 'tr'
@@ -641,7 +659,7 @@ const ViewPurchasing = (() => {
           box.querySelector('#ivGo').onclick = async () => {
             try {
               await Api.createSupplierInvoice({ poId: val('ivPo'), invoiceNo: val('ivNo'), amount: numVal('ivAmt'), currency: val('ivCur'), invoiceDate: val('ivDate') });
-              closeModal(); UI.ok(t('saved')); load(el);
+              closeModal(); UI.ok(t('saved')); reload();
             } catch (e) { UI.err(e); }
           };
         }
@@ -649,5 +667,20 @@ const ViewPurchasing = (() => {
     });
   }
 
-  return { render };
-})();
+  if (!ready) {
+    return <div dangerouslySetInnerHTML={{ __html: loading() }} />;
+  }
+
+  const html = `
+    <div class="topbar">
+      <div><h2>${t('purchTitle')}</h2><div class="sub">${t('purchSub')}</div></div>
+      <div class="topbar-actions" id="purchActions"></div>
+    </div>
+    ${UI.tabs([
+      { k: 'orders', l: t('tabOrders') }, { k: 'suppliers', l: t('tabSuppliers') },
+      { k: 'requests', l: t('tabRequests') }, { k: 'rfqs', l: t('tabRfqs') }, { k: 'invoices', l: t('tabInvoices') }
+    ], tab, k => setTab(k))}
+    <div id="purchBody">${loading()}</div>`;
+
+  return <div dangerouslySetInnerHTML={{ __html: html }} />;
+}

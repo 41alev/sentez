@@ -16,6 +16,7 @@ import LotsView, { traceDialog } from './LotsView.jsx';
 import ProductionView from './ProductionView.jsx';
 import ReportsView from './ReportsView.jsx';
 import PlanningView from './PlanningView.jsx';
+import PurchasingView from './PurchasingView.jsx';
 
 window.ViewDashboard = mountView(DashboardView);
 window.ViewItems = mountView(ItemsView);
@@ -27,3 +28,4 @@ window.ViewLots = { ...mountView(LotsView), traceDialog };
 window.ViewProduction = mountView(ProductionView);
 window.ViewReports = mountView(ReportsView);
 window.ViewPlanning = mountView(PlanningView);
+window.ViewPurchasing = mountView(PurchasingView);
