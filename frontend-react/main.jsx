@@ -18,16 +18,18 @@ import ReportsView from './ReportsView.jsx';
 import PlanningView from './PlanningView.jsx';
 import PurchasingView from './PurchasingView.jsx';
 import QualityView from './QualityView.jsx';
+import SalesView from './SalesView.jsx';
 
 window.ViewDashboard = mountView(DashboardView);
 window.ViewItems = mountView(ItemsView);
 window.ViewCounts = mountView(CountsView);
 // traceDialog kendi verisini kendi çeker (React ağacından bağımsız) —
-// hâlâ vanilla olan sales.js bunu doğrudan `ViewLots.traceDialog(lotId)`
-// olarak çağırıyor.
+// artık tüm çağıranlar da React'e taşındı, ama fonksiyon yine de bağımsız
+// dışa aktarılıyor.
 window.ViewLots = { ...mountView(LotsView), traceDialog };
 window.ViewProduction = mountView(ProductionView);
 window.ViewReports = mountView(ReportsView);
 window.ViewPlanning = mountView(PlanningView);
 window.ViewPurchasing = mountView(PurchasingView);
 window.ViewQuality = mountView(QualityView);
+window.ViewSales = mountView(SalesView);

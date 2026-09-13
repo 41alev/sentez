@@ -1,50 +1,59 @@
-// @ts-nocheck
-const ViewSales = (() => {
+/**
+ * Satış (Sales) — React'e kademeli geçişin bir sonraki ekranı.
+ * Planning/Purchasing/Quality ile aynı sekmeli desen (6 sekme) + ön-koşul
+ * veri çekimi (items/customers/warehouses). fullReload()'a gerek yok.
+ */
+import { useEffect, useState, useRef } from 'react';
+
+export default function SalesView() {
   const { t, esc, num, money, cur, dt, ts, table, pager, loading, modal, closeModal,
           field, input, select, textarea, val, numVal, intVal, can } = UI;
 
-  let tab = 'orders';
-  let items = [], customers = [], warehouses = [];
+  const [tab, setTab] = useState('orders');
+  const [reloadToken, setReloadToken] = useState(0);
+  const [ready, setReady] = useState(false);
 
-  async function render(el) {
-    el.innerHTML = loading();
-    try {
-      const [it, cs, wh] = await Promise.all([
-        Api.items({ pageSize: 300 }), Api.customers({ pageSize: 200 }), Api.warehouses()
-      ]);
-      items = it.data; customers = cs.data || cs; warehouses = wh;
-    } catch (e) { UI.err(e); }
-    await load(el);
-  }
+  const itemsRef = useRef([]);
+  const customersRef = useRef([]);
+  const warehousesRef = useRef([]);
+  const profitGroupRef = useRef('item');
 
-  async function load(el) {
-    el.innerHTML = `
-      <div class="topbar">
-        <div><h2>${t('salesTitle')}</h2><div class="sub">${t('salesSub')}</div></div>
-        <div class="topbar-actions" id="salesActions"></div>
-      </div>
-      ${UI.tabs([
-        { k: 'orders', l: t('tabSalesOrders') }, { k: 'shipments', l: t('tabShipments') },
-        { k: 'customers', l: t('tabCustomers') }, { k: 'invoices', l: t('tabSalesInvoices') },
-        { k: 'edocs', l: t('tabEdocs') }, { k: 'profit', l: t('tabProfit') }
-      ], tab, k => { tab = k; load(el); })}
-      <div id="salesBody">${loading()}</div>`;
+  function reload() { setReloadToken(x => x + 1); }
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [it, cs, wh] = await Promise.all([
+          Api.items({ pageSize: 300 }), Api.customers({ pageSize: 200 }), Api.warehouses()
+        ]);
+        if (cancelled) return;
+        itemsRef.current = it.data; customersRef.current = cs.data || cs; warehousesRef.current = wh;
+      } catch (e) { UI.err(e); }
+      if (cancelled) return;
+      setReady(true);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
     const body = document.getElementById('salesBody');
     const actions = document.getElementById('salesActions');
-    if (tab === 'orders') await renderOrders(el, body, actions);
-    if (tab === 'shipments') await renderShipments(el, body, actions);
-    if (tab === 'customers') await renderCustomers(el, body, actions);
-    if (tab === 'invoices') await renderInvoices(el, body, actions);
-    if (tab === 'edocs') await renderEdocs(el, body, actions);
-    if (tab === 'profit') await renderProfit(el, body, actions);
-  }
+    if (!body || !actions) return;
+    const fns = { orders: renderOrders, shipments: renderShipments, customers: renderCustomers, invoices: renderInvoices, edocs: renderEdocs, profit: renderProfit };
+    (async () => {
+      try { await fns[tab](body, actions); }
+      catch (e) { UI.err(e); body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+    })();
+  }, [ready, tab, reloadToken]);
 
   /* ================= SALES ORDERS ================= */
-  async function renderOrders(el, body, actions) {
+  async function renderOrders(body, actions) {
     let res;
     try { res = await Api.salesOrders({ pageSize: 25 }); } catch (e) { UI.err(e); return; }
     const rows = res.data || res;
-    if (can('write')) actions.innerHTML = `<button class="btn btn-primary btn-sm" id="soNew">${UI.icon(UI.ICONS.plus)}${t('newSO')}</button>`;
+    actions.innerHTML = can('write') ? `<button class="btn btn-primary btn-sm" id="soNew">${UI.icon(UI.ICONS.plus)}${t('newSO')}</button>` : '';
 
     body.innerHTML = `<div class="card">${table([
       { key: 'soNo', label: t('soNo'), render: r => `<button class="link-btn" data-open="${esc(r.id)}">${esc(r.soNo)}</button>
@@ -71,12 +80,12 @@ const ViewSales = (() => {
           ${['shipped', 'partially_shipped'].includes(r.status) && can('write')
             ? `<button class="btn btn-ghost btn-sm" data-inv="${esc(r.id)}">${t('newInvoice')}</button>` : ''}
         </div>` }
-    ], rows)}${res.totalPages ? pager(res, () => load(el)) : ''}</div>`;
+    ], rows)}${res.totalPages ? pager(res, () => reload()) : ''}</div>`;
 
-    document.getElementById('soNew')?.addEventListener('click', () => soForm(el));
-    body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openSO(el, b.dataset.open));
-    body.querySelectorAll('[data-ship]').forEach(b => b.onclick = () => shipmentForm(el, b.dataset.ship));
-    body.querySelectorAll('[data-inv]').forEach(b => b.onclick = () => invoiceForm(el, rows.find(x => x.id === b.dataset.inv)));
+    document.getElementById('soNew')?.addEventListener('click', () => soForm());
+    body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openSO(b.dataset.open));
+    body.querySelectorAll('[data-ship]').forEach(b => b.onclick = () => shipmentForm(b.dataset.ship));
+    body.querySelectorAll('[data-inv]').forEach(b => b.onclick = () => invoiceForm(rows.find(x => x.id === b.dataset.inv)));
   }
 
   const soStatusBadge = (s) => {
@@ -91,7 +100,8 @@ const ViewSales = (() => {
     return `<span class="badge ${c}">${esc(l)}</span>`;
   };
 
-  function soForm(el) {
+  function soForm() {
+    const items = itemsRef.current, customers = customersRef.current;
     let lines = [{ itemId: items[0]?.id || '', qty: 1, price: 0 }];
     modal({
       title: t('newSO'), size: 'wide',
@@ -150,7 +160,7 @@ const ViewSales = (() => {
               currency: val('soCur'), incoterm: val('soInco'), notes: val('soNote'),
               lines: lines.filter(l => l.itemId && l.qty > 0)
             });
-            closeModal(); UI.ok(t('saved')); load(el);
+            closeModal(); UI.ok(t('saved')); reload();
           } catch (e) {
             // Credit limit rejections carry useful numbers — surface them rather than a bare message
             if (e.payload && e.payload.creditLimit !== undefined) {
@@ -162,7 +172,7 @@ const ViewSales = (() => {
     });
   }
 
-  async function openSO(el, id) {
+  async function openSO(id) {
     let so;
     try { so = await Api.salesOrder(id); } catch (e) { UI.err(e); return; }
     modal({
@@ -207,10 +217,10 @@ const ViewSales = (() => {
                ${!['shipped', 'invoiced', 'cancelled'].includes(so.status) && can('approve')
                  ? `<button class="btn btn-danger" id="soCancel">${UI.getLang() === 'tr' ? 'İptal Et' : 'Cancel Order'}</button>` : ''}`,
       onOpen: (box) => {
-        box.querySelector('#soShip')?.addEventListener('click', () => { closeModal(); shipmentForm(el, so.id); });
+        box.querySelector('#soShip')?.addEventListener('click', () => { closeModal(); shipmentForm(so.id); });
         box.querySelector('#soCancel')?.addEventListener('click', () => {
           UI.confirmDialog(t('confirmDelete'), async () => {
-            try { await Api.cancelSalesOrder(so.id); closeModal(); UI.ok(t('saved')); load(el); } catch (e) { UI.err(e); }
+            try { await Api.cancelSalesOrder(so.id); closeModal(); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); }
           }, { danger: true });
         });
       }
@@ -218,11 +228,11 @@ const ViewSales = (() => {
   }
 
   /* ================= SHIPMENTS ================= */
-  async function renderShipments(el, body, actions) {
+  async function renderShipments(body, actions) {
     let res;
     try { res = await Api.shipments({ pageSize: 25 }); } catch (e) { UI.err(e); return; }
     const rows = res.data || res;
-    if (can('write')) actions.innerHTML = `<button class="btn btn-primary btn-sm" id="shNew">${UI.icon(UI.ICONS.plus)}${t('newShipment')}</button>`;
+    actions.innerHTML = can('write') ? `<button class="btn btn-primary btn-sm" id="shNew">${UI.icon(UI.ICONS.plus)}${t('newShipment')}</button>` : '';
 
     body.innerHTML = `<div class="card">${table([
       { key: 'shipmentNo', label: t('shipmentNo'), render: r => `<button class="link-btn" data-open="${esc(r.id)}">${esc(r.shipmentNo)}</button>
@@ -238,20 +248,21 @@ const ViewSales = (() => {
           <button class="icon-btn" data-print="${esc(r.id)}" title="${t('print')}">${UI.icon(UI.ICONS.print)}</button>
           ${can('delete') && r.status !== 'Teslim Edildi' ? `<button class="icon-btn danger" data-del="${esc(r.id)}">${UI.icon(UI.ICONS.trash)}</button>` : ''}
         </div>` }
-    ], rows)}${res.totalPages ? pager(res, () => load(el)) : ''}</div>`;
+    ], rows)}${res.totalPages ? pager(res, () => reload()) : ''}</div>`;
 
-    document.getElementById('shNew')?.addEventListener('click', () => shipmentForm(el, null));
+    document.getElementById('shNew')?.addEventListener('click', () => shipmentForm(null));
     body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openShipment(b.dataset.open));
     body.querySelectorAll('[data-adv]').forEach(b => b.onclick = async () => {
-      try { await Api.advanceShipment(b.dataset.adv); UI.ok(t('saved')); load(el); } catch (e) { UI.err(e); }
+      try { await Api.advanceShipment(b.dataset.adv); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); }
     });
     body.querySelectorAll('[data-print]').forEach(b => b.onclick = async () => printPackingList(await Api.shipment(b.dataset.print)));
     body.querySelectorAll('[data-del]').forEach(b => b.onclick = () => UI.confirmDialog(t('confirmDelete'), async () => {
-      try { await Api.deleteShipment(b.dataset.del); UI.ok(t('deleted')); load(el); } catch (e) { UI.err(e); }
+      try { await Api.deleteShipment(b.dataset.del); UI.ok(t('deleted')); reload(); } catch (e) { UI.err(e); }
     }, { danger: true }));
   }
 
-  async function shipmentForm(el, soId) {
+  async function shipmentForm(soId) {
+    const items = itemsRef.current, customers = customersRef.current, warehouses = warehousesRef.current;
     let so = null;
     if (soId) { try { so = await Api.salesOrder(soId); } catch (e) { UI.err(e); return; } }
 
@@ -383,7 +394,7 @@ const ViewSales = (() => {
               })),
               crates: crates.filter(c => c.w || c.h || c.d || c.weight)
             });
-            closeModal(); UI.ok(t('saved')); load(el);
+            closeModal(); UI.ok(t('saved')); reload();
           } catch (e) { UI.err(e); }
         };
       }
@@ -446,11 +457,11 @@ const ViewSales = (() => {
   }
 
   /* ================= CUSTOMERS ================= */
-  async function renderCustomers(el, body, actions) {
+  async function renderCustomers(body, actions) {
     let res;
     try { res = await Api.customers({ pageSize: 50 }); } catch (e) { UI.err(e); return; }
     const rows = res.data || res;
-    if (can('approve')) actions.innerHTML = `<button class="btn btn-primary btn-sm" id="cuNew">${UI.icon(UI.ICONS.plus)}${t('newCustomer')}</button>`;
+    actions.innerHTML = can('approve') ? `<button class="btn btn-primary btn-sm" id="cuNew">${UI.icon(UI.ICONS.plus)}${t('newCustomer')}</button>` : '';
 
     body.innerHTML = `<div class="card">${table([
       { key: 'name', label: t('customerName'), render: r => `<button class="link-btn" data-open="${r.id}">${esc(r.name)}</button>
@@ -465,15 +476,15 @@ const ViewSales = (() => {
           ${can('admin') ? `<button class="icon-btn danger" data-del="${r.id}">${UI.icon(UI.ICONS.trash)}</button>` : ''}</div>` }
     ], rows)}</div>`;
 
-    document.getElementById('cuNew')?.addEventListener('click', () => customerForm(el, null));
+    document.getElementById('cuNew')?.addEventListener('click', () => customerForm(null));
     body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openCustomer(b.dataset.open));
-    body.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => customerForm(el, rows.find(x => String(x.id) === b.dataset.edit)));
+    body.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => customerForm(rows.find(x => String(x.id) === b.dataset.edit)));
     body.querySelectorAll('[data-del]').forEach(b => b.onclick = () => UI.confirmDialog(t('confirmDelete'), async () => {
-      try { await Api.deleteCustomer(b.dataset.del); UI.ok(t('deleted')); load(el); } catch (e) { UI.err(e); }
+      try { await Api.deleteCustomer(b.dataset.del); UI.ok(t('deleted')); reload(); } catch (e) { UI.err(e); }
     }, { danger: true }));
   }
 
-  function customerForm(el, c) {
+  function customerForm(c) {
     modal({
       title: c ? t('edit') : t('newCustomer'), size: 'wide',
       body: `
@@ -513,7 +524,7 @@ const ViewSales = (() => {
           };
           try {
             if (c) await Api.updateCustomer(c.id, p); else await Api.createCustomer(p);
-            closeModal(); UI.ok(t('saved')); load(el);
+            closeModal(); UI.ok(t('saved')); reload();
           } catch (e) { UI.err(e); }
         };
       }
@@ -552,13 +563,12 @@ const ViewSales = (() => {
   }
 
   /* ================= CUSTOMER INVOICES ================= */
-  let edocByInvoice = {};
-  async function renderInvoices(el, body, actions) {
+  async function renderInvoices(body, actions) {
     let res;
     try { res = await Api.customerInvoices({ pageSize: 50 }); } catch (e) { UI.err(e); return; }
     const rows = res.data || res;
     // One extra call fills the e-document column for every row at once.
-    edocByInvoice = {};
+    const edocByInvoice = {};
     try {
       const docs = await Api.edocs({ pageSize: 200 });
       (docs.data || []).forEach(d => { if (d.sourceType === 'customer_invoice') edocByInvoice[d.sourceId] = d; });
@@ -588,19 +598,19 @@ const ViewSales = (() => {
     ], rows)}</div>`;
 
     body.querySelectorAll('[data-pay]').forEach(b => b.onclick = async () => {
-      try { await Api.payInvoice(b.dataset.pay); UI.ok(t('saved')); load(el); } catch (e) { UI.err(e); }
+      try { await Api.payInvoice(b.dataset.pay); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); }
     });
     body.querySelectorAll('[data-edoc]').forEach(b => b.onclick = async () => {
       try {
         const d = await Api.edocFromInvoice(b.dataset.edoc);
         UI.ok(`${d.documentNo} ${UI.getLang() === 'tr' ? 'oluşturuldu' : 'created'}`);
-        load(el);
+        reload();
       } catch (e) { UI.err(e); }
     });
-    body.querySelectorAll('[data-viewdoc]').forEach(b => b.onclick = () => openEdoc(el, b.dataset.viewdoc));
+    body.querySelectorAll('[data-viewdoc]').forEach(b => b.onclick = () => openEdoc(b.dataset.viewdoc));
   }
 
-  function invoiceForm(el, so) {
+  function invoiceForm(so) {
     const total = (so.lines || []).reduce((s, l) => s + (l.shippedQty || 0) * l.price, 0);
     modal({
       title: t('newInvoice'), sub: `${so.soNo} · ${so.customerName || ''}`,
@@ -620,7 +630,7 @@ const ViewSales = (() => {
               customerId: so.customerId, soId: so.id, amount: numVal('ciAmt'),
               currency: val('ciCur'), invoiceDate: val('ciDate')
             });
-            closeModal(); UI.ok(t('saved')); load(el);
+            closeModal(); UI.ok(t('saved')); reload();
           } catch (e) { UI.err(e); }
         };
       }
@@ -628,8 +638,8 @@ const ViewSales = (() => {
   }
 
   /* ================= PROFITABILITY ================= */
-  let profitGroup = 'item';
-  async function renderProfit(el, body, actions) {
+  async function renderProfit(body, actions) {
+    const profitGroup = profitGroupRef.current;
     let p;
     try { p = await Api.profitability({ groupBy: profitGroup }); } catch (e) { UI.err(e); return; }
 
@@ -659,7 +669,7 @@ const ViewSales = (() => {
             `<span style="color:${r.marginPct < 0 ? 'var(--danger)' : r.marginPct < 15 ? 'var(--accent)' : 'var(--success)'}">${num(r.marginPct, 1)}%</span>` }
       ], p.data)}</div>`;
 
-    document.getElementById('prGroup').onchange = e => { profitGroup = e.target.value; load(el); };
+    document.getElementById('prGroup').onchange = e => { profitGroupRef.current = e.target.value; reload(); };
     document.getElementById('prCsv').onclick = () => UI.exportCsv('karlilik.csv',
       [profitGroup, t('qty'), t('revenue'), t('cost'), t('profit'), t('margin')],
       p.data.map(r => [r.key, r.qty, r.revenueBase, r.costBase, r.profitBase, r.marginPct.toFixed(1)]));
@@ -694,7 +704,7 @@ const ViewSales = (() => {
     return `<span class="badge ${c}">${esc(l)}</span>`;
   };
 
-  async function renderEdocs(el, body, actions) {
+  async function renderEdocs(body, actions) {
     let res, settings;
     try {
       [res, settings] = await Promise.all([
@@ -724,25 +734,25 @@ const ViewSales = (() => {
               ? `<button class="btn btn-ghost btn-sm" data-refresh="${esc(d.id)}">${t('refreshEdoc')}</button>` : ''}
             <a class="icon-btn" href="/api/edocs/${esc(d.id)}/xml" title="${t('downloadXml')}" style="text-decoration:none">${UI.icon(UI.ICONS.download)}</a>
           </div>` }
-      ], rows)}${res.totalPages ? pager(res, () => load(el)) : ''}</div>`;
+      ], rows)}${res.totalPages ? pager(res, () => reload()) : ''}</div>`;
 
-    body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openEdoc(el, b.dataset.open));
+    body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openEdoc(b.dataset.open));
     body.querySelectorAll('[data-send]').forEach(b => b.onclick = () => {
       UI.confirmDialog(
         UI.getLang() === 'tr'
           ? 'Belge entegratöre gönderilecek. Gönderilmiş e-Fatura tek taraflı iptal edilemez.'
           : 'The document will be transmitted. A sent e-Invoice cannot be unilaterally cancelled.',
         async () => {
-          try { await Api.sendEdoc(b.dataset.send); UI.ok(t('saved')); load(el); } catch (e) { UI.err(e); }
+          try { await Api.sendEdoc(b.dataset.send); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); }
         }, { confirmLabel: t('sendEdoc') });
     });
     body.querySelectorAll('[data-refresh]').forEach(b => b.onclick = async () => {
-      try { const d = await Api.refreshEdoc(b.dataset.refresh); UI.ok(d.gibStatusText || t('saved')); load(el); }
+      try { const d = await Api.refreshEdoc(b.dataset.refresh); UI.ok(d.gibStatusText || t('saved')); reload(); }
       catch (e) { UI.err(e); }
     });
   }
 
-  async function openEdoc(el, id) {
+  async function openEdoc(id) {
     let d;
     try { d = await Api.edoc(id); } catch (e) { UI.err(e); return; }
     modal({
@@ -781,16 +791,32 @@ const ViewSales = (() => {
                  ? `<button class="btn btn-danger" id="edCancel">${t('cancelEdoc')}</button>` : ''}`,
       onOpen: (box) => {
         box.querySelector('#edSend')?.addEventListener('click', async () => {
-          try { await Api.sendEdoc(d.id); closeModal(); UI.ok(t('saved')); load(el); } catch (e) { UI.err(e); }
+          try { await Api.sendEdoc(d.id); closeModal(); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); }
         });
         box.querySelector('#edCancel')?.addEventListener('click', () => {
           UI.confirmDialog(t('confirmDelete'), async () => {
-            try { await Api.cancelEdoc(d.id, ''); closeModal(); UI.ok(t('saved')); load(el); } catch (e) { UI.err(e); }
+            try { await Api.cancelEdoc(d.id, ''); closeModal(); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); }
           }, { danger: true });
         });
       }
     });
   }
 
-  return { render };
-})();
+  if (!ready) {
+    return <div dangerouslySetInnerHTML={{ __html: loading() }} />;
+  }
+
+  const html = `
+    <div class="topbar">
+      <div><h2>${t('salesTitle')}</h2><div class="sub">${t('salesSub')}</div></div>
+      <div class="topbar-actions" id="salesActions"></div>
+    </div>
+    ${UI.tabs([
+      { k: 'orders', l: t('tabSalesOrders') }, { k: 'shipments', l: t('tabShipments') },
+      { k: 'customers', l: t('tabCustomers') }, { k: 'invoices', l: t('tabSalesInvoices') },
+      { k: 'edocs', l: t('tabEdocs') }, { k: 'profit', l: t('tabProfit') }
+    ], tab, k => setTab(k))}
+    <div id="salesBody">${loading()}</div>`;
+
+  return <div dangerouslySetInnerHTML={{ __html: html }} />;
+}

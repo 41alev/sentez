@@ -92,7 +92,7 @@ async function until(fn, timeout = 6000, step = 60) {
   const files = [
     'js/i18n.js', 'js/api.js', 'js/ui.js',
     'dist/react-views.js',
-    'js/views/sales.js', 'js/views/admin.js', 'js/app.js'
+    'js/views/admin.js', 'js/app.js'
   ];
   console.log('\n=== BETİK YÜKLEME / SCRIPT LOADING ===');
   // Inject as real <script> elements so top-level `const` lands in the shared global
@@ -105,8 +105,8 @@ async function until(fn, timeout = 6000, step = 60) {
     const name = f.split('/').pop().replace('.js', '');
     const globalNames = {
       'i18n': ['I18N'], 'api': ['Api'], 'ui': ['UI'], 'app': ['App'],
-      'react-views': ['ViewDashboard', 'ViewItems', 'ViewCounts', 'ViewLots', 'ViewProduction', 'ViewReports', 'ViewPlanning', 'ViewPurchasing', 'ViewQuality'], // frontend-react/main.jsx defines these globals
-      'sales': ['ViewSales'], 'admin': ['ViewAdmin']
+      'react-views': ['ViewDashboard', 'ViewItems', 'ViewCounts', 'ViewLots', 'ViewProduction', 'ViewReports', 'ViewPlanning', 'ViewPurchasing', 'ViewQuality', 'ViewSales'], // frontend-react/main.jsx defines these globals
+      'admin': ['ViewAdmin']
     }[name];
     const loaded = globalNames.every(g => window.eval(`typeof ${g} !== 'undefined'`));
     check(f, loaded && jsErrors.length === before, jsErrors.slice(before).join(' | '));
