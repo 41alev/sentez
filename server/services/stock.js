@@ -248,6 +248,43 @@ function adjustLot({ lotId, newQty, reason, userId, refType, refId }) {
   return delta;
 }
 
+/**
+ * Pick lots for a quantity WITHOUT consuming them yet, so a caller can combine the
+ * result with an explicitly chosen lot before committing everything through
+ * consume() in one pass (see sales.js shipment creation: per line, either an
+ * explicit lot or an allocate() pick, always finished off by the same consume()).
+ * Only FEFO is implemented (see pickLotsFEFO) — the strategy argument is accepted
+ * for call-site clarity but not otherwise used.
+ */
+function allocate(itemId, qty, warehouseId = null, strategy = 'FEFO') {
+  const item = db.prepare('SELECT id, name, unit FROM items WHERE id = ?').get(itemId);
+  if (!item) throw new AppError('Ürün bulunamadı / Item not found', 404);
+  const { picks, shortfall } = pickLotsFEFO(itemId, qty, warehouseId);
+  if (shortfall > 0) {
+    throw new AppError('Yetersiz stok / Insufficient stock', 400, {
+      shortfall: { name: item.name, needed: qty, available: qty - shortfall, unit: item.unit }
+    });
+  }
+  return picks.map(p => ({ lotId: p.lot.id, lotNo: p.lot.lot_no, qty: p.qty, unitCost: p.lot.unit_cost }));
+}
+
+/** Consume lots already picked by allocate() or chosen explicitly by the caller. */
+function consume(picks, { itemId, itemName, note, refType, refId, userId }) {
+  for (const p of picks) {
+    const lot = db.prepare('SELECT * FROM stock_lots WHERE id = ?').get(p.lotId);
+    if (!lot) throw new AppError('Parti bulunamadı / Lot not found', 404);
+    const newQty = lot.qty - p.qty;
+    db.prepare('UPDATE stock_lots SET qty = ?, status = CASE WHEN ? <= 0 THEN ? ELSE status END WHERE id = ?')
+      .run(newQty, newQty, 'consumed', lot.id);
+    recordMovement({
+      itemId, itemName, lotId: lot.id, lotNo: lot.lot_no, warehouseId: lot.warehouse_id,
+      type: 'out', qty: p.qty, unitCost: p.unitCost ?? lot.unit_cost,
+      fromStatus: 'available', note, refType, refId, userId
+    });
+  }
+  recalcItemQty(itemId);
+}
+
 /** Total stock value at lot cost — the number you can actually give to accounting. */
 function stockValueBase(warehouseId = null) {
   const params = [];
@@ -258,6 +295,6 @@ function stockValueBase(warehouseId = null) {
 
 module.exports = {
   ACTIVE_STATUSES, recalcItemQty, recordMovement, updateAverageCost,
-  receiveLot, pickLotsFEFO, availableQty, issueStock,
+  receiveLot, pickLotsFEFO, availableQty, issueStock, allocate, consume,
   changeLotStatus, transferLot, adjustLot, stockValueBase
 };

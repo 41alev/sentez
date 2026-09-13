@@ -1,5 +1,64 @@
 # PROJECT_STATUS.md
 
+## 2026-09-14 (devam 21) — EN CİDDİ BULGU: "Yeni Sevkiyat" TAMAMEN ÇÖKÜYORDU (500), hiçbir sevkiyat asla kaydedilemiyordu
+
+Satın Alma modülü tamamen test edildikten sonra Satış modülüne geçildi.
+"Yeni Satış Siparişi" ile yeni bir sipariş oluşturuldu, ardından üzerinde
+"Yeni Sevkiyat" denendi — **`POST /api/sales/shipments` HER SEFERİNDE 500
+Internal Server Error döndü**, hem FEFO otomatik lot seçimiyle hem de elle
+seçilen bir lotla. Bu, bir depo/ERP sisteminde en temel operasyonlardan
+biri olan "müşteriye mal sevk et" işleminin **hiçbir zaman
+çalışmadığı** anlamına geliyordu.
+
+Sunucu loglarını yakalamak için demo sunucusu stdout/stderr dosyaya
+yönlendirilerek yeniden başlatıldı (Windows'ta Start-Process'in pino'nun
+async log yazımını process sonlanana kadar diske yazmayabildiği fark
+edildi — süreç durdurulup log dosyası öyle okundu). Gerçek hata:
+
+```
+TypeError: stock.allocate is not a function
+    at server/routes/sales.js:232
+```
+
+`server/routes/sales.js`'teki `POST /shipments` handler'ı
+`stock.allocate(itemId, qty, warehouseId, 'FEFO')` VE
+`stock.consume(picks, {...})` çağırıyordu — ama `server/services/stock.js`
+bu iki fonksiyonu **HİÇBİR ZAMAN EXPORT ETMEMİŞTİ** (`module.exports`
+listesinde `allocate`/`consume` hiç yoktu, yalnızca `pickLotsFEFO` ve
+`issueStock` vardı — farklı imzalarla). Bu, hem FEFO otomatik yolu (`picks
+= stock.allocate(...)`) HEM DE elle lot seçilen yolu (ikisi de sonunda
+aynı `stock.consume(picks, ...)` satırından geçiyor) etkiliyordu — yani
+**tek bir istisna olmadan her sevkiyat oluşturma denemesi çöküyordu**.
+`test/e2e.js`'deki mevcut test yalnızca seed verisindeki (sunucu açılışında
+elle SQL ile eklenen) sevkiyatları `GET` ile okuyordu, gerçek bir `POST`
+hiç denenmemişti — bu yüzden bu tam kapsamlı çökme hiçbir CI/test
+koşusunda hiç yakalanmamıştı.
+
+Düzeltme: `server/services/stock.js`'e eksik `allocate()` (mevcut
+`pickLotsFEFO`'yu sarıp yetersiz stokta `AppError` fırlatan, sonucu
+`{lotId, lotNo, qty, unitCost}` şekline döken) ve `consume()` (verilen
+lot listesini gerçekten düşüren, `recordMovement` ile hareket kaydeden,
+`recalcItemQty` ile önbelleği güncelleyen) fonksiyonları eklendi — ikisi
+de mevcut yapı taşlarını (`pickLotsFEFO`, `recordMovement`,
+`recalcItemQty`) kullanıyor, `sales.js`'e hiç dokunulmadı.
+
+`test/e2e.js`'e gerçek bir `POST /api/sales/shipments` çağrısı eklendi:
+hem FEFO otomatik lot seçimiyle hem elle seçilen bir lotla sevkiyat
+oluşturulup 201 döndüğü VE stoğun gerçekten düştüğü doğrulanıyor.
+
+**Doğrulama:** `npm run typecheck`/`lint` temiz. `npx playwright test` →
+15/15 geçti. `node test/run-all.js` → 29/29 suite geçti (yeni e2e
+assertion'ları dahil). Gerçek tarayıcıda önce bozuk hali (500 hatası,
+sipariş "0/3" kalıyor), sonra düzeltilmiş hali (sipariş "Sevk edildi"ye
+geçiyor, stok gerçekten düşüyor) hem FEFO hem elle lot senaryosunda
+doğrulandı.
+
+**Bu turun geri kalanı devam ediyor** — Satış modülünün diğer sekmeleri
+(Sevkiyatlar, Müşteriler, Faturalar, e-Belgeler, Kârlılık), Kalite (6
+sekme), CRM/Fırsatlar, Destek, Planlama (5 sekme), Raporlar (10 sekme),
+Yönetim (11 sekme) ve Depo Terminali'nin her düğmesi/diyaloğu sırayla
+test edilecek.
+
 ## 2026-09-14 (devam 20) — ÜÇÜNCÜ BULGU: Fatura 3'lü eşleştirme tablosunda tedarikçi adı ve fark notu hiç görünmüyordu
 
 Aynı turda, Teklifler sekmesindeki düzeltmeden hemen sonra Faturalar

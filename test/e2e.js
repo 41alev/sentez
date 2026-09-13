@@ -206,6 +206,38 @@ async function login(username, password) {
   const shipWithLot = shipments.data.data[0];
   ok('shipment carries lot reference', shipWithLot && shipWithLot.items[0]?.lotNo, JSON.stringify(shipWithLot?.items?.[0]));
 
+  // Regresyon: server/services/stock.js hiç var olmayan stock.allocate()/
+  // stock.consume() fonksiyonlarını çağırıyordu (server/routes/sales.js:232,234) —
+  // bu yüzden "Yeni Sevkiyat" HİÇBİR ZAMAN kaydedilemiyordu, ne FEFO otomatik lot
+  // seçimiyle ne de elle seçilen bir lotla — her ikisi de aynı stock.consume()
+  // çağrısından geçiyordu. Yukarıdaki "shipments listed" testi yalnızca SEED
+  // verisindeki (sunucu başlarken elle SQL ile eklenen) sevkiyatları okuduğu için
+  // bu tam kapsamlı çökme hiçbir testte hiç yakalanmamıştı. Artık gerçek bir POST
+  // ile hem FEFO hem elle lot seçimi yolu kontrol ediliyor.
+  const setItemBefore = (await api('GET', `/api/items/${setItem.id}`, { token: admin })).data.qty;
+  const fefoShip = await api('POST', '/api/sales/shipments', {
+    token: operator,
+    body: { type: 'Yurt İçi', destination: 'Test Depo FEFO', items: [{ itemId: setItem.id, qty: 1 }], crates: [] }
+  });
+  ok('FEFO otomatik lot seçimiyle sevkiyat oluşturuluyor (stock.allocate/consume gerçekten var)',
+    fefoShip.status === 201, `got ${fefoShip.status} ${JSON.stringify(fefoShip.data).slice(0, 200)}`);
+  if (fefoShip.status === 201) {
+    ok('FEFO sevkiyatı gerçek bir lot taşıyor', !!fefoShip.data.items[0]?.lotId, JSON.stringify(fefoShip.data.items[0]));
+    const setItemAfterFefo = (await api('GET', `/api/items/${setItem.id}`, { token: admin })).data.qty;
+    ok('FEFO sevkiyatı stoğu gerçekten düşürüyor', setItemAfterFefo === setItemBefore - 1, `${setItemBefore} → ${setItemAfterFefo}`);
+  }
+
+  const explicitLot = (await api('GET', `/api/stock/lots?itemId=${setItem.id}&pageSize=50`, { token: admin }))
+    .data.data.find(l => l.status === 'available' && l.qty >= 1);
+  if (explicitLot) {
+    const explicitShip = await api('POST', '/api/sales/shipments', {
+      token: operator,
+      body: { type: 'Yurt İçi', destination: 'Test Depo Elle Lot', items: [{ itemId: setItem.id, qty: 1, lotId: explicitLot.id }], crates: [] }
+    });
+    ok('elle seçilen lotla sevkiyat oluşturuluyor', explicitShip.status === 201,
+      `got ${explicitShip.status} ${JSON.stringify(explicitShip.data).slice(0, 200)}`);
+  }
+
   const profit = await api('GET', '/api/sales/profitability?groupBy=item', { token: manager });
   ok('profitability computed', profit.status === 200 && profit.data.totals.revenueBase > 0,
     JSON.stringify(profit.data.totals));
