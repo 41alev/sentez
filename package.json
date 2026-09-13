@@ -40,6 +40,7 @@
     "test:openapi": "node test/openapi.js",
     "test:pwa": "node test/pwa.js",
     "test:crm": "node test/crm.js",
+    "test:pivot": "node test/pivot.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },

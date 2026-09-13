@@ -2,8 +2,11 @@
 const express = require('express');
 const db = require('../db');
 const { requireAuth } = require('../middleware/auth');
-const { toBase } = require('../lib/core');
+const { validate, z } = require('../middleware/validate');
+const { AppError, uuid, toBase, logAudit } = require('../lib/core');
+const { companyIdOf } = require('../lib/tenant');
 const { today: todayStr, addDays, toLocalDateStr } = require('../lib/dates');
+const pivot = require('../services/pivot');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -386,6 +389,72 @@ router.get('/valuation', (req, res) => {
       quarantineQty: r.quarantine_qty, blockedQty: r.blocked_qty
     }))
   });
+});
+
+/* ============================ ÖZEL RAPOR / PIVOT (BI derinliği) ============================ */
+
+router.get('/pivot-meta', (req, res) => res.json(pivot.meta()));
+
+const pivotSchema = z.object({
+  dimension: z.string().min(1), metric: z.string().min(1),
+  filters: z.object({
+    from: z.string().max(20).optional(), to: z.string().max(20).optional(),
+    type: z.string().max(50).optional(), warehouseId: z.coerce.number().int().optional(),
+    itemId: z.string().max(200).optional()
+  }).default({})
+});
+
+router.post('/pivot', validate(pivotSchema), (req, res) => {
+  const b = req.valid;
+  res.json({ dimension: b.dimension, metric: b.metric, data: pivot.runMovementPivot(b) });
+});
+
+function serializeSavedReport(row) {
+  let filters = {};
+  try { filters = JSON.parse(row.filters); } catch { /* bozuk kayıt: boş filtreyle devam et */ }
+  return {
+    id: row.id, name: row.name, dimension: row.dimension, metric: row.metric,
+    chartType: row.chart_type, filters, createdBy: row.created_by, createdAt: row.created_at
+  };
+}
+
+router.get('/saved', (req, res) => {
+  const rows = db.prepare('SELECT * FROM saved_reports WHERE company_id = ? ORDER BY created_at DESC').all(companyIdOf(req));
+  res.json(rows.map(serializeSavedReport));
+});
+
+const savedReportSchema = z.object({
+  name: z.string().min(1).max(200), dimension: z.string().min(1), metric: z.string().min(1),
+  chartType: z.enum(['bar', 'line']).default('bar'),
+  filters: z.object({
+    from: z.string().max(20).optional(), to: z.string().max(20).optional(),
+    type: z.string().max(50).optional(), warehouseId: z.coerce.number().int().optional(),
+    itemId: z.string().max(200).optional()
+  }).default({})
+});
+
+router.post('/saved', validate(savedReportSchema), (req, res) => {
+  const b = req.valid;
+  if (!pivot.DIMENSIONS[b.dimension]) throw new AppError('Geçersiz boyut / Invalid dimension', 400);
+  if (!pivot.METRICS[b.metric]) throw new AppError('Geçersiz ölçü / Invalid metric', 400);
+  const id = uuid();
+  db.prepare(`INSERT INTO saved_reports (id, company_id, name, dimension, metric, chart_type, filters, created_by, created_at)
+    VALUES (?,?,?,?,?,?,?,?,?)`)
+    .run(id, companyIdOf(req), b.name, b.dimension, b.metric, b.chartType, JSON.stringify(b.filters), req.user.id, Date.now());
+  logAudit(req, 'auditSavedReportAdd', { entityType: 'saved_report', entityId: id, newValue: { name: b.name }, detail: b.name });
+  res.status(201).json(serializeSavedReport(db.prepare('SELECT * FROM saved_reports WHERE id = ?').get(id)));
+});
+
+router.delete('/saved/:id', (req, res) => {
+  const row = db.prepare('SELECT * FROM saved_reports WHERE id = ?').get(req.params.id);
+  if (!row) throw new AppError('Kayıtlı rapor bulunamadı / Saved report not found', 404);
+  // Kendi raporunu herkes silebilir; başkasının raporunu yalnızca yönetici/müdür kaldırabilir.
+  const isOwner = row.created_by === req.user.id;
+  const isManager = ['admin', 'manager'].includes(req.user.role);
+  if (!isOwner && !isManager) throw new AppError('Bu raporu yalnızca oluşturan kişi veya bir yönetici silebilir / Only the owner or a manager can delete this report', 403);
+  db.prepare('DELETE FROM saved_reports WHERE id = ?').run(row.id);
+  logAudit(req, 'auditSavedReportDelete', { entityType: 'saved_report', entityId: row.id, detail: row.name });
+  res.status(204).end();
 });
 
 module.exports = router;

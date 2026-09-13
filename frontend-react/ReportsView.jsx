@@ -17,11 +17,12 @@ import { useEffect, useState, useRef } from 'react';
 const DEAD_STOCK_DEFAULT_DAYS = 180;
 
 export default function ReportsView() {
-  const { t, esc, num, money, dt, ts, table, loading, select } = UI;
+  const { t, esc, num, money, dt, ts, table, loading, select, field, input, modal, closeModal, val } = UI;
 
   const [tab, setTab] = useState('valuation');
   const [reloadToken, setReloadToken] = useState(0);
   const deadDaysRef = useRef(DEAD_STOCK_DEFAULT_DAYS);
+  const pivotConfigRef = useRef({ dimension: 'month', metric: 'value', filters: {} });
 
   function reload() { setReloadToken(x => x + 1); }
 
@@ -29,7 +30,7 @@ export default function ReportsView() {
     const body = document.getElementById('repBody');
     const actions = document.getElementById('repActions');
     if (!body || !actions) return;
-    const fns = { valuation, trends, deadStock, turnover, abc, reorder, supplier, quality: qualityKpi, prodCost };
+    const fns = { valuation, trends, deadStock, turnover, abc, reorder, supplier, quality: qualityKpi, prodCost, custom: customReport };
     (async () => {
       try { await fns[tab](body, actions); }
       catch (e) { UI.err(e); body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
@@ -356,6 +357,94 @@ export default function ReportsView() {
     });
   }
 
+  /* ---------- özel rapor (pivot) — BI derinliği ---------- */
+  async function customReport(body, actions) {
+    actions.innerHTML = '';
+    let meta, saved;
+    try { [meta, saved] = await Promise.all([Api.pivotMeta(), Api.savedReports()]); }
+    catch (e) { UI.err(e); return; }
+    const cfg = pivotConfigRef.current;
+
+    const dimLabel = (k) => meta.dimensions.find(d => d.key === k)?.label || k;
+    const metLabel = (k) => meta.metrics.find(m => m.key === k)?.label || k;
+
+    body.innerHTML = `
+      <div class="card"><div class="card-body">
+        <div class="filters">
+          ${field(t('pivotDimension'), select('pvDim', meta.dimensions.map(d => ({ v: d.key, l: d.label })), cfg.dimension))}
+          ${field(t('pivotMetric'), select('pvMet', meta.metrics.map(m => ({ v: m.key, l: m.label })), cfg.metric))}
+          ${field(t('pivotTypeFilter'), select('pvType', [{ v: '', l: t('all') }, ...meta.movementTypes.map(mt => ({ v: mt, l: mt }))], cfg.filters.type || ''))}
+        </div>
+        <div class="filters">
+          ${field(t('from'), input('pvFrom', { type: 'date', value: cfg.filters.from || '' }))}
+          ${field(t('to'), input('pvTo', { type: 'date', value: cfg.filters.to || '' }))}
+        </div>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button class="btn btn-primary btn-sm" id="pvRun">${t('runReport')}</button>
+          <button class="btn btn-ghost btn-sm" id="pvSave">${t('saveReport')}</button>
+        </div>
+      </div></div>
+      ${saved.length ? `<div class="card"><div class="card-body">
+        <div class="section-title">${t('savedReports')}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          ${saved.map(s => `<span class="badge plain" style="cursor:pointer" data-load="${esc(s.id)}">${esc(s.name)}
+            <span data-del="${esc(s.id)}" style="margin-left:6px;opacity:.7">✕</span></span>`).join('')}
+        </div>
+      </div></div>` : ''}
+      <div id="pvResult"></div>`;
+
+    async function runAndRender() {
+      cfg.dimension = val('pvDim'); cfg.metric = val('pvMet');
+      cfg.filters = { type: val('pvType') || undefined, from: val('pvFrom') || undefined, to: val('pvTo') || undefined };
+      const resultEl = document.getElementById('pvResult');
+      resultEl.innerHTML = loading();
+      let r;
+      try { r = await Api.runPivot(cfg); } catch (e) { UI.err(e); resultEl.innerHTML = ''; return; }
+      resultEl.innerHTML = `
+        <div class="card"><div class="card-body"><div class="chart-wrap"><canvas id="pvChart"></canvas></div></div></div>
+        <div class="card">${table([
+          { key: 'dim', label: dimLabel(cfg.dimension) },
+          { key: 'val', label: metLabel(cfg.metric), num: true, render: row => num(row.val, 2) }
+        ], r.data)}</div>`;
+      UI.chart('pvChart', {
+        type: 'bar',
+        data: { labels: r.data.map(d => String(d.dim)), datasets: [{ label: metLabel(cfg.metric), data: r.data.map(d => d.val), backgroundColor: UI.PALETTE[1], borderRadius: 4 }] }
+      });
+    }
+
+    document.getElementById('pvRun').onclick = runAndRender;
+    document.getElementById('pvSave').onclick = () => {
+      modal({
+        title: t('saveReport'),
+        body: field(t('reportName'), input('pvName')),
+        footer: `<button class="btn btn-ghost" data-close>${t('cancel')}</button><button class="btn btn-primary" id="pvSaveGo">${t('save')}</button>`,
+        onOpen: (box) => {
+          box.querySelector('#pvSaveGo').onclick = async () => {
+            const name = val('pvName');
+            if (!name) return UI.toast(t('reportName'), 'err');
+            try {
+              await Api.createSavedReport({ name, dimension: val('pvDim'), metric: val('pvMet'),
+                filters: { type: val('pvType') || undefined, from: val('pvFrom') || undefined, to: val('pvTo') || undefined } });
+              closeModal(); UI.ok(t('saved')); reload();
+            } catch (e) { UI.err(e); }
+          };
+        }
+      });
+    };
+    body.querySelectorAll('[data-load]').forEach(el => el.onclick = (e) => {
+      if (e.target.dataset.del) return;
+      const s = saved.find(x => x.id === el.dataset.load);
+      pivotConfigRef.current = { dimension: s.dimension, metric: s.metric, filters: s.filters };
+      reload();
+    });
+    body.querySelectorAll('[data-del]').forEach(el => el.onclick = async (e) => {
+      e.stopPropagation();
+      try { await Api.deleteSavedReport(el.dataset.del); UI.ok(t('deleted')); reload(); } catch (err) { UI.err(err); }
+    });
+
+    runAndRender();
+  }
+
   const html = `
     <div class="topbar">
       <div><h2>${t('repTitle')}</h2><div class="sub">${t('repSub')}</div></div>
@@ -366,7 +455,7 @@ export default function ReportsView() {
       { k: 'deadStock', l: t('tabDeadStock') }, { k: 'turnover', l: t('tabTurnover') },
       { k: 'abc', l: t('tabAbc') }, { k: 'reorder', l: t('tabReorder') },
       { k: 'supplier', l: t('tabSupplierPerf') }, { k: 'quality', l: t('tabQualityKpi') },
-      { k: 'prodCost', l: t('tabProdCost') }
+      { k: 'prodCost', l: t('tabProdCost') }, { k: 'custom', l: t('tabCustomReport') }
     ], tab, k => setTab(k))}
     <div id="repBody">${loading()}</div>`;
 

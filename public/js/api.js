@@ -167,6 +167,11 @@ const Api = (() => {
     productionCosts: () => req('GET', '/reports/production-costs'),
     valuation: () => req('GET', '/reports/valuation'),
     priceHistory: (itemId) => req('GET', '/reports/price-history/' + itemId),
+    pivotMeta: () => req('GET', '/reports/pivot-meta'),
+    runPivot: (d) => req('POST', '/reports/pivot', d),
+    savedReports: () => req('GET', '/reports/saved'),
+    createSavedReport: (d) => req('POST', '/reports/saved', d),
+    deleteSavedReport: (id) => req('DELETE', '/reports/saved/' + id),
 
     // documents
     documents: (p) => req('GET', '/documents' + qs(p)),
