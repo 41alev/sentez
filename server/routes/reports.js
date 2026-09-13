@@ -395,25 +395,28 @@ router.get('/valuation', (req, res) => {
 
 router.get('/pivot-meta', (req, res) => res.json(pivot.meta()));
 
+const filtersSchema = z.object({
+  from: z.string().max(20).optional(), to: z.string().max(20).optional(),
+  type: z.string().max(50).optional(), warehouseId: z.coerce.number().int().optional(),
+  itemId: z.string().max(200).optional(), customerId: z.coerce.number().int().optional(),
+  supplierId: z.coerce.number().int().optional()
+}).passthrough(); // pivot.js kendi whitelist'inde bilinmeyen alanları zaten yok sayar
+
 const pivotSchema = z.object({
-  dimension: z.string().min(1), metric: z.string().min(1),
-  filters: z.object({
-    from: z.string().max(20).optional(), to: z.string().max(20).optional(),
-    type: z.string().max(50).optional(), warehouseId: z.coerce.number().int().optional(),
-    itemId: z.string().max(200).optional()
-  }).default({})
+  dataSource: z.string().min(1).default('movements'), dimension: z.string().min(1), metric: z.string().min(1),
+  filters: filtersSchema.default({})
 });
 
 router.post('/pivot', validate(pivotSchema), (req, res) => {
   const b = req.valid;
-  res.json({ dimension: b.dimension, metric: b.metric, data: pivot.runMovementPivot(b) });
+  res.json({ dataSource: b.dataSource, dimension: b.dimension, metric: b.metric, data: pivot.runPivot(b) });
 });
 
 function serializeSavedReport(row) {
   let filters = {};
   try { filters = JSON.parse(row.filters); } catch { /* bozuk kayıt: boş filtreyle devam et */ }
   return {
-    id: row.id, name: row.name, dimension: row.dimension, metric: row.metric,
+    id: row.id, name: row.name, dataSource: row.data_source || 'movements', dimension: row.dimension, metric: row.metric,
     chartType: row.chart_type, filters, createdBy: row.created_by, createdAt: row.created_at
   };
 }
@@ -424,23 +427,22 @@ router.get('/saved', (req, res) => {
 });
 
 const savedReportSchema = z.object({
-  name: z.string().min(1).max(200), dimension: z.string().min(1), metric: z.string().min(1),
+  name: z.string().min(1).max(200), dataSource: z.string().min(1).default('movements'),
+  dimension: z.string().min(1), metric: z.string().min(1),
   chartType: z.enum(['bar', 'line']).default('bar'),
-  filters: z.object({
-    from: z.string().max(20).optional(), to: z.string().max(20).optional(),
-    type: z.string().max(50).optional(), warehouseId: z.coerce.number().int().optional(),
-    itemId: z.string().max(200).optional()
-  }).default({})
+  filters: filtersSchema.default({})
 });
 
 router.post('/saved', validate(savedReportSchema), (req, res) => {
   const b = req.valid;
-  if (!pivot.DIMENSIONS[b.dimension]) throw new AppError('Geçersiz boyut / Invalid dimension', 400);
-  if (!pivot.METRICS[b.metric]) throw new AppError('Geçersiz ölçü / Invalid metric', 400);
+  const ds = pivot.DATASOURCES[b.dataSource];
+  if (!ds) throw new AppError('Geçersiz veri kaynağı / Invalid data source', 400);
+  if (!ds.dimensions[b.dimension]) throw new AppError('Geçersiz boyut / Invalid dimension', 400);
+  if (!ds.metrics[b.metric]) throw new AppError('Geçersiz ölçü / Invalid metric', 400);
   const id = uuid();
-  db.prepare(`INSERT INTO saved_reports (id, company_id, name, dimension, metric, chart_type, filters, created_by, created_at)
-    VALUES (?,?,?,?,?,?,?,?,?)`)
-    .run(id, companyIdOf(req), b.name, b.dimension, b.metric, b.chartType, JSON.stringify(b.filters), req.user.id, Date.now());
+  db.prepare(`INSERT INTO saved_reports (id, company_id, name, data_source, dimension, metric, chart_type, filters, created_by, created_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?)`)
+    .run(id, companyIdOf(req), b.name, b.dataSource, b.dimension, b.metric, b.chartType, JSON.stringify(b.filters), req.user.id, Date.now());
   logAudit(req, 'auditSavedReportAdd', { entityType: 'saved_report', entityId: id, newValue: { name: b.name }, detail: b.name });
   res.status(201).json(serializeSavedReport(db.prepare('SELECT * FROM saved_reports WHERE id = ?').get(id)));
 });

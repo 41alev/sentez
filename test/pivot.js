@@ -37,8 +37,12 @@ async function api(method, p, { token, body } = {}) {
   console.log('\n=== META / WHITELIST ===');
   const meta = await api('GET', '/api/reports/pivot-meta', { token: viewer });
   ok('meta kimlik doğrulaması yeterli (viewer okuyabiliyor)', meta.status === 200);
-  ok('boyut listesi geliyor', Array.isArray(meta.data.dimensions) && meta.data.dimensions.some(d => d.key === 'month'));
-  ok('ölçü listesi geliyor', Array.isArray(meta.data.metrics) && meta.data.metrics.some(m => m.key === 'value'));
+  ok('4 veri kaynağı da listede (movements/sales/purchasing/quality)',
+    ['movements', 'sales', 'purchasing', 'quality'].every(k => meta.data.dataSources.some(d => d.key === k)),
+    JSON.stringify(meta.data.dataSources.map(d => d.key)));
+  const movementsSrc = meta.data.dataSources.find(d => d.key === 'movements');
+  ok('movements boyut listesi geliyor', movementsSrc.dimensions.some(d => d.key === 'month'));
+  ok('movements ölçü listesi geliyor', movementsSrc.metrics.some(m => m.key === 'value'));
   ok('hareket tipi listesi geliyor', meta.data.movementTypes.includes('in'));
 
   console.log('\n=== PIVOT ÇALIŞTIRMA / RUN PIVOT ===');
@@ -61,13 +65,42 @@ async function api(method, p, { token, body } = {}) {
   const filtered = await api('POST', '/api/reports/pivot', { token: admin, body: { dimension: 'type', metric: 'count', filters: { type: 'in' } } });
   ok('tek tipe filtrelenince tek satır dönüyor', filtered.data.data.length === 1 && filtered.data.data[0].dim === 'in', JSON.stringify(filtered.data));
 
+  console.log('\n=== YENİ VERİ KAYNAKLARI / NEW DATA SOURCES (satış, satın alma, kalite) ===');
+  // Tohum verisi her üç modülde de gerçek kayıtlar içeriyor (e2e/contract
+  // testlerinin de dayandığı aynı seed) — en az bir satır dönmesi, JOIN'lerin
+  // ve sütun adlarının GERÇEKTEN doğru olduğunun kanıtı (uydurma alan adı
+  // kullanılsaydı SQL hatası fırlatır, sessizce yanlış sonuç vermezdi).
+  const salesPivot = await api('POST', '/api/reports/pivot', { token: admin, body: { dataSource: 'sales', dimension: 'customer', metric: 'revenueBase', filters: {} } });
+  ok('satış pivotu çalışıyor', salesPivot.status === 200 && salesPivot.data.data.length > 0, JSON.stringify(salesPivot.data));
+
+  const purchasingPivot = await api('POST', '/api/reports/pivot', { token: admin, body: { dataSource: 'purchasing', dimension: 'supplier', metric: 'spendBase', filters: {} } });
+  ok('satın alma pivotu çalışıyor', purchasingPivot.status === 200 && purchasingPivot.data.data.length > 0, JSON.stringify(purchasingPivot.data));
+
+  const qualityPivot = await api('POST', '/api/reports/pivot', { token: admin, body: { dataSource: 'quality', dimension: 'result', metric: 'count', filters: {} } });
+  ok('kalite pivotu çalışıyor', qualityPivot.status === 200 && qualityPivot.data.data.length > 0, JSON.stringify(qualityPivot.data));
+
+  const badDataSource = await api('POST', '/api/reports/pivot', { token: admin, body: { dataSource: 'yok-boyle-bir-kaynak', dimension: 'month', metric: 'qty', filters: {} } });
+  ok('bilinmeyen veri kaynağı reddediliyor (400)', badDataSource.status === 400);
+
+  // Bir kaynağın boyutu/ölçüsü BAŞKA bir kaynakta whitelist dışıdır —
+  // veri kaynakları arasında yanlışlıkla "sızma" olmadığının kanıtı.
+  const crossSource = await api('POST', '/api/reports/pivot', { token: admin, body: { dataSource: 'sales', dimension: 'warehouse', metric: 'qty', filters: {} } });
+  ok('sales kaynağında movements\'a özel "warehouse" boyutu reddediliyor (400)', crossSource.status === 400);
+
   console.log('\n=== KAYITLI RAPORLAR / SAVED REPORTS ===');
   const created = await api('POST', '/api/reports/saved', {
     token: admin, body: { name: 'Test Raporu', dimension: 'month', metric: 'value', chartType: 'line', filters: { type: 'in' } }
   });
   ok('kayıtlı rapor oluşturuldu (201)', created.status === 201, JSON.stringify(created.data));
   ok('filtreler geri okunuyor', created.data.filters.type === 'in');
+  ok('varsayılan veri kaynağı movements', created.data.dataSource === 'movements');
   const reportId = created.data.id;
+
+  const savedSales = await api('POST', '/api/reports/saved', {
+    token: admin, body: { name: 'Satış Raporu', dataSource: 'sales', dimension: 'customer', metric: 'revenueBase' }
+  });
+  ok('sales veri kaynaklı rapor kaydedilip geri okunuyor', savedSales.status === 201 && savedSales.data.dataSource === 'sales', JSON.stringify(savedSales.data));
+  await api('DELETE', `/api/reports/saved/${savedSales.data.id}`, { token: admin });
 
   const badSave = await api('POST', '/api/reports/saved', { token: admin, body: { name: 'X', dimension: 'yok-boyle-bir-sey', metric: 'qty' } });
   ok('geçersiz boyutla kayıt reddediliyor (400)', badSave.status === 400);

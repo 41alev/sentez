@@ -22,7 +22,7 @@ export default function ReportsView() {
   const [tab, setTab] = useState('valuation');
   const [reloadToken, setReloadToken] = useState(0);
   const deadDaysRef = useRef(DEAD_STOCK_DEFAULT_DAYS);
-  const pivotConfigRef = useRef({ dimension: 'month', metric: 'value', filters: {} });
+  const pivotConfigRef = useRef({ dataSource: 'movements', dimension: 'month', metric: 'value', filters: {} });
 
   function reload() { setReloadToken(x => x + 1); }
 
@@ -364,17 +364,33 @@ export default function ReportsView() {
     try { [meta, saved] = await Promise.all([Api.pivotMeta(), Api.savedReports()]); }
     catch (e) { UI.err(e); return; }
     const cfg = pivotConfigRef.current;
+    const dsOf = (key) => meta.dataSources.find(d => d.key === key) || meta.dataSources[0];
 
-    const dimLabel = (k) => meta.dimensions.find(d => d.key === k)?.label || k;
-    const metLabel = (k) => meta.metrics.find(m => m.key === k)?.label || k;
+    const dimLabel = (dsKey, k) => dsOf(dsKey).dimensions.find(d => d.key === k)?.label || k;
+    const metLabel = (dsKey, k) => dsOf(dsKey).metrics.find(m => m.key === k)?.label || k;
+
+    function drawFields(dsKey) {
+      const ds = dsOf(dsKey);
+      // Boyut/ölçü seçimi seçili veri kaynağında YOKSA o kaynağın ilk seçeneğine düş —
+      // her veri kaynağının kendi boyut/ölçü kümesi var (bkz. server/services/pivot.js).
+      const dimVal = ds.dimensions.some(d => d.key === cfg.dimension) ? cfg.dimension : ds.dimensions[0].key;
+      const metVal = ds.metrics.some(m => m.key === cfg.metric) ? cfg.metric : ds.metrics[0].key;
+      document.getElementById('pvFields').innerHTML = `
+        <div class="filters">
+          ${field(t('pivotDimension'), select('pvDim', ds.dimensions.map(d => ({ v: d.key, l: d.label })), dimVal))}
+          ${field(t('pivotMetric'), select('pvMet', ds.metrics.map(m => ({ v: m.key, l: m.label })), metVal))}
+          ${ds.extraFilterKeys.includes('type')
+            ? field(t('pivotTypeFilter'), select('pvType', [{ v: '', l: t('all') }, ...meta.movementTypes.map(mt => ({ v: mt, l: mt }))], cfg.filters.type || ''))
+            : ''}
+        </div>`;
+    }
 
     body.innerHTML = `
       <div class="card"><div class="card-body">
         <div class="filters">
-          ${field(t('pivotDimension'), select('pvDim', meta.dimensions.map(d => ({ v: d.key, l: d.label })), cfg.dimension))}
-          ${field(t('pivotMetric'), select('pvMet', meta.metrics.map(m => ({ v: m.key, l: m.label })), cfg.metric))}
-          ${field(t('pivotTypeFilter'), select('pvType', [{ v: '', l: t('all') }, ...meta.movementTypes.map(mt => ({ v: mt, l: mt }))], cfg.filters.type || ''))}
+          ${field(t('pivotDataSource'), select('pvSrc', meta.dataSources.map(d => ({ v: d.key, l: d.label })), cfg.dataSource))}
         </div>
+        <div id="pvFields"></div>
         <div class="filters">
           ${field(t('from'), input('pvFrom', { type: 'date', value: cfg.filters.from || '' }))}
           ${field(t('to'), input('pvTo', { type: 'date', value: cfg.filters.to || '' }))}
@@ -387,15 +403,19 @@ export default function ReportsView() {
       ${saved.length ? `<div class="card"><div class="card-body">
         <div class="section-title">${t('savedReports')}</div>
         <div style="display:flex;flex-wrap:wrap;gap:8px">
-          ${saved.map(s => `<span class="badge plain" style="cursor:pointer" data-load="${esc(s.id)}">${esc(s.name)}
+          ${saved.map(s => `<span class="badge plain" style="cursor:pointer" data-load="${esc(s.id)}">${esc(dsOf(s.dataSource).label)} · ${esc(s.name)}
             <span data-del="${esc(s.id)}" style="margin-left:6px;opacity:.7">✕</span></span>`).join('')}
         </div>
       </div></div>` : ''}
       <div id="pvResult"></div>`;
 
+    drawFields(cfg.dataSource);
+    document.getElementById('pvSrc').onchange = (e) => drawFields(e.target.value);
+
     async function runAndRender() {
-      cfg.dimension = val('pvDim'); cfg.metric = val('pvMet');
-      cfg.filters = { type: val('pvType') || undefined, from: val('pvFrom') || undefined, to: val('pvTo') || undefined };
+      cfg.dataSource = val('pvSrc'); cfg.dimension = val('pvDim'); cfg.metric = val('pvMet');
+      cfg.filters = { type: document.getElementById('pvType') ? (val('pvType') || undefined) : undefined,
+        from: val('pvFrom') || undefined, to: val('pvTo') || undefined };
       const resultEl = document.getElementById('pvResult');
       resultEl.innerHTML = loading();
       let r;
@@ -403,12 +423,12 @@ export default function ReportsView() {
       resultEl.innerHTML = `
         <div class="card"><div class="card-body"><div class="chart-wrap"><canvas id="pvChart"></canvas></div></div></div>
         <div class="card">${table([
-          { key: 'dim', label: dimLabel(cfg.dimension) },
-          { key: 'val', label: metLabel(cfg.metric), num: true, render: row => num(row.val, 2) }
+          { key: 'dim', label: dimLabel(cfg.dataSource, cfg.dimension) },
+          { key: 'val', label: metLabel(cfg.dataSource, cfg.metric), num: true, render: row => num(row.val, 2) }
         ], r.data)}</div>`;
       UI.chart('pvChart', {
         type: 'bar',
-        data: { labels: r.data.map(d => String(d.dim)), datasets: [{ label: metLabel(cfg.metric), data: r.data.map(d => d.val), backgroundColor: UI.PALETTE[1], borderRadius: 4 }] }
+        data: { labels: r.data.map(d => String(d.dim)), datasets: [{ label: metLabel(cfg.dataSource, cfg.metric), data: r.data.map(d => d.val), backgroundColor: UI.PALETTE[1], borderRadius: 4 }] }
       });
     }
 
@@ -423,8 +443,11 @@ export default function ReportsView() {
             const name = val('pvName');
             if (!name) return UI.toast(t('reportName'), 'err');
             try {
-              await Api.createSavedReport({ name, dimension: val('pvDim'), metric: val('pvMet'),
-                filters: { type: val('pvType') || undefined, from: val('pvFrom') || undefined, to: val('pvTo') || undefined } });
+              await Api.createSavedReport({
+                name, dataSource: val('pvSrc'), dimension: val('pvDim'), metric: val('pvMet'),
+                filters: { type: document.getElementById('pvType') ? (val('pvType') || undefined) : undefined,
+                  from: val('pvFrom') || undefined, to: val('pvTo') || undefined }
+              });
               closeModal(); UI.ok(t('saved')); reload();
             } catch (e) { UI.err(e); }
           };
@@ -434,7 +457,7 @@ export default function ReportsView() {
     body.querySelectorAll('[data-load]').forEach(el => el.onclick = (e) => {
       if (e.target.dataset.del) return;
       const s = saved.find(x => x.id === el.dataset.load);
-      pivotConfigRef.current = { dimension: s.dimension, metric: s.metric, filters: s.filters };
+      pivotConfigRef.current = { dataSource: s.dataSource, dimension: s.dimension, metric: s.metric, filters: s.filters };
       reload();
     });
     body.querySelectorAll('[data-del]').forEach(el => el.onclick = async (e) => {
