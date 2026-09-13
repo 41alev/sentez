@@ -1,5 +1,76 @@
 # PROJECT_STATUS.md
 
+## 2026-09-13 (devam 2) — Aşama 5 TAMAMLANDI: Genel API/Entegrasyon hikayesi (Webhook + OpenAPI)
+
+Rekabet-eksikliği önceliğinde Barkod ZPL'den (Aşama 4) sonraki madde. İki
+alt bölüm halinde, her biri kendi commit'i ve doğrulamasıyla tamamlandı.
+
+**Kısım 1/2 — Webhook altyapısı (`e19f977`).** `webhooks` + `webhook_deliveries`
+tabloları (`009_webhooks.js`). Sabit bir olay kataloğu (`purchase_order.
+{created,approved,received}`, `sales_order.created`, `shipment.
+{created,status_changed}`, `production_order.completed`, `ncr.opened`) —
+ilgili route'larda (purchasing/sales/production/quality) iş işlemi
+COMMIT OLDUKTAN SONRA `dispatchEvent()` çağrılıyor. Teslimat: HMAC-SHA256
+imzalı (`X-Webhook-Signature: sha256=...`), 8 saniye zaman aşımlı, TEK
+deneme — **bilinçli kapsam sınırı: bu bir transactional outbox değil**,
+fire-and-forget bir gönderim; sonuç (başarı/hata) her zaman
+`webhook_deliveries`'e yazılır, otomatik yeniden deneme kuyruğu yok, yalnızca
+elle (`POST .../retry`) yeniden denenebilir. v1 için kasıtlı olarak dar
+tutulan bir kapsam (CLAUDE.md §14 değişim bütçesi ilkesiyle uyumlu).
+
+Yönetim ekranına "Webhook'lar" sekmesi (CRUD + gizli anahtar bir kez
+gösterimi + test pingi + teslimat geçmişi diyaloğu). `test/webhooks.js`
+(25 test) gerçek bir yerel HTTP alıcı açıp imzanın GERÇEKTEN doğrulanabilir
+olduğunu ve olay gövdesinin gerçek iş verisini taşıdığını kanıtlıyor —
+yalnızca "istek atıldı" değil.
+
+**Gerçek bulunan hata:** `/api/webhooks/:id/deliveries` `success` alanını
+ham SQLite `INTEGER` (0/1) olarak döndürüyordu; test `d.success === true`
+gibi katı bir eşitlik bekliyordu. SQLite'ın yerel boolean tipi olmaması
+kaynaklı gerçek bir API sözleşmesi hatasıydı (test hatası değil) —
+projedeki mevcut `!!row.is_active` deseniyle düzeltildi.
+
+**Kısım 2/2 — OpenAPI 3.0 şeması + interaktif doküman sayfası (`3a63737`).**
+`server/lib/openapi.js` elle yazılan OpenAPI 3.0.3 şeması (~24 yol grubu,
+~30 şema) — sistemin TÜM iç uçlarını değil, dış sistemlerin (e-ticaret,
+B2B portal, muhasebe, başka bir ERP) entegre olmak isteyeceği ana
+kaynakları kapsıyor; alan adları `test/contract.js`'in doğruladığı gerçek
+sözleşmeden alındı. `GET /api/docs/openapi.json` kimlik doğrulama
+gerektirmeden servis eder (Postman/Insomnia'ya dışarıdan içe aktarım için
+bilinçli tercih). `public/api-docs.html`: bağımsız bir Swagger UI sayfası.
+`test/openapi.js` (10 test) — en değerli kontrol `collectRefs()` ile tüm
+şema referanslarını gezip her birinin gerçekten var olan bir şemaya işaret
+ettiğini kanıtlıyor (yanlış yazılmış bir referans Swagger UI'da sessizce
+bozuk görünür, hata vermez).
+
+**Gerçek bulunan hata (tarayıcıda doğrulama sırasında):** `api-docs.html`
+ilk yazımda Swagger UI dosyalarını `cdn.jsdelivr.net`'ten yüklüyordu —
+ama `server/index.js`'teki CSP yalnızca `cdnjs.cloudflare.com`'a
+(script-src) ve `fonts.googleapis.com`'a (style-src) izin veriyor, sayfa
+hiç açılmıyordu (tarayıcı konsolunda CSP ihlali). Ayrıca sayfanın inline
+`<script>` ve inline `onerror` handler'ı da CSP'nin `script-src`'de
+`unsafe-inline` bulunmaması yüzünden çalışmıyordu. Düzeltme: (1) Swagger UI
+dosyaları zaten güvenilen `cdnjs.cloudflare.com`'a taşındı — yeni bir CDN
+kaynağı açmak yerine mevcut, zaten Chart.js için güvenilen host'un
+style-src'ye de eklenmesi (güvenlik yüzeyi minimum genişletildi); (2)
+sayfanın JS'i `public/js/api-docs.js`'e taşındı (inline script yasak).
+Tarayıcıda gerçekten açılıp "Try it out" ile bir uç noktanın etkileşimli
+çalıştığı doğrulandı.
+
+**Doğrulama (toplam):** `npx tsc --noEmit` temiz, `npx eslint .` 0 hata
+(yalnızca ilgisiz, önceden var olan uyarılar). `node test/run-all.js` —
+labels/webhooks/openapi paketlerinin üçü de tam geçti. Tek başarısız paket
+`planning` — `test/planning.js:270`'teki `dstr(-1)` ("dün") tarihe bağlı,
+önceden var olan bir kırılganlık (hafta sonuna denk gelince ilgili
+vardiyanın çalışma takviminde olmaması `plannedMinutes=0` üretiyor —
+bkz. Aşama 3 kaydı); bu oturumda dokunulan hiçbir dosyayla ilgisi yok.
+
+**Sırada:** Kullanıcının "5 maddeyi sırayla yap" talimatına göre Aşama 6 —
+PWA/Offline mobil (`public/mobile.html`'in service worker + IndexedDB
+tabanlı gerçek bir çevrimdışı senkronizasyon motoruna yükseltilmesi).
+
+---
+
 ## 2026-09-13 (devam) — Aşama 4: Barkod etiket yazdırma (Zebra/ZPL)
 
 React geçişi tamamlandıktan sonra kullanıcı, önceki oturumda sıralanan
