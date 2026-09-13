@@ -682,17 +682,17 @@ export default function PurchasingView() {
         ? '3\'lü eşleştirme: fatura tutarı, sipariş ve teslim alınan miktarla otomatik karşılaştırılır.'
         : '3-way match: invoice amount is compared against the order and the received quantity.'}</div>
       <div class="card">${table([
-        { key: 'invoice_no', label: t('invoiceNo'), render: r => `<span class="mono">${esc(r.invoice_no || r.invoiceNo)}</span>` },
-        { key: 'supplier', label: t('supplierName'), render: r => esc(r.supplier_name || r.supplierName || '—') },
-        { key: 'invoice_date', label: t('date'), render: r => dt(r.invoice_date || r.invoiceDate) },
+        { key: 'invoiceNo', label: t('invoiceNo'), render: r => `<span class="mono">${esc(r.invoiceNo)}</span>` },
+        { key: 'supplier', label: t('supplierName'), render: r => esc(r.supplier || '—') },
+        { key: 'invoiceDate', label: t('date'), render: r => dt(r.invoiceDate) },
         { key: 'amount', label: UI.getLang() === 'tr' ? 'Tutar' : 'Amount', num: true, render: r => `${num(r.amount, 2)} ${cur(r.currency)}` },
-        { key: 'match_status', label: t('threeWayMatch'), render: r => {
-            const s = r.match_status || r.matchStatus;
+        { key: 'matchStatus', label: t('threeWayMatch'), render: r => {
+            const s = r.matchStatus;
             const m = { matched: ['ok', t('matchOk')], discrepancy: ['crit', t('matchDiscrepancy')], unmatched: ['warn', t('matchUnmatched')], approved: ['ok', t('approve')], paid: ['ok', 'OK'] };
             const [c, l] = m[s] || ['plain', s];
             return `<span class="badge ${c}">${esc(l)}</span>`;
           } },
-        { key: 'note', label: '', render: r => esc(r.discrepancy_note || '') }
+        { key: 'note', label: '', render: r => esc(r.discrepancyNote || '') }
       ], rows)}</div>`;
 
     document.getElementById('invNew')?.addEventListener('click', async () => {

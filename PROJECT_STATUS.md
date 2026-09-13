@@ -1,5 +1,43 @@
 # PROJECT_STATUS.md
 
+## 2026-09-14 (devam 20) — ÜÇÜNCÜ BULGU: Fatura 3'lü eşleştirme tablosunda tedarikçi adı ve fark notu hiç görünmüyordu
+
+Aynı turda, Teklifler sekmesindeki düzeltmeden hemen sonra Faturalar
+sekmesi test edildi. "Fatura Gir" ile SafeGuard GmbH'ye ait bir siparişe
+kasıtlı olarak uyuşmayan bir tutar (999.999 ₺) girilip 3'lü eşleştirmenin
+farkı doğru yakaladığı doğrulandı ("Fark var" rozeti çıktı) — ANCAK
+**"Tedarikçi Adı" sütunu "—" gösterdi** ve fark açıklaması sütunu tamamen
+**boştu**, oysa API `supplier: "SafeGuard GmbH"` ve
+`discrepancyNote: "Fatura 999999.00 TL, teslim alınan 0.00 TL"` alanlarını
+doğru döndürüyordu (network log ile doğrulandı).
+
+Kök neden, yine aynı sınıf: `GET /api/purchasing/invoices`
+(`server/routes/purchasing.js`) yanıtı SADECE camelCase alanlar içeriyor
+(`supplier`, `discrepancyNote`, `matchStatus`, `invoiceNo`, `invoiceDate`)
+— hiçbir snake_case karşılığı yok. Ama `frontend-react/PurchasingView.jsx`
+`renderInvoices()` tedarikçi adını `r.supplier_name || r.supplierName`,
+fark notunu `r.discrepancy_note` ile okuyordu — ikisi de gerçek `supplier`/
+`discrepancyNote` alanlarıyla hiç eşleşmiyordu. (Durum rozeti doğru
+çalışıyordu çünkü `match_status || matchStatus` her iki olası adı da
+kapsıyordu — bu yüzden hata daha önce fark edilmemişti, tablo "çalışıyor
+gibi" görünüyordu.) Tüm sütunlar gerçek API alan adlarına (`invoiceNo`,
+`supplier`, `invoiceDate`, `matchStatus`, `discrepancyNote`) göre
+düzeltildi.
+
+`test/e2e-browser/purchasing-invoices.spec.js` (yeni): gerçek bir fatura
+girilip satırın "SafeGuard GmbH" VE "teslim alınan..." fark metnini
+gerçekten içerdiğini kanıtlıyor.
+
+**Doğrulama:** `npm run typecheck`/`lint`/`build` temiz. `npx playwright
+test` → 15/15 geçti (yeni test dahil). `node test/run-all.js` → 29/29
+suite geçti. Gerçek tarayıcıda önce bozuk hali ("—" ve boş fark sütunu),
+sonra düzeltilmiş hali ekran/DOM içeriğiyle doğrulandı.
+
+**Bu turun geri kalanı devam ediyor** — Satış (6 sekme), Kalite (6 sekme),
+CRM/Fırsatlar, Destek, Planlama (5 sekme), Raporlar (10 sekme), Yönetim
+(11 sekme) ve Depo Terminali'nin her düğmesi/diyaloğu sırayla test
+edilecek.
+
 ## 2026-09-14 (devam 19) — İKİNCİ KRİTİK BULGU: Teklif karşılaştırma raporu hiç çalışmıyordu
 
 Aynı sistematik "her butonu dene" turunda, Satın Alma > Tedarikçiler
