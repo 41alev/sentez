@@ -1,5 +1,79 @@
 # PROJECT_STATUS.md
 
+## 2026-09-13 (devam 3) — Aşama 6 TAMAMLANDI: PWA / çevrimdışı mobil terminal (`d3cf0e0`)
+
+Rekabet-eksikliği önceliğinde Aşama 5'ten (Webhook+OpenAPI) sonraki madde.
+Depo terminalinin (`public/mobile.html`) çevrimdışı kuyruğu şimdiye kadar
+localStorage'da tek bir JSON dizisi olarak tutuluyordu ve sayfanın kendisi
+hiç önbelleklenmiyordu — cihaz açılışta bağlantı yoksa terminal hiç
+yüklenmiyordu. Depo/saha Wi-Fi kapsamasının genelde kötü olduğu bir ürün
+için gerçek bir boşluktu.
+
+**Yapılanlar:**
+- `public/js/mobile-db.js` (yeni): IndexedDB tabanlı kuyruk (`MobileDB.add/
+  getAll/clear`) — localStorage'a göre yapılandırılmış kayıt bazlı çalışma,
+  çok daha yüksek depolama sınırı, kaynak baskısında daha geç temizlenme.
+- `public/js/mobile.js`: kuyruk mantığı (`submit`/`flushQueue`/`paintQueue`/
+  `queue` ekranı) IndexedDB'ye taşındı (async). `migrateLegacyQueue()`:
+  yükseltme sırasında eski localStorage kuyruğunda bekleyen işlem varsa
+  bir kerelik IndexedDB'ye taşınır — sessizce kaybolmaz.
+- `public/sw.js` (yeni): YALNIZCA terminal kabuğunu (mobile.html+css/js+
+  manifest+simgeler) önbellekler; API çağrıları ve masaüstü arayüzü
+  fetch olayında hiç ele alınmaz — ikisi de her zaman canlı veriyle çalışır.
+- `public/manifest.webmanifest` + `public/icons/*.png` (harici bağımlılık
+  olmadan Node `zlib` ile üretilen gerçek PNG'ler): terminal artık
+  "Ana Ekrana Ekle" ile kurulabilir bir PWA.
+- `server/index.js`: `/sw.js` için açık `Content-Type` route'u.
+
+**Gerçek bulunan, Aşama 6'dan bağımsız bir hata (aynı commit'te düzeltildi):**
+`public/css/mobile.css` hiçbir yerde `[hidden]{display:none}` sıfırlaması
+tanımlamıyordu. `.m-cam` gibi sınıflar kendi `display` değerini koşulsuz
+tanımladığı için (author stylesheet tarayıcının varsayılan `[hidden]`
+kuralını HER ZAMAN ezer) kamera görünümü `hidden=true` olsa bile GÖRÜNÜR
+KALIYORDU — giriş ekranı tamamen kapanıyordu. `jsdom` testleri bunu hiç
+yakalayamazdı (gerçek CSS cascade hesaplamıyor); yalnızca gerçek tarayıcıda
+açılınca ortaya çıktı (bkz. Browser paneli doğrulaması). Tek satırlık
+global kuralla düzeltildi.
+
+**Doğrulama:** `tsc`/`eslint` temiz. `test/mobile.js` — jsdom IndexedDB'yi
+hiç uygulamadığı için (belgelenmiş sınırlama) gerçek IndexedDB'nin async
+sözleşmesini taklit eden minimal bir sahte sürüm eklendi, `mobile-db.js`'in
+GERÇEK kodu mock'lanmadan çalıştırıldı; yükseltme/migrasyon senaryosu
+doğrudan test edildi. Bu süreçte jsdom'un `DOMContentLoaded`'ı KENDİSİ de
+ateşlediği keşfedildi (testteki elle `dispatchEvent` migrasyonu iki kez
+çalıştırıp kaydı ikiletiyordu) — testten kaldırılarak düzeltildi (kod
+hatası değil, test kurulumu artefaktı). 59/59. `test/pwa.js` (yeni, 31
+test): manifest alanları, önbellek listesinin **hiçbir `/api` yolu
+içermediği** (en kritik kontrol), simgelerin geçerli PNG olduğu, CSP'nin
+service worker/manifest'i engellemediği. `node test/run-all.js`: yeni
+paketlerin (mobile, pwa) ikisi de tam geçti; tek başarısız paket yine
+`planning` (tarihe bağlı, önceden bilinen, bu oturumda dokunulmayan bir
+kırılganlık — bkz. Aşama 3 kaydı).
+
+**Tarayıcıda gerçekten doğrulandı:** giriş ekranı (CSS düzeltmesinden
+sonra) doğru render; gerçek barkod taraması + stok girişi uçtan uca
+çalıştı (gerçek sunucuya gitti, "1,00 adet girildi" ile sonuçlandı);
+gerçek IndexedDB üzerinden `MobileDB.add/getAll/clear` doğrulandı.
+
+**Doğrulanamayan, dürüstçe belirtilmesi gereken sınır:**
+`navigator.serviceWorker.register()` bu oturumun kullandığı sandbox'lı
+Browser panelinde her zaman "An unknown error occurred when fetching the
+script" ile başarısız oluyor. Kontrol testi olarak TAMAMEN ilgisiz bir uç
+noktayı (`/health`) kaydetmeyi denedim — AYNI jenerik hata çıktı; bu,
+`sw.js`'in içeriğiyle değil, bu spesifik sandbox'ın service worker kayıt
+altyapısıyla ilgili bir ortam sınırlaması (projenin daha önce Chart.js CDN
+engeli için belgelediği sandbox kısıtlamasıyla aynı sınıftan — bkz. Aşama
+2 Faz 1 kaydı). Sunucu tarafında doğrulanabilen HER ŞEY (dosya servisi,
+içerik tipi, CSP uyumu, önbellek listesi doğruluğu) `test/pwa.js` ile
+kanıtlandı; asıl "çevrimdışı açılış" davranışı gerçek bir tarayıcıda/
+cihazda ayrıca denenmelidir.
+
+**Sırada:** Kullanıcının "5 maddeyi sırayla yap" talimatına göre Aşama 7 —
+CRM/satış hunisi (fırsat/teklif takibi, mevcut `sales_orders`'ın öncesine
+eklenen yeni bir modül).
+
+---
+
 ## 2026-09-13 (devam 2) — Aşama 5 TAMAMLANDI: Genel API/Entegrasyon hikayesi (Webhook + OpenAPI)
 
 Rekabet-eksikliği önceliğinde Barkod ZPL'den (Aşama 4) sonraki madde. İki
