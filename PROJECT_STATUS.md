@@ -1,5 +1,111 @@
 # PROJECT_STATUS.md
 
+## 2026-09-13 (devam 8) — Satışa hazırlık: 5 madde (7 commit)
+
+GitHub'a ilk push'tan sonra kullanıcı "bu yazılım bir firmaya/fabrikaya
+satılmaya hazır mı" diye sordu. Verdiğim dürüst değerlendirmede 5 somut
+madde işaretlenmişti; kullanıcı hepsini sırayla ve tam yetkiyle
+tamamlamamı istedi:
+
+**1. GitHub Actions CI'ın gerçek bir çalıştırması (`8260bc1`, `957fd8a`,
+`d2a53c6`).** İlk push'tan sonra CI GERÇEKTEN çalıştı ve başarısız oldu —
+tam da şüphelenilen "hiç gerçek çalıştırma görmedi" boşluğu doğrulandı.
+Üç ayrı kök neden art arda bulunup düzeltildi:
+- Windows runner'da `better-sqlite3` node-gyp ile derlemeye düşüyordu
+  (önceden derlenmiş ikili bulunmasına rağmen) çünkü npm, paketin kök
+  dizinindeki `binding.gyp` dosyasını görünce otomatik `node-gyp rebuild`
+  çalıştırıyor (bilinen bir npm davranışı). İki yanlış çözüm denendi
+  (msvs_version zorlama, güncel node-gyp kurulumu — ikisi de node-gyp'in
+  GitHub'ın yeni VS sürümünü TANIYAMAMASI sorununu çözemedi) önce asıl kök
+  nedene ulaşıldı: kök dizine `ignore-scripts=true` içeren bir `.npmrc`
+  eklendi (yalnızca better-sqlite3 ve macOS'a özel fsevents'i etkiliyor,
+  ikisinin de kurulum betiği gereksiz).
+- `test/planning.js` haftanın hangi günü çalıştırıldığına bağlıydı
+  (`dstr(-1)` "dün" bir Cumartesi/Pazar'a denk gelince vardiya tanımı
+  0 planlanan dakika döndürüyordu — uygulama hatası değil, testin kendi
+  tarih seçimi kırılgandı). `lastWeekdayStr()` yardımcı fonksiyonuyla
+  düzeltildi, gerçekten bir Pazar günü çalıştırılarak doğrulandı.
+- `better-sqlite3@13` artık Node ≥22 gerektiriyor; matriste Node 20 da
+  test ediliyordu. `package.json` engines alanı ve CI matrisi ≥22'ye
+  çekildi.
+**Sonuç: CI artık gerçekten yeşil** (`gh run view --json conclusion` ile
+doğrulandı, "success").
+
+**2. e-Fatura: gerçek entegratöre bağlanmaya hazır altyapı (`e92c9c7`).**
+Araştırma (WebSearch) gerçek Türkiye e-Fatura entegratörlerinin (Foriba,
+Uyumsoft, Nesbilgi, İzibiz) standart modelini doğruladı: mali mühür/
+e-imzayı entegratör kendisi uyguluyor, müşteri yalnızca imzasız UBL-TR
+XML'i onların API'sine gönderiyor — yani elektronik imza (XAdES-BES)
+üretimi bu modelde GEREKMİYOR (bu bilinçli olarak yapılmadı, nedeni
+kayıtlı). Asıl eksik bağlantı/kimlik doğrulama katmanındaydı:
+`httpProvider` yalnızca Bearer token destekliyordu ve gönderim/durum/
+mükellef sorgu yolları ayarlardan hiç değiştirilemiyordu. Eklendi: üç
+kimlik doğrulama şeması (bearer/basic/özel başlık), tüm yolların
+ayarlardan okunması, `POST /edocs/settings/test-connection` (kendi
+VKN'imizi sorgulayarak fatura göndermeden bağlantıyı kanıtlar), Admin
+arayüzünde "Gelişmiş entegratör ayarları" kartı + "Bağlantıyı Test Et"
+düğmesi, ve gerçek bir sahte HTTP sunucusuna karşı çalışan yeni testler
+(`test/einvoice.js`, 82/82 geçti). `docs/KULLANIM-KILAVUZU.md`'ye
+canlıya alma kontrol listesi eklendi.
+
+**3. KVKK / veri koruma değerlendirmesi (`e6dbba1`).** Kullanıcı
+"değerlendir" dedi (uygula değil) — `docs/KVKK-DEGERLENDIRME.md` yazıldı:
+gerçek kod incelemesine dayalı kişisel veri envanteri, var olan olumlu
+tedbirler (bcrypt, RBAC, audit log, rate limiting), ve gerçek boşluklar
+(en önemlisi: veri silme/anonimleştirme ve "bana ait veriyi göster"
+taleplerini karşılayacak hiçbir mekanizma yok — `DELETE /customers/:id`
+yalnızca soft-delete, kişisel veri süresiz kalıyor). Belgede açıkça
+belirtildi: bu bir mühendislik değerlendirmesidir, hukuki görüş değildir.
+
+**4. Tek-kurulum-başına-müşteri modeli denetimi (`f7a4079`).** Çok
+şirketlilik istenmiyor ("ayrı firma/fabrikalara ayrı kurulum" modeli).
+`server/scripts/setup.js` ve `docs/KURULUM.md` yeniden incelendi — genel
+olarak sağlam bulundu, TEK gerçek ve somut eksik: `docs/KURULUM.md`'nin
+gereksinim tablosu hâlâ "Node 18/20 LTS" yazıyordu, ama madde 1'deki
+düzeltme `package.json` engines alanını ≥22'ye çıkarmıştı — bu, ayrı bir
+müşteriye kurulum yapan biri için gerçek bir hata kaynağı olurdu.
+Düzeltildi.
+
+**5. Lisanslama altyapısı (`574b178`).** Kullanıcı: bugünkü model ömür
+boyu lisans, aktif kısıtlama istemiyor, ama aylık/yıllık lisansa
+dönülürse "sadece talep etmem kalsın" diye altyapı istiyor. Yan bulgu:
+`package.json`'daki `"license": "MIT"` alanı GERÇEK bir hukuki sorundu —
+ticari/kapalı bir ürünü yanlışlıkla açık kaynak lisansı altında
+işaretliyordu; `UNLICENSED` olarak düzeltildi, kök dizine taslak bir
+`LICENSE` dosyası eklendi (hukuk danışmanı incelemesi gerektiği açıkça
+belirtildi). `server/lib/license.js`: Ed25519 imza doğrulama (ek
+bağımlılık yok), `LICENSE_FILE` ortam değişkeni tanımlı DEĞİLSE hiçbir
+kontrol yapmaz (bugünkü sıfır sürtünmeli varsayılan); tanımlıysa
+"boş veritabanı" ile aynı desende kasıtlı olarak açılmama. Satıcı aracı:
+`npm run license:generate -- --licensee "Firma" [--expires TARIH]` —
+özel anahtar `license-signing-key.pem`'de (`.gitignore`'da, ASLA commit
+edilmez). Yan ürün: `/api/data-health/system` endpoint'i zaten vardı ama
+hiçbir zaman arayüze bağlanmamıştı (KULLANIM-KILAVUZU.md'nin iddia ettiği
+"Veri Sağlığı sürüm/DB boyutu/yedek yaşını gösterir" özelliği aslında
+YOKTU) — bu tutarsızlık da kapatıldı, yeni "Sistem bilgisi" kartı hem bu
+eski boşluğu hem yeni lisans durumunu gösteriyor. `test/license.js`
+(17 test): önceden gerçek özel anahtarla imzalanmış 3 sabit örnek
+(süresiz/ileri-tarihli/süresi-dolmuş — testler bir daha özel anahtara
+ihtiyaç duymuyor) + dört gerçek sunucu-alt-süreç açılış senaryosu.
+
+**Doğrulama (toplam):** her commit kendi `npm run typecheck`/`lint`/
+`build` + `node test/run-all.js` ile ayrı ayrı doğrulandı; son durumda
+26/26 paket geçti (yeni `license` paketi dahil). CI'ın kendisi de GERÇEK
+bir GitHub Actions çalıştırmasında yeşil. Browser panelinde e-Belge
+"Bağlantıyı Test Et" akışı ve Veri Sağlığı "Sistem bilgisi" kartı gerçek
+tarayıcıda elle doğrulandı.
+
+**Kasıtlı olarak dokunulmayan/ertelenen (dürüstçe belirtildi):**
+- e-Fatura'da elektronik imza (XAdES-BES) — araştırma sonucu gerçek
+  entegratör modelinde gerekmediği için değil, "kendi mali mührünle GİB'e
+  doğrudan özel entegratör olarak bağlanma" gibi çok daha büyük, ayrı bir
+  GİB sertifikasyon süreci gerektiren bir model için gerekir.
+- KVKK madde 4.1/4.2'deki öneriler (veri anonimleştirme özelliği, veri
+  sahibi bilgi talebi raporu) — kullanıcı "değerlendir" dedi, "uygula"
+  değil; bu oturumda UYGULANMADI, yalnızca belgelendi.
+- Veritabanı/yedek şifrelemesi (KVKK 3.3) — `better-sqlite3` SQLCipher
+  desteklemiyor, sürücü değişikliği gerektiren ayrı, büyük bir karar.
+
 ## 2026-09-13 (devam 7) — Proje adı "Sentez" olarak değiştirildi (`79ac1ff`)
 
 Kullanıcı "bu olan isim çok olmuyor bence" dedi, yeni isim arayışına
