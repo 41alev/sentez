@@ -4,7 +4,8 @@ const db = require('../db');
 const { AppError, uuid, nextNumber, logAudit, diff, fxRate } = require('../lib/core');
 const { toLocalDateStr } = require('../lib/dates');
 const { companyIdOf } = require('../lib/tenant');
-const { requireAuth, requirePermission } = require('../middleware/auth');
+const { requireAuth, requirePermission, requireRole } = require('../middleware/auth');
+const kvkk = require('../lib/kvkk');
 const { validate, validateQuery, z, pageQuery, currency } = require('../middleware/validate');
 const stock = require('../services/stock');
 const costing = require('../services/costing');
@@ -51,7 +52,7 @@ function serializeSupplier(r) {
     id: r.id, code: r.code, name: r.name, contactPerson: r.contact_person, phone: r.phone, email: r.email,
     address: r.address, country: r.country, taxNo: r.tax_no, currency: r.currency,
     paymentTermsDays: r.payment_terms_days, leadTimeDays: r.lead_time_days, incoterm: r.incoterm,
-    bankInfo: r.bank_info, isApproved: !!r.is_approved, notes: r.notes
+    bankInfo: r.bank_info, isApproved: !!r.is_approved, notes: r.notes, anonymizedAt: r.anonymized_at
   };
 }
 
@@ -134,10 +135,20 @@ router.delete('/suppliers/:id', requirePermission('stock.delete'), (req, res, ne
   try {
     const s = db.prepare('SELECT * FROM suppliers WHERE id = ?').get(req.params.id);
     if (!s) throw new AppError('Tedarikçi bulunamadı / Supplier not found', 404);
-    db.prepare('UPDATE suppliers SET is_active = 0 WHERE id = ?').run(s.id);
+    db.prepare('UPDATE suppliers SET is_active = 0, deactivated_at = COALESCE(deactivated_at, ?) WHERE id = ?').run(Date.now(), s.id);
     logAudit(req, 'auditSupplierDelete', { entityType: 'supplier', entityId: s.id, detail: s.name });
     res.status(204).end();
   } catch (e) { next(e); }
+});
+
+/** KVKK m.7 — geri döndürülemez anonimleştirme (bkz. server/lib/kvkk.js). */
+router.post('/suppliers/:id/anonymize', requireRole('admin'), (req, res, next) => {
+  try { res.json(kvkk.anonymizeSupplier(req, req.params.id)); } catch (e) { next(e); }
+});
+
+/** KVKK m.11/b — "hangi veriyi tutuyoruz" dışa aktarım raporu. */
+router.get('/suppliers/:id/data-export', requireRole('admin'), (req, res, next) => {
+  try { res.json(kvkk.exportSupplierData(req.params.id)); } catch (e) { next(e); }
 });
 
 // ============================ PURCHASE REQUESTS ============================

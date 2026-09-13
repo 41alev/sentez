@@ -68,6 +68,9 @@ export default function AdminView() {
             <button class="icon-btn" data-edit="${esc(r.id)}" title="${t('edit')}">${UI.icon(UI.ICONS.edit)}</button>
             <button class="btn btn-ghost btn-sm" data-pw="${esc(r.id)}">${t('resetPassword')}</button>
             ${r.lockedUntil ? `<button class="btn btn-ghost btn-sm" data-unlock="${esc(r.id)}">${t('unlockUser')}</button>` : ''}
+            <button class="btn btn-ghost btn-sm" data-export="${esc(r.id)}">${t('kvkkExport')}</button>
+            ${r.anonymizedAt ? `<span class="badge plain">${t('kvkkAlreadyAnonymized')}</span>` :
+              `<button class="btn btn-ghost btn-sm" data-anon="${esc(r.id)}">${t('kvkkAnonymize')}</button>`}
             ${r.isActive ? `<button class="icon-btn danger" data-del="${esc(r.id)}" title="${t('deactivate')}">${UI.icon(UI.ICONS.trash)}</button>` : ''}
           </div>` }
       ], rows)}</div>`;
@@ -78,6 +81,16 @@ export default function AdminView() {
     body.querySelectorAll('[data-unlock]').forEach(b => b.onclick = async () => {
       try { await Api.unlockUser(b.dataset.unlock); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); }
     });
+    body.querySelectorAll('[data-export]').forEach(b => b.onclick = async () => {
+      try {
+        const data = await Api.exportUserData(b.dataset.export);
+        UI.downloadJson(`kullanici-${b.dataset.export}-kvkk-veri.json`, data);
+        UI.ok(t('kvkkExportDone'));
+      } catch (e) { UI.err(e); }
+    });
+    body.querySelectorAll('[data-anon]').forEach(b => b.onclick = () => UI.confirmDialog(t('kvkkAnonymizeConfirm'),
+      async () => { try { await Api.anonymizeUser(b.dataset.anon); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); } },
+      { danger: true }));
     body.querySelectorAll('[data-del]').forEach(b => b.onclick = () => UI.confirmDialog(
       UI.getLang() === 'tr' ? 'Kullanıcı pasifleştirilecek ve oturumları kapatılacak.' : 'The user will be deactivated and signed out.',
       async () => { try { await Api.deleteUser(b.dataset.del); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); } },
@@ -438,6 +451,18 @@ export default function AdminView() {
         ${editable ? `<button class="btn btn-primary" id="stPrinterGo">${t('save')}</button>` : ''}
       </div></div>
 
+      <div class="card"><div class="card-head"><h3>${t('kvkkRetentionTitle')}</h3></div><div class="card-body">
+        <div class="alert info">${t('kvkkRetentionHint')}</div>
+        <div class="field-row">
+          ${field(t('kvkkRetentionYears'), input('stKvkkYears', { type: 'number', min: 1, max: 50, value: s.kvkkRetentionYears || 10, attrs: editable ? '' : 'disabled' }))}
+        </div>
+        ${checkbox('stKvkkAuto', t('kvkkAutoAnonymizeEnabled'), !!s.kvkkAutoAnonymizeEnabled)}
+        <div style="margin-top:10px;display:flex;gap:8px">
+          ${editable ? `<button class="btn btn-primary" id="stKvkkGo">${t('save')}</button>` : ''}
+          ${can('admin') ? `<button class="btn btn-ghost" id="stKvkkRun">${t('kvkkRunNow')}</button>` : ''}
+        </div>
+      </div></div>
+
       <div class="card"><div class="card-head"><h3>${t('tabBackup')}</h3></div><div class="card-body">
         <div class="alert info">${t('backupHint')}</div>
         <div style="font-size:12.5px;color:var(--text-muted);line-height:1.7">
@@ -463,6 +488,19 @@ export default function AdminView() {
       try {
         await Api.updateSettings({ labelPrinterIp: val('stPrinterIp'), labelPrinterPort: intVal('stPrinterPort') });
         UI.ok(t('saved'));
+      } catch (e) { UI.err(e); }
+    });
+
+    document.getElementById('stKvkkGo')?.addEventListener('click', async () => {
+      try {
+        await Api.updateSettings({ kvkkRetentionYears: intVal('stKvkkYears'), kvkkAutoAnonymizeEnabled: checked('stKvkkAuto') ? '1' : '0' });
+        UI.ok(t('saved'));
+      } catch (e) { UI.err(e); }
+    });
+    document.getElementById('stKvkkRun')?.addEventListener('click', async () => {
+      try {
+        const r = await Api.runDataRetentionSweep();
+        UI.ok(`${t('kvkkSweepDone')}: ${r.anonymized}`);
       } catch (e) { UI.err(e); }
     });
   }

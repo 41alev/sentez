@@ -8,6 +8,7 @@ const { companyIdOf } = require('../lib/tenant');
 const stock = require('../services/stock');
 const { dispatchEvent } = require('../lib/webhooks');
 const { createSalesOrder } = require('../services/sales-orders');
+const kvkk = require('../lib/kvkk');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -74,9 +75,19 @@ router.put('/customers/:id', ADMIN, validate(customerSchema.partial()), (req, re
 router.delete('/customers/:id', requireRole('admin'), (req, res) => {
   const c = db.prepare('SELECT * FROM customers WHERE id = ?').get(req.params.id);
   if (!c) throw new AppError('Müşteri bulunamadı / Customer not found', 404);
-  db.prepare('UPDATE customers SET is_active = 0 WHERE id = ?').run(c.id);
+  db.prepare('UPDATE customers SET is_active = 0, deactivated_at = COALESCE(deactivated_at, ?) WHERE id = ?').run(Date.now(), c.id);
   logAudit(req, 'auditCustomerDelete', { entityType: 'customer', entityId: c.id, detail: c.name });
   res.status(204).end();
+});
+
+/** KVKK m.7 — geri döndürülemez anonimleştirme (bkz. server/lib/kvkk.js). */
+router.post('/customers/:id/anonymize', requireRole('admin'), (req, res) => {
+  res.json(kvkk.anonymizeCustomer(req, req.params.id));
+});
+
+/** KVKK m.11/b — "hangi veriyi tutuyoruz" dışa aktarım raporu. */
+router.get('/customers/:id/data-export', requireRole('admin'), (req, res) => {
+  res.json(kvkk.exportCustomerData(req.params.id));
 });
 
 /* ============================ SALES ORDERS ============================ */

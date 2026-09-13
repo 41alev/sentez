@@ -7,6 +7,7 @@ const { validate, z } = require('../middleware/validate');
 const { AppError, logAudit, diff, getSetting, setSetting, paginate } = require('../lib/core');
 const { today } = require('../lib/dates');
 const { companyIdOf } = require('../lib/tenant');
+const kvkk = require('../lib/kvkk');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -19,12 +20,12 @@ const ROLES = ['admin', 'manager', 'operator', 'quality', 'viewer'];
 
 router.get('/users', ADMIN, (req, res) => {
   const rows = db.prepare(`SELECT id, username, full_name, email, role, approval_limit, is_active,
-    must_change_password, last_login_at, locked_until, created_at FROM users ORDER BY id`).all();
+    must_change_password, last_login_at, locked_until, created_at, anonymized_at FROM users ORDER BY id`).all();
   res.json(rows.map(u => ({
     id: u.id, username: u.username, fullName: u.full_name, email: u.email, role: u.role,
     approvalLimit: u.approval_limit, isActive: !!u.is_active, mustChangePassword: !!u.must_change_password,
     lastLoginAt: u.last_login_at, lockedUntil: u.locked_until, createdAt: u.created_at,
-    permissions: PERMISSIONS[u.role] || []
+    anonymizedAt: u.anonymized_at, permissions: PERMISSIONS[u.role] || []
   })));
 });
 
@@ -120,6 +121,23 @@ router.delete('/users/:id', ADMIN, (req, res) => {
   res.status(204).end();
 });
 
+/** KVKK m.7 — geri döndürülemez anonimleştirme (bkz. server/lib/kvkk.js). */
+router.post('/users/:id/anonymize', ADMIN, (req, res) => {
+  res.json(kvkk.anonymizeUser(req, req.params.id));
+});
+
+/** KVKK m.11/b — "hangi veriyi tutuyoruz" dışa aktarım raporu. */
+router.get('/users/:id/data-export', ADMIN, (req, res) => {
+  res.json(kvkk.exportUserData(req.params.id));
+});
+
+/** Saklama süresi taramasını beklemeden tetikler (bkz. services/data-retention.js). */
+router.post('/data-retention/run', ADMIN, (req, res) => {
+  const result = require('../services/data-retention').runRetentionSweep();
+  logAudit(req, 'auditDataRetentionRun', { entityType: 'settings', detail: `${result.anonymized} kayıt anonimleştirildi` });
+  res.json(result);
+});
+
 /* ============================ WAREHOUSES ============================ */
 
 router.get('/warehouses', (req, res) => {
@@ -171,13 +189,15 @@ router.get('/settings', (req, res) => {
     lowStockCheckEnabled: out.lowStockCheckEnabled !== '0',
     labelPrinterIp: out.labelPrinterIp || '',
     labelPrinterPort: Number(out.labelPrinterPort || 9100),
+    kvkkRetentionYears: Number(out.kvkkRetentionYears || 10),
+    kvkkAutoAnonymizeEnabled: out.kvkkAutoAnonymizeEnabled === '1',
     raw: out
   });
 });
 
 router.put('/settings', MANAGER, (req, res) => {
   const before = {};
-  const allowed = ['companyName', 'baseCurrency', 'defaultLaborRate', 'defaultOverheadPct', 'expiryWarningDays', 'lowStockCheckEnabled', 'labelPrinterIp', 'labelPrinterPort'];
+  const allowed = ['companyName', 'baseCurrency', 'defaultLaborRate', 'defaultOverheadPct', 'expiryWarningDays', 'lowStockCheckEnabled', 'labelPrinterIp', 'labelPrinterPort', 'kvkkRetentionYears', 'kvkkAutoAnonymizeEnabled'];
   const changes = {};
   allowed.forEach(k => {
     if (req.body[k] !== undefined) {

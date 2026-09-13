@@ -447,7 +447,22 @@ export default function PurchasingView() {
 
         ${s.notes ? `<div class="section-title">${t('notes')}</div>
           <div style="font-size:12.5px;color:var(--text-muted);line-height:1.6">${esc(s.notes)}</div>` : ''}`,
-      footer: `<button class="btn btn-ghost" data-close>${t('close')}</button>`
+      footer: `${can('admin') ? `
+               <button class="btn btn-ghost btn-sm" id="suExport">${t('kvkkExport')}</button>
+               ${!s.anonymizedAt ? `<button class="btn btn-danger" id="suAnon">${t('kvkkAnonymize')}</button>` : `<span class="badge plain">${t('kvkkAlreadyAnonymized')}</span>`}` : ''}
+               <button class="btn btn-ghost" data-close>${t('close')}</button>`,
+      onOpen: (box) => {
+        box.querySelector('#suExport')?.addEventListener('click', async () => {
+          try {
+            const data = await Api.exportSupplierData(s.id);
+            UI.downloadJson(`tedarikci-${s.id}-kvkk-veri.json`, data);
+            UI.ok(t('kvkkExportDone'));
+          } catch (e) { UI.err(e); }
+        });
+        box.querySelector('#suAnon')?.addEventListener('click', () => UI.confirmDialog(t('kvkkAnonymizeConfirm'), async () => {
+          try { await Api.anonymizeSupplier(s.id); closeModal(); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); }
+        }, { danger: true }));
+      }
     });
   }
 

@@ -575,6 +575,12 @@ function buildOpenApiSpec() {
       '/purchasing/suppliers/{id}': {
         get: { tags: ['Purchasing'], summary: 'Tedarikçi detayı / Supplier detail', security: bearerAuth, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: jsonResponse('Tedarikçi', ref('Supplier')), 404: errorResponse } }
       },
+      '/purchasing/suppliers/{id}/anonymize': {
+        post: { tags: ['Purchasing'], summary: 'KVKK — kişisel veriyi geri döndürülemez şekilde anonimleştir / Anonymize personal data (irreversible)', security: bearerAuth, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: jsonResponse('Anonimleştirildi', ref('Supplier')), 404: errorResponse, 409: errorResponse } }
+      },
+      '/purchasing/suppliers/{id}/data-export': {
+        get: { tags: ['Purchasing'], summary: 'KVKK m.11/b — bu tedarikçi hakkında tutulan tüm veriyi dışa aktar / Export all data held about this supplier', security: bearerAuth, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: jsonResponse('Veri raporu', { type: 'object' }), 404: errorResponse } }
+      },
       '/purchasing/orders': {
         get: { tags: ['Purchasing'], summary: 'Siparişleri listele / List purchase orders', security: bearerAuth, parameters: [{ name: 'status', in: 'query', schema: { type: 'string' } }], responses: { 200: jsonResponse('Sayfalanmış liste', envelope('PurchaseOrder')) } },
         post: {
@@ -600,6 +606,12 @@ function buildOpenApiSpec() {
       '/sales/customers': {
         get: { tags: ['Sales'], summary: 'Müşterileri listele / List customers', security: bearerAuth, responses: { 200: jsonResponse('Sayfalanmış liste', envelope('Customer')) } },
         post: { tags: ['Sales'], summary: 'Yeni müşteri / Create customer', security: bearerAuth, requestBody: { required: true, content: { 'application/json': { schema: ref('CustomerCreate') } } }, responses: { 201: jsonResponse('Oluşturuldu', ref('Customer')), 422: errorResponse } }
+      },
+      '/sales/customers/{id}/anonymize': {
+        post: { tags: ['Sales'], summary: 'KVKK — kişisel veriyi geri döndürülemez şekilde anonimleştir / Anonymize personal data (irreversible)', security: bearerAuth, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: jsonResponse('Anonimleştirildi', ref('Customer')), 404: errorResponse, 409: errorResponse } }
+      },
+      '/sales/customers/{id}/data-export': {
+        get: { tags: ['Sales'], summary: 'KVKK m.11/b — bu müşteri hakkında tutulan tüm veriyi dışa aktar / Export all data held about this customer', security: bearerAuth, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: jsonResponse('Veri raporu', { type: 'object' }), 404: errorResponse } }
       },
       '/sales/orders': {
         get: { tags: ['Sales'], summary: 'Satış siparişlerini listele / List sales orders', security: bearerAuth, responses: { 200: jsonResponse('Sayfalanmış liste', envelope('SalesOrder')) } },

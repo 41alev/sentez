@@ -237,6 +237,7 @@ if (process.env.DISABLE_JOBS !== '1') {
   require('./services/notifications').startScheduler();
   require('./scripts/backup').startBackupScheduler();
   require('./lib/webhooks').startWebhookRetryScheduler();
+  require('./services/data-retention').startRetentionScheduler();
 }
 
 const PORT = process.env.PORT || 3000;

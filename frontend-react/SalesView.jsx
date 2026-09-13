@@ -559,7 +559,22 @@ export default function SalesView() {
             { key: 'total_base', label: t('total'), num: true, render: r => '₺' + money(r.total_base) },
             { key: 'status', label: t('status'), render: r => soStatusBadge(r.status) }
           ], c.recentOrders)}` : ''}`,
-      footer: `<button class="btn btn-ghost" data-close>${t('close')}</button>`
+      footer: `${can('admin') ? `
+               <button class="btn btn-ghost btn-sm" id="cuExport">${t('kvkkExport')}</button>
+               ${!c.anonymized_at ? `<button class="btn btn-danger" id="cuAnon">${t('kvkkAnonymize')}</button>` : `<span class="badge plain">${t('kvkkAlreadyAnonymized')}</span>`}` : ''}
+               <button class="btn btn-ghost" data-close>${t('close')}</button>`,
+      onOpen: (box) => {
+        box.querySelector('#cuExport')?.addEventListener('click', async () => {
+          try {
+            const data = await Api.exportCustomerData(c.id);
+            UI.downloadJson(`musteri-${c.id}-kvkk-veri.json`, data);
+            UI.ok(t('kvkkExportDone'));
+          } catch (e) { UI.err(e); }
+        });
+        box.querySelector('#cuAnon')?.addEventListener('click', () => UI.confirmDialog(t('kvkkAnonymizeConfirm'), async () => {
+          try { await Api.anonymizeCustomer(c.id); closeModal(); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); }
+        }, { danger: true }));
+      }
     });
   }
 

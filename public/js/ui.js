@@ -382,6 +382,15 @@ const UI = (() => {
     ok(lang === 'tr' ? 'CSV indirildi.' : 'CSV downloaded.');
   }
 
+  /* ---------- JSON export (KVKK veri dışa aktarım raporları) ---------- */
+  function downloadJson(filename, obj) {
+    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  }
+
   /* ---------- misc ---------- */
   const icon = (paths) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${paths}</svg>`;
   const ICONS = {
@@ -456,7 +465,7 @@ const UI = (() => {
     field, input, textarea, select, checkbox, val, numVal, intVal, checked,
     table, pager, card, stat, loading, tabs,
     lotStatusBadge, stockStatus, poStatusBadge, prodStatusBadge, shipStatusBadge, originBadge, roleLabel,
-    chart, PALETTE, printDoc, clearPrintCache, loadPrintConfig, exportCsv, icon, ICONS,
+    chart, PALETTE, printDoc, clearPrintCache, loadPrintConfig, exportCsv, downloadJson, icon, ICONS,
     debounce, can, onBarcodeScan
   };
 })();
