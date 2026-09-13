@@ -177,7 +177,7 @@ function seed() {
 
     const rfqId = uuid();
     db.prepare(`INSERT INTO rfqs (id,rfq_no,request_id,status,due_date,notes,created_by,created_at)
-      VALUES (?,?,?,'open',?,?,2,?)`).run(rfqId, 'TKL-2026-001', prId, dstr(7), '1000 kg paslanmaz sac için teklif', Date.now() - 4 * DAY);
+      VALUES (?,?,?,'open',?,?,2,?)`).run(rfqId, 'TEK-2026-001', prId, dstr(7), '1000 kg paslanmaz sac için teklif', Date.now() - 4 * DAY);
     db.prepare('INSERT INTO rfq_lines (rfq_id,item_id,item_name,qty) VALUES (?,?,?,?)').run(rfqId, I.sac, 'Paslanmaz Sac 2mm', 1000);
     const insQuote = db.prepare('INSERT INTO rfq_quotes (rfq_id,supplier_id,item_id,unit_price,currency,lead_time_days,valid_until) VALUES (?,?,?,?,?,?,?)');
     insQuote.run(rfqId, supAkim, I.sac, 151.00, 'TRY', 5, dstr(30));

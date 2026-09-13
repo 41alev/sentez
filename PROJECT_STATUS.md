@@ -1,5 +1,47 @@
 # PROJECT_STATUS.md
 
+## 2026-09-14 (devam 19) — İKİNCİ KRİTİK BULGU: Teklif karşılaştırma raporu hiç çalışmıyordu
+
+Aynı sistematik "her butonu dene" turunda, Satın Alma > Tedarikçiler
+sekmesinin tam CRUD döngüsü (oluştur/düzenle/sil — hepsi doğru çalışıyor)
+doğrulandıktan sonra Talepler sekmesi test edildi (Yeni Talep — çoklu kalem
+—, Onayla, Reddet — hepsi doğru çalışıyor). Ardından Teklifler (RFQ)
+sekmesinde **aynı hata sınıfının ikinci örneği** bulundu:
+
+`GET /api/purchasing/rfqs/:id/compare` (`server/routes/purchasing.js`)
+satır bazlı iç içe bir yapı döner: `{ rfqNo, lines: [{ itemName,
+quotes: [{supplier, unitPrice, ...}], best }] }` — düz bir
+"comparison"/"quotes"/"data" alanı hiç yok. Ama
+`frontend-react/PurchasingView.jsx`'teki `compareDialog()` tam olarak bu üç
+hiç var olmayan alanı okumaya çalışıyordu (`cmp.comparison || cmp.quotes ||
+cmp.data || []`) — sonuç: "Teklifleri Karşılaştır" diyaloğu, seed verisinde
+**3 gerçek teklifi olan bir RFQ için bile** her zaman "Kayıt bulunamadı"
+gösteriyordu. Doğrudan `Invoke-RestMethod`/network-log ile API'nin gerçek
+veriyi (3 tedarikçi, fiyat, teslim süresi, en iyi fiyat) döndürdüğü
+kanıtlandıktan sonra `compareDialog()` gerçek `lines[].quotes[]` yapısını
+düzleştirip doğru render edecek şekilde yeniden yazıldı.
+
+Ayrıca fark edilen küçük bir tutarsızlık da düzeltildi: `server/seed.js`
+RFQ seed kaydına elle `'TKL-2026-001'` yazılmış, ama gerçek numaralandırma
+mantığı (`nextNumber('rfq', 'TEK')`) her zaman `TEK-` öneki üretiyor —
+seed verisi artık gerçek koddan üretilecek numarayla tutarlı
+(`TEK-2026-001`).
+
+`test/e2e-browser/purchasing-compare-quotes.spec.js` (yeni): TEK-2026-001
+RFQ'sunun karşılaştırma modalının gerçekten 3 tedarikçi adını, doğru
+fiyatı VE "En iyi fiyat" rozetini içerdiğini, "Kayıt bulunamadı"
+içermediğini kanıtlıyor.
+
+**Doğrulama:** `npm run typecheck`/`lint`/`build` temiz. `npx playwright
+test` → 14/14 geçti (yeni test dahil). `node test/run-all.js` → 29/29
+suite geçti. Gerçek tarayıcıda önce bozuk hali ("Kayıt bulunamadı"),
+sonra düzeltilmiş hali (3 satır + en iyi fiyat rozeti) ekran görüntüsüyle
+doğrulandı.
+
+**Bu turun geri kalanı devam ediyor** — Satın Alma > Faturalar sekmesi ve
+Satış, Kalite, CRM, Destek, Planlama, Raporlar, Yönetim, Depo Terminali
+modüllerinin her düğmesi/diyaloğu sırayla test edilecek.
+
 ## 2026-09-14 (devam 18) — KRİTİK: İzlenebilirlik/geri çağırma raporu hiç çalışmıyordu (`f9144ce`)
 
 Kullanıcı "çok daha uzun, sistematik bir tur yap — test etmediğin en ufak

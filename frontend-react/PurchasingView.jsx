@@ -642,15 +642,28 @@ export default function PurchasingView() {
   async function compareDialog(rfqId) {
     let cmp;
     try { cmp = await Api.compareQuotes(rfqId); } catch (e) { UI.err(e); return; }
-    const rows = cmp.comparison || cmp.quotes || cmp.data || [];
+    // Api.compareQuotes() satır bazlı iç içe bir yapı döner:
+    // { rfqNo, lines: [{ itemName, quotes: [{supplier, unitPrice, ...}], best }] }
+    // düz bir "comparison"/"quotes"/"data" alanı hiç yok — önceki kod bunları
+    // okumaya çalıştığı için tablo her zaman boş görünüyordu (bkz. PROJECT_STATUS.md).
+    const lines = cmp.lines || [];
+    const rows = lines.flatMap(line => (line.quotes || []).map(q => ({
+      itemName: line.itemName,
+      supplierName: q.supplier,
+      unitPrice: q.unitPrice,
+      currency: q.currency,
+      priceBase: q.unitPriceBase,
+      leadTimeDays: q.leadTimeDays,
+      isBest: !!(line.best && q.supplierId === line.best.supplierId)
+    })));
     modal({
       title: t('compareQuotes'), size: 'wide',
       body: rows.length ? table([
-        { key: 'supplierName', label: t('supplierName'), render: r => esc(r.supplierName || r.supplier_name || '—') },
-        { key: 'itemName', label: t('itemName'), render: r => esc(r.itemName || r.item_name || '—') },
-        { key: 'unitPrice', label: t('price'), num: true, render: r => `${num(r.unitPrice ?? r.unit_price, 4)} ${cur(r.currency)}` },
-        { key: 'priceBase', label: '₺', num: true, render: r => '₺' + num(r.priceBase ?? r.price_base ?? 0, 2) },
-        { key: 'leadTimeDays', label: t('leadTime'), num: true, render: r => num(r.leadTimeDays ?? r.lead_time_days ?? 0) },
+        { key: 'itemName', label: t('itemName'), render: r => esc(r.itemName || '—') },
+        { key: 'supplierName', label: t('supplierName'), render: r => esc(r.supplierName || '—') },
+        { key: 'unitPrice', label: t('price'), num: true, render: r => `${num(r.unitPrice, 4)} ${cur(r.currency)}` },
+        { key: 'priceBase', label: '₺', num: true, render: r => '₺' + num(r.priceBase, 2) },
+        { key: 'leadTimeDays', label: t('leadTime'), num: true, render: r => num(r.leadTimeDays) },
         { key: 'best', label: '', render: r => r.isBest ? `<span class="badge ok">${t('bestPrice')}</span>` : '' }
       ], rows) : `<div class="empty">${t('noData')}</div>`,
       footer: `<button class="btn btn-ghost" data-close>${t('close')}</button>`
