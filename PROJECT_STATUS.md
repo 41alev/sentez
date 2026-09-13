@@ -1,5 +1,54 @@
 # PROJECT_STATUS.md
 
+## 2026-09-13 (devam 5) — Aşama 8 TAMAMLANDI: BI / raporlama derinliği (`41281ef`)
+
+Kullanıcının "5 maddeyi sırayla yap" talimatının SON maddesi. 9 sabit
+raporun (stok değerleme, trendler, ölü stok, devir hızı, ABC, sipariş
+önerileri, tedarikçi performansı, kalite KPI, üretim maliyetleri) üstüne,
+kullanıcının KENDİ kesişimini kurabildiği bir "Özel Rapor" sekmesi eklendi.
+
+**Bilinçli kapsam sınırı (kullanıcıyla daha önce netleştirilen plana göre):**
+serbest SQL veya sürükle-bırak rapor tasarımcısı YOK — SQL injection ve
+yetkisiz veri erişimi riski gerçek, fayda/karmaşıklık oranı düşük. Bunun
+yerine `movements` (stok hareketleri — depo verisinin en zengin, tek
+tablosu) üzerinde ÖNCEDEN TANIMLANMIŞ, güvenli bir boyut (gün/ay/ürün/depo/
+hareket tipi/referans tipi) + ölçü (miktar/değer/adet) + filtre whitelist'i.
+Talep tahmini (forecasting) kapsam dışı bırakıldı — ayrı bir veri bilimi
+çalışması gerektirir, bu turun "genel envanter/BI" hedefinin dışında.
+
+**Güvenlik — gerçekten test edildi, sadece iddia edilmedi:**
+`server/services/pivot.js`'teki whitelist'e karşı doğrudan SQL enjeksiyonu
+denemeleri (`"1); DROP TABLE users;--"` gibi boyut/ölçü/filtre değerleri
+olarak) `test/pivot.js`'de çalıştırıldı — hepsi 400 ile reddedildi VE
+denemeler sonrası veritabanının (users tablosu dahil) sağlam kaldığı ayrıca
+doğrulandı. Kullanıcı girdisi hiçbir zaman ham SQL string'ine karışmıyor,
+yalnızca sabit anahtar kelimelerle eşleştiriliyor.
+
+**Kayıtlı raporlar:** kullanıcı bir pivot konfigürasyonunu isim vererek
+kaydedip tekrar çağırabiliyor (`saved_reports` tablosu). Yetki modeli:
+rapor tanımı oluşturmak/görmek salt-okunur bir tercih olduğu için TÜM
+authenticated kullanıcılara (görüntüleyici dahil) açık; SİLME ise yalnızca
+raporun sahibi VEYA bir yönetici/müdür için — başkasının raporunu silme
+denemesi 403 ile reddediliyor (test edildi).
+
+**Doğrulama:** `tsc`/`eslint` temiz. `test/pivot.js` (yeni, 21 test).
+`node test/run-all.js`: `pivot` + güncellenen `ui-smoke` (Raporlar artık
+10 sekme) dahil TÜM paketler tam geçti; tek başarısız paket yine `planning`
+(tarihe bağlı, önceden bilinen, bu oturumda dokunulmayan kırılganlık — bkz.
+Aşama 3 kaydı). Tarayıcıda gerçekten doğrulandı: boyut/ölçü değiştirip
+çalıştırma, gerçek sonuç tablosu+grafiği, rapor kaydetme, kayıtlı rapora
+tıklayıp konfigürasyonun geri yüklenmesi, silme.
+
+**Sırada:** Kullanıcının önceliklendirdiği 5 maddenin (1. Barkod ZPL,
+2. OpenAPI+Webhook, 3. PWA/Offline, 4. CRM, 5. BI/Raporlama) TAMAMI
+tamamlandı. Bir sonraki adım için kullanıcıyla yön teyidi alınacak — plan
+dosyasındaki (`peppy-puzzling-plum.md`) daha önce kapsam dışı bırakılan
+maddeler (Aşama 3 Faz 2+ zaten tamamlanmıştı; e-Fatura gerçek entegratör
+testi hâlâ entegratör hesabı gerektirdiği için bekliyor) veya kullanıcının
+belirteceği yeni bir öncelik.
+
+---
+
 ## 2026-09-13 (devam 4) — Aşama 7 TAMAMLANDI: CRM / satış hunisi (`d89384d`)
 
 Rekabet-eksikliği önceliğinde Aşama 6'dan (PWA/Offline) sonraki madde.
