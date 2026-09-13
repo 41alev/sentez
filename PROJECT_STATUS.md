@@ -1,5 +1,41 @@
 # PROJECT_STATUS.md
 
+## 2026-09-14 (devam 15) — Güvenlik denetiminin son turu: git geçmişi + JWT algoritma sınırlaması (`0174fb4`)
+
+Kullanıcı üçüncü kez "başka yapabileceğin güvenlik testi kaldı mı" diye
+sordu. Bu turda ŞU ANA KADAR YAPILMAMIŞ iki farklı kontrol yapıldı:
+
+1. **Git geçmişinin tamamı (80 commit) taranıp** yanlışlıkla eklenmiş bir
+   sır/anahtar dosyası (`.env`/`.pem`/`.key`) veya gömülü bir secret
+   (JWT_SECRET'a gerçek değer, özel anahtar başlığı, AWS erişim anahtarı
+   deseni) arandı — önceki tüm taramalar yalnızca ŞU ANKİ dosya içeriğine
+   bakıyordu, geçmişe değil. **Temiz** — hiçbir commit'te sızıntı yok.
+2. **`jwt.verify()` izin verilen algoritmayı açıkça sınırlamıyordu
+   (DÜŞÜK, teorik).** `algorithms` seçeneği verilmezse kütüphane, gizli
+   anahtarın TÜM HMAC ailesini (HS256/384/512) kabul eder. Gerçek bir
+   istismar yolu YOK (klasik RS256/HS256 "algorithm confusion" saldırısı
+   bir açık anahtar gerektirir, bu sistemde hiç asimetrik anahtar yok)
+   ama savunma derinliği için ucuz/risksiz: `{ algorithms: ['HS256'] }`
+   eklendi.
+
+Ayrıca webhook HMAC imzasının yalnızca DIŞARI gönderildiği, hiçbir uç
+noktanın gelen bir imzayı karşılaştırmadığı (GİB durumu push değil poll
+ile çalışıyor) doğrulandı — zamanlama saldırısı yüzeyi hiç yok.
+
+**Doğrulama:** `npm run typecheck`/`lint` temiz. `node test/run-all.js`
+→ 28/28 suite geçti (mevcut "alg:none reddediliyor" testi dahil, regresyon
+yok).
+
+**Bu, güvenlik denetiminin SON turu olarak kullanıcıya bildirildi.** Kod
+seviyesinde pratik olarak yapılabilecek testler tüketildi: kimlik
+doğrulama/yetkilendirme, enjeksiyon sınıfları (SQL/komut/XXE/SSTI/CSV),
+XSS, dosya yükleme, oturum yönetimi, sırlar (kod + git geçmişi), güvenlik
+başlıkları, rate-limit atlatma, mass assignment, ReDoS, JWT algoritma
+karışıklığı. Geriye kalanlar bu ortamda YAPILAMAZ: gerçek ağ/TLS sızma
+testi, ölçekte DoS dayanıklılığı, bağımlılık karışıklığı saldırıları,
+fiziksel/sosyal mühendislik — bağımsız bir sızma testi önerisi geçerliliğini
+koruyor.
+
 ## 2026-09-14 (devam 14) — CSV/formül enjeksiyonu kapatıldı (`b147308`)
 
 Kullanıcı "başka yapabileceğin güvenlik testi var mı" diye sordu. Ek bir
