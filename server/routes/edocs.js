@@ -137,7 +137,12 @@ router.get('/settings/current', MANAGER, (req, res) => {
     testMode: getSetting('einvoiceTestMode') !== '0',
     defaultVatRate: Number(getSetting('defaultVatRate') || 20),
     // API anahtarı asla geri gönderilmez; yalnızca tanımlı olup olmadığı bildirilir
-    providerConfig: { baseUrl: cfg.baseUrl || '', apiKeySet: !!cfg.apiKey },
+    providerConfig: {
+      baseUrl: cfg.baseUrl || '', apiKeySet: !!cfg.apiKey,
+      authType: cfg.authType || 'bearer', authHeaderName: cfg.authHeaderName || '',
+      sendPath: cfg.sendPath || '', statusPath: cfg.statusPath || '', taxpayerPath: cfg.taxpayerPath || '',
+      timeoutMs: cfg.timeoutMs || 30000
+    },
     company: {
       name: company.name, taxNo: company.tax_no, taxOffice: company.tax_office,
       address: company.address, district: company.district, city: company.city,
@@ -163,10 +168,17 @@ router.put('/settings/current', MANAGER, (req, res) => {
   if (b.providerConfig) {
     let cfg = {};
     try { cfg = JSON.parse(getSetting('einvoiceProviderConfig') || '{}'); } catch {}
-    if (b.providerConfig.baseUrl !== undefined) cfg.baseUrl = b.providerConfig.baseUrl;
+    const pc = b.providerConfig;
+    if (pc.baseUrl !== undefined) cfg.baseUrl = pc.baseUrl;
     // Boş gönderilen anahtar mevcut anahtarı silmez; kasıtlı temizleme için null gerekir
-    if (b.providerConfig.apiKey) cfg.apiKey = b.providerConfig.apiKey;
-    if (b.providerConfig.apiKey === null) delete cfg.apiKey;
+    if (pc.apiKey) cfg.apiKey = pc.apiKey;
+    if (pc.apiKey === null) delete cfg.apiKey;
+    if (pc.authType !== undefined) cfg.authType = pc.authType || 'bearer';
+    if (pc.authHeaderName !== undefined) cfg.authHeaderName = pc.authHeaderName || undefined;
+    if (pc.sendPath !== undefined) cfg.sendPath = pc.sendPath || undefined;
+    if (pc.statusPath !== undefined) cfg.statusPath = pc.statusPath || undefined;
+    if (pc.taxpayerPath !== undefined) cfg.taxpayerPath = pc.taxpayerPath || undefined;
+    if (pc.timeoutMs !== undefined) cfg.timeoutMs = Number(pc.timeoutMs) || undefined;
     setSetting('einvoiceProviderConfig', JSON.stringify(cfg));
   }
 
@@ -193,6 +205,11 @@ router.put('/settings/current', MANAGER, (req, res) => {
 
   logAudit(req, 'auditEDocSettings', { entityType: 'settings', oldValue: before, newValue: { enabled: b.enabled, provider: b.provider, testMode: b.testMode } });
   res.json({ ok: true });
+});
+
+router.post('/settings/test-connection', MANAGER, async (req, res, next) => {
+  try { res.json(await einvoice.testConnection()); }
+  catch (e) { next(e); }
 });
 
 module.exports = router;

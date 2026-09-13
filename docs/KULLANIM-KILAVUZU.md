@@ -473,6 +473,45 @@ Canlıda entegratörünüzün API adresini ve anahtarını girin.
 
 > Canlıya geçmeden önce üretilen XML'i entegratörünüzün doğrulamasından geçirin.
 
+#### Bir entegratörle anlaştığınızda: canlıya alma adımları
+
+Sistem hangi entegratörle çalışacağınızı önceden bilemez — Türkiye'deki e-Fatura entegratörleri
+(Foriba, Uyumsoft, Nesbilgi, İzibiz ve benzerleri) her biri kendi API adresini ve kimlik doğrulama
+yöntemini kullanır. Bir entegratörle sözleşme imzaladığınızda yapmanız gereken tek şey, onların
+size vereceği bağlantı bilgilerini aşağıdaki alanlara girmektir — kod değişikliği gerekmez.
+
+**Entegratörünüzden şunları isteyin:**
+
+1. API taban adresi (`baseUrl`) — ör. `https://api.entegrator.com/v1`
+2. Kimlik doğrulama yöntemi ve anahtarı — genellikle üç şemadan biri:
+   - **Bearer token**: tek bir anahtar, `Authorization: Bearer <anahtar>` başlığıyla gönderilir (en yaygın)
+   - **Basic**: kullanıcı adı/şifre ikilisi
+   - **Özel başlık**: anahtar, entegratörün belirlediği özel bir HTTP başlığında gönderilir (ör. `X-API-Key`)
+3. Belge gönderme, durum sorgulama ve mükellef sorgulama için uç nokta (path) adları — bunlar
+   entegratöre göre değişir, dokümanlarında "endpoint"/"uç nokta" başlığı altında bulunur.
+
+**Ayarlar > e-Belge Ayarları'nda:**
+
+1. **Entegratör** alanını `HTTP entegratör` yapın.
+2. **API URL** ve **API Key** alanlarını doldurun.
+3. **Gelişmiş entegratör ayarları** kartında: kimlik doğrulama şemasını seçin (yukarıdaki üç
+   seçenekten entegratörünüzün kullandığı), özel başlık seçtiyseniz başlık adını girin, ve
+   entegratörün dokümanındaki gönderim/durum/mükellef sorgu yollarını girin (boş bırakılırsa
+   varsayılan `/documents` ve `/taxpayers` yolları denenir).
+4. **Kaydet**'e basın.
+5. **Bağlantıyı Test Et** düğmesine basın — bu, kendi VKN'inizi entegratöre sorgulayarak hem
+   adresin hem kimlik bilgilerinin gerçekten çalıştığını, bir fatura göndermeden kanıtlar. Hata
+   alırsanız mesaj neyin yanlış olduğunu (yanlış adres, geçersiz kimlik bilgisi, vb.) açıkça söyler.
+6. Test modunu (`Test modu` kutusu) kapatmadan önce entegratörünüzün kendi test/sandbox
+   ortamında birkaç deneme faturası gönderip üretilen XML'in onların şema doğrulamasından
+   geçtiğini görün.
+7. Her şey doğrulandıktan sonra test modunu kapatın — artık gerçek e-Fatura/e-Arşiv gönderimi
+   yapılır.
+
+> **Not:** "Bağlantıyı Test Et" yalnızca bağlantının ve kimlik bilgilerinin çalıştığını kanıtlar;
+> entegratörünüzün TAM API sözleşmesini (her alan adı, her hata kodu) doğrulamaz. Canlıya
+> almadan önce mutlaka entegratörünüzün kendi test ortamında gerçek bir fatura denemesi yapın.
+
 ### Yedekleme
 
 Sunucu her 24 saatte bir otomatik yedek alır ve son 14 kopyayı saklar.

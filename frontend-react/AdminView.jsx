@@ -474,6 +474,7 @@ export default function AdminView() {
     const editable = can('approve');
     const dis = editable ? '' : 'disabled';
     const c = s2.company || {};
+    const pc = s2.providerConfig || {};
 
     body.innerHTML = `
       <div class="alert info">${t('edocLegalWarning')}</div>
@@ -494,6 +495,25 @@ export default function AdminView() {
           ${UI.checkbox('edTest', t('edocTestMode'), s2.testMode)}
           ${field(t('vatRate'), input('edVat', { type: 'number', min: 0, max: 100, step: '0.1', value: s2.defaultVatRate, attrs: dis }))}
         </div>
+      </div></div>
+
+      <div class="card"><div class="card-head"><h3>${t('edocAdvanced')}</h3></div><div class="card-body">
+        <div class="field-row three">
+          ${field(t('edocAuthType'), select('edAuthType', [
+            { v: 'bearer', l: t('edocAuthBearer') }, { v: 'basic', l: t('edocAuthBasic') },
+            { v: 'header', l: t('edocAuthHeader') }, { v: 'none', l: t('edocAuthNone') }
+          ], pc.authType || 'bearer', { attrs: dis }))}
+          ${field(t('edocAuthHeaderName'), input('edAuthHeaderName', { value: pc.authHeaderName || '', placeholder: 'X-API-Key', attrs: dis }))}
+          ${field(t('edocTimeoutMs'), input('edTimeout', { type: 'number', min: 1000, step: '1000', value: pc.timeoutMs || 30000, attrs: dis }))}
+        </div>
+        <div class="field-row three">
+          ${field(t('edocSendPath'), input('edSendPath', { value: pc.sendPath || '', placeholder: '/documents', attrs: dis }))}
+          ${field(t('edocStatusPath'), input('edStatusPath', { value: pc.statusPath || '', placeholder: '/documents', attrs: dis }))}
+          ${field(t('edocTaxpayerPath'), input('edTaxpayerPath', { value: pc.taxpayerPath || '', placeholder: '/taxpayers', attrs: dis }))}
+        </div>
+        <div class="alert info">${t('edocTestConnectionHint')}</div>
+        <button class="btn" id="edTestConn" type="button">${t('edocTestConnection')}</button>
+        <div id="edTestConnResult" style="margin-top:8px"></div>
       </div></div>
 
       <div class="card"><div class="card-head"><h3>${UI.getLang() === 'tr' ? 'Gönderici bilgileri' : 'Sender details'}</h3></div>
@@ -552,7 +572,12 @@ export default function AdminView() {
         await Api.updateEdocSettings({
           enabled: UI.checked('edEnabled'), provider: val('edProvider'), testMode: UI.checked('edTest'),
           defaultVatRate: numVal('edVat'),
-          providerConfig: { baseUrl: val('edUrl'), apiKey: val('edKey') || undefined },
+          providerConfig: {
+            baseUrl: val('edUrl'), apiKey: val('edKey') || undefined,
+            authType: val('edAuthType'), authHeaderName: val('edAuthHeaderName'),
+            sendPath: val('edSendPath'), statusPath: val('edStatusPath'), taxpayerPath: val('edTaxpayerPath'),
+            timeoutMs: numVal('edTimeout')
+          },
           company: {
             name: val('edName'), taxNo: val('edTaxNo'), taxOffice: val('edTaxOffice'),
             district: val('edDistrict'), city: val('edCity'), address: val('edAddr'),
@@ -563,6 +588,18 @@ export default function AdminView() {
         });
         UI.ok(t('saved')); reload();
       } catch (e) { UI.err(e); }
+    });
+
+    document.getElementById('edTestConn')?.addEventListener('click', async () => {
+      const out = document.getElementById('edTestConnResult');
+      out.innerHTML = '';
+      try {
+        const r = await Api.testEdocConnection();
+        out.innerHTML = `<div class="alert ok">${esc(t('edocTestConnectionOk'))} (${r.tookMs} ms)` +
+          (r.alias ? ` — ${esc(r.alias)}` : '') + `</div>`;
+      } catch (e) {
+        out.innerHTML = `<div class="alert crit">${esc(e.message)}</div>`;
+      }
     });
   }
 

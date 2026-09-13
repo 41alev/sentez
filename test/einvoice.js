@@ -3,14 +3,20 @@
  * e-Belge testleri.
  *
  * Kapsam: fatura kalemleri ve KDV hesabı, e-Fatura / e-Arşiv ayrımı, UBL-TR
- * çıktısının yapısı, doğrulama kuralları, gönderim akışı ve iptal kısıtları.
+ * çıktısının yapısı, doğrulama kuralları, gönderim akışı, iptal kısıtları ve
+ * HTTP entegratör adaptörü (sahte/mock bir entegratör sunucusuna karşı —
+ * kimlik doğrulama şemaları, uç nokta eşleme, hata iletimi).
  *
- * Kapsam DIŞI: gerçek bir entegratöre veya GİB'e gönderim. Testler 'local'
- * sağlayıcıyla çalışır; belge diske yazılır. Canlıya almadan önce üretilen XML
- * seçilen entegratörün şema doğrulamasından geçirilmelidir.
+ * Kapsam DIŞI: gerçek bir entegratöre veya GİB'e gönderim — bunun için
+ * entegratör hesabı/GİB erişimi gerekir. Mock sunucu testleri httpProvider'ın
+ * KENDİ kodunun doğru çalıştığını kanıtlar (istek biçimi, başlıklar, hata
+ * eşleme); gerçek bir entegratörün API sözleşmesiyle birebir eşleştiğini
+ * kanıtlamaz — bu, canlıya almadan önce "Bağlantıyı Test Et" ile ve
+ * entegratörün kendi dokümanıyla doğrulanmalıdır.
  *
  *   node test/einvoice.js
  */
+const http = require('http');
 const BASE = process.env.BASE || 'http://localhost:3000';
 let pass = 0, fail = 0;
 const failures = [];
@@ -199,6 +205,88 @@ async function api(method, path, { token, body } = {}) {
   console.log('\n=== MÜKELLEF SORGUSU (yerel modda desteklenmez) ===');
   const tp = await api('POST', `/api/edocs/check-taxpayer/${anadolu.id}`, { token: operator });
   ok('yerel modda mükellef sorgusu açıkça reddediliyor (501)', tp.status === 501, `got ${tp.status}`);
+
+  console.log('\n=== HTTP ENTEGRATÖR (sahte/mock sunucu) ===');
+  // Gerçek bir entegratör hesabımız yok; bu yüzden httpProvider'ın KENDİ
+  // kodunun (istek biçimi, kimlik doğrulama başlıkları, hata eşleme) doğru
+  // çalıştığını, üç kimlik doğrulama şemasını da kapsayan sahte bir HTTP
+  // sunucusuna karşı kanıtlıyoruz.
+  const mockReceived = [];
+  const mock = await new Promise(resolve => {
+    const srv = http.createServer((req, res) => {
+      let body = '';
+      req.on('data', c => body += c);
+      req.on('end', () => {
+        mockReceived.push({ method: req.method, url: req.url, headers: req.headers, body });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        if (req.url.startsWith('/documents/')) return res.end(JSON.stringify({ status: 'ACCEPTED', statusText: 'Kabul edildi' }));
+        if (req.url === '/documents') return res.end(JSON.stringify({ id: 'MOCK-REF-1', statusText: 'Kuyruğa alındı' }));
+        if (req.url.startsWith('/taxpayers/')) return res.end(JSON.stringify({ isEinvoiceUser: true, alias: 'urn:mail:mock@entegrator.test' }));
+        res.writeHead(404); res.end('{}');
+      });
+    });
+    srv.listen(0, '127.0.0.1', () => resolve({ srv, port: srv.address().port }));
+  });
+  const mockBaseUrl = `http://127.0.0.1:${mock.port}`;
+
+  async function setHttpProvider(extra = {}) {
+    mockReceived.length = 0;
+    await api('PUT', '/api/edocs/settings/current', {
+      token: admin, body: { provider: 'http', providerConfig: { baseUrl: mockBaseUrl, apiKey: 'gizli-anahtar-123', ...extra } }
+    });
+  }
+
+  await setHttpProvider({ authType: 'bearer' });
+  const inv2b = await api('POST', '/api/sales/invoices', {
+    token: operator, body: { customerId: ege.id, currency: 'TRY', lines: [{ itemName: 'Test HTTP', qty: 1, unitPrice: 75, vatRate: 20 }] }
+  });
+  const gen2b = await api('POST', `/api/edocs/from-invoice/${inv2b.data.id}`, { token: operator });
+  const httpSent = await api('POST', `/api/edocs/${gen2b.data.id}/send`, { token: manager });
+  ok('http sağlayıcı ile gönderim başarılı', httpSent.status === 200 && httpSent.data.status === 'sent', `got ${httpSent.status} ${JSON.stringify(httpSent.data).slice(0, 160)}`);
+  ok('takip numarası entegratörden alındı', httpSent.data.providerRef === 'MOCK-REF-1', httpSent.data.providerRef);
+  ok('bearer başlığı doğru gönderildi', mockReceived[0].headers.authorization === 'Bearer gizli-anahtar-123', mockReceived[0].headers.authorization);
+  ok('belge numarası entegratöre iletildi', JSON.parse(mockReceived[0].body).documentNumber === gen2b.data.documentNo,
+    JSON.stringify(JSON.parse(mockReceived[0].body)));
+
+  const httpStatus = await api('POST', `/api/edocs/${gen2b.data.id}/refresh`, { token: manager });
+  ok('durum sorgusu entegratörden geldi', httpStatus.status === 200 && httpStatus.data.status === 'accepted', `got ${httpStatus.status} ${JSON.stringify(httpStatus.data)}`);
+
+  await setHttpProvider({ authType: 'basic' });
+  const inv3 = await api('POST', '/api/sales/invoices', {
+    token: operator, body: { customerId: ege.id, currency: 'TRY', lines: [{ itemName: 'Test 2', qty: 1, unitPrice: 50, vatRate: 20 }] }
+  });
+  const gen3 = await api('POST', `/api/edocs/from-invoice/${inv3.data.id}`, { token: operator });
+  await api('POST', `/api/edocs/${gen3.data.id}/send`, { token: manager });
+  ok('basic kimlik doğrulama başlığı doğru kodlandı',
+    mockReceived[0].headers.authorization === `Basic ${Buffer.from('gizli-anahtar-123').toString('base64')}`,
+    mockReceived[0].headers.authorization);
+
+  await setHttpProvider({ authType: 'header', authHeaderName: 'X-Custom-Key' });
+  const inv4 = await api('POST', '/api/sales/invoices', {
+    token: operator, body: { customerId: ege.id, currency: 'TRY', lines: [{ itemName: 'Test 3', qty: 1, unitPrice: 50, vatRate: 20 }] }
+  });
+  const gen4 = await api('POST', `/api/edocs/from-invoice/${inv4.data.id}`, { token: operator });
+  await api('POST', `/api/edocs/${gen4.data.id}/send`, { token: manager });
+  ok('özel başlık (header) kimlik doğrulaması gönderildi',
+    mockReceived[0].headers['x-custom-key'] === 'gizli-anahtar-123', JSON.stringify(mockReceived[0].headers));
+
+  console.log('\n=== BAĞLANTI TESTİ / TEST CONNECTION ===');
+  await setHttpProvider({ authType: 'bearer' });
+  const connOk = await api('POST', '/api/edocs/settings/test-connection', { token: admin });
+  ok('bağlantı testi başarılı (kendi VKN\'imiz sorgulandı)', connOk.status === 200 && connOk.data.ok === true, JSON.stringify(connOk.data));
+  ok('mükellef sorgu yolu çağrıldı', mockReceived[0].url.startsWith('/taxpayers/1234567890'), mockReceived[0].url);
+
+  // Yanlış/erişilemez bir adres — en sık yapılan canlıya alma hatası — açık
+  // bir hata mesajıyla başarısız olmalı, sessizce yutulmamalı veya "başarılı"
+  // görünmemelidir.
+  await api('PUT', '/api/edocs/settings/current', {
+    token: admin, body: { providerConfig: { baseUrl: `http://127.0.0.1:${mock.port + 1}` } }
+  });
+  const connUnreachable = await api('POST', '/api/edocs/settings/test-connection', { token: admin });
+  ok('erişilemeyen adres açık hatayla bildiriliyor (502)', connUnreachable.status === 502, `got ${connUnreachable.status} ${JSON.stringify(connUnreachable.data)}`);
+
+  await api('PUT', '/api/edocs/settings/current', { token: admin, body: { provider: 'local' } });
+  mock.srv.close();
 
   console.log('\n=== LİSTE / LIST ===');
   const list = await api('GET', '/api/edocs?pageSize=50', { token: admin });

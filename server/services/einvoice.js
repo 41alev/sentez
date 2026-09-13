@@ -56,23 +56,33 @@ const localProvider = {
 };
 
 /**
- * HTTP adaptörü iskeleti. Çoğu Türk entegratörü benzer bir REST arayüzü sunar:
- * belge POST edilir, takip numarası döner, durum ayrı bir uçtan sorulur.
+ * HTTP adaptörü. Çoğu Türk entegratörü benzer bir REST arayüzü sunar: belge
+ * POST edilir, takip numarası döner, durum ayrı bir uçtan sorulur.
  *
- * Uç nokta adresleri ve alan adları entegratöre göre değişir; bu yüzden
- * ayarlardan okunur. Canlıya almadan önce entegratörün dokümanıyla eşleştirin.
+ * Uç nokta adresleri, kimlik doğrulama şeması ve alan adları entegratöre göre
+ * değişir; bu yüzden hepsi ayarlardan okunur (bkz. AdminView.jsx e-Belge
+ * sekmesi). Canlıya almadan önce entegratörün dokümanıyla eşleştirin ve
+ * "Bağlantıyı Test Et" ile doğrulayın.
  */
 function httpProvider(config) {
   const required = ['baseUrl', 'apiKey'];
   const missing = required.filter(k => !config[k]);
   if (missing.length) throw new AppError(`Entegratör ayarı eksik / Missing provider config: ${missing.join(', ')}`);
 
+  function authHeaders() {
+    const type = config.authType || 'bearer';
+    if (type === 'none') return {};
+    if (type === 'basic') return { 'Authorization': `Basic ${Buffer.from(config.apiKey, 'utf8').toString('base64')}` };
+    if (type === 'header') return { [config.authHeaderName || 'X-API-Key']: config.apiKey };
+    return { 'Authorization': `Bearer ${config.apiKey}` };
+  }
+
   const call = async (endpoint, method, body) => {
     const res = await fetch(config.baseUrl.replace(/\/$/, '') + endpoint, {
       method,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`,
+        ...authHeaders(),
         ...(config.extraHeaders || {})
       },
       body: body ? JSON.stringify(body) : undefined,
@@ -135,6 +145,32 @@ function getProvider() {
   let cfg;
   try { cfg = JSON.parse(getSetting('einvoiceProviderConfig') || '{}'); } catch { cfg = {}; }
   return httpProvider({ ...cfg, name, testMode: getSetting('einvoiceTestMode') !== '0' });
+}
+
+/**
+ * Kaydedilmiş entegratör ayarlarını canlıya almadan önce doğrular: kendi
+ * VKN'imizi sorgulayarak hem bağlantının hem kimlik doğrulamanın gerçekten
+ * çalıştığını kanıtlar. Faturaya benzer bir yan etkisi yoktur, salt okunur.
+ */
+async function testConnection() {
+  const name = getSetting('einvoiceProvider') || 'local';
+  if (name === 'local') {
+    throw new AppError('Yerel modda test edilecek bir entegratör bağlantısı yok / Nothing to test in local mode', 400);
+  }
+  const provider = getProvider();
+  const company = db.prepare('SELECT tax_no FROM companies WHERE id = 1').get();
+  const taxNo = String((company && company.tax_no) || '').replace(/\D/g, '');
+  if (!taxNo) throw new AppError('Firma VKN bilgisi tanımlı değil, test için gerekli / Company tax number missing', 400);
+  if (!provider.checkTaxpayer) throw new AppError('Bu entegratör mükellef sorgulaması desteklemiyor / Provider does not support taxpayer lookup', 501);
+
+  const started = Date.now();
+  try {
+    const r = await provider.checkTaxpayer(taxNo);
+    return { ok: true, tookMs: Date.now() - started, isEinvoiceUser: !!(r && r.isEinvoiceUser), alias: (r && r.alias) || null };
+  } catch (e) {
+    throw new AppError(`Bağlantı testi başarısız / Connection test failed: ${e.message}`, 502,
+      { providerStatus: e.providerStatus || null });
+  }
 }
 
 /* ============================ NUMARALANDIRMA ============================ */
@@ -434,5 +470,5 @@ function logDoc(docId, action, status, message, userId, payload) {
 module.exports = {
   buildFromInvoice, buildFromShipment, sendDocument, refreshStatus,
   checkTaxpayer, cancelDocument, nextDocumentNo, getProvider, logDoc,
-  localProvider, httpProvider
+  localProvider, httpProvider, testConnection
 };

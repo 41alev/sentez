@@ -249,6 +249,7 @@ const Api = (() => {
     checkTaxpayer: (customerId) => req('POST', '/edocs/check-taxpayer/' + customerId),
     edocSettings: () => req('GET', '/edocs/settings/current'),
     updateEdocSettings: (d) => req('PUT', '/edocs/settings/current', d),
+    testEdocConnection: () => req('POST', '/edocs/settings/test-connection'),
     customerInvoice: (id) => req('GET', '/sales/invoices/' + id),
 
     // admin
