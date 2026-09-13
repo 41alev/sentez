@@ -1,45 +1,54 @@
-// @ts-nocheck
-const ViewQuality = (() => {
+/**
+ * Kalite (Quality) — React'e kademeli geçişin bir sonraki ekranı.
+ * Planning/Purchasing ile aynı sekmeli desen (6 sekme) + ön-koşul veri
+ * çekimi (items/suppliers/users). fullReload()'a gerek yok — tüm
+ * kaydetme işlemleri orijinalde yalnızca aktif sekmeyi yeniden çekiyordu.
+ */
+import { useEffect, useState, useRef } from 'react';
+
+export default function QualityView() {
   const { t, esc, num, dt, ts, table, pager, loading, modal, closeModal,
-          field, input, select, textarea, checkbox, val, numVal, intVal, checked, can } = UI;
+          field, input, select, textarea, val, numVal, intVal, can } = UI;
 
-  let tab = 'inspections';
-  let items = [], suppliers = [], users = [];
+  const [tab, setTab] = useState('inspections');
+  const [reloadToken, setReloadToken] = useState(0);
+  const [ready, setReady] = useState(false);
 
-  async function render(el) {
-    el.innerHTML = loading();
-    try {
-      const [it, sp] = await Promise.all([
-        Api.items({ pageSize: 300 }),
-        Api.suppliers({ pageSize: 200 }).catch(() => ({ data: [] }))
-      ]);
-      items = it.data; suppliers = sp.data || sp;
-      users = await Api.users().catch(() => []);
-    } catch (e) { UI.err(e); }
-    await load(el);
-  }
+  const itemsRef = useRef([]);
+  const suppliersRef = useRef([]);
+  const usersRef = useRef([]);
 
-  async function load(el) {
-    el.innerHTML = `
-      <div class="topbar">
-        <div><h2>${t('qualTitle')}</h2><div class="sub">${t('qualSub')}</div></div>
-        <div class="topbar-actions" id="qActions"></div>
-      </div>
-      ${UI.tabs([
-        { k: 'inspections', l: t('tabInspections') }, { k: 'ncr', l: t('tabNcr') },
-        { k: 'capa', l: t('tabCapa') }, { k: 'equipment', l: t('tabEquipment') },
-        { k: 'plans', l: t('tabPlans') }, { k: 'trace', l: t('tabTrace') }
-      ], tab, k => { tab = k; load(el); })}
-      <div id="qBody">${loading()}</div>`;
+  function reload() { setReloadToken(x => x + 1); }
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [it, sp] = await Promise.all([
+          Api.items({ pageSize: 300 }),
+          Api.suppliers({ pageSize: 200 }).catch(() => ({ data: [] }))
+        ]);
+        if (cancelled) return;
+        itemsRef.current = it.data; suppliersRef.current = sp.data || sp;
+        usersRef.current = await Api.users().catch(() => []);
+      } catch (e) { UI.err(e); }
+      if (cancelled) return;
+      setReady(true);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
     const body = document.getElementById('qBody');
     const actions = document.getElementById('qActions');
-    if (tab === 'inspections') await renderInspections(el, body, actions);
-    if (tab === 'ncr') await renderNcrs(el, body, actions);
-    if (tab === 'capa') await renderCapas(el, body, actions);
-    if (tab === 'equipment') await renderEquipment(el, body, actions);
-    if (tab === 'plans') await renderPlans(el, body, actions);
-    if (tab === 'trace') renderTrace(el, body, actions);
-  }
+    if (!body || !actions) return;
+    const fns = { inspections: renderInspections, ncr: renderNcrs, capa: renderCapas, equipment: renderEquipment, plans: renderPlans, trace: renderTrace };
+    (async () => {
+      try { await fns[tab](body, actions); }
+      catch (e) { UI.err(e); body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+    })();
+  }, [ready, tab, reloadToken]);
 
   /* ================= INSPECTIONS ================= */
   const inspResultBadge = (r) => {
@@ -52,11 +61,11 @@ const ViewQuality = (() => {
   };
   const inspTypeLabel = (ty) => ({ incoming: t('inspIncoming'), in_process: t('inspInProcess'), final: t('inspFinal') }[ty] || ty);
 
-  async function renderInspections(el, body, actions) {
+  async function renderInspections(body, actions) {
     let res;
     try { res = await Api.inspections({ pageSize: 25 }); } catch (e) { UI.err(e); return; }
     const rows = res.data || res;
-    if (can('quality')) actions.innerHTML = `<button class="btn btn-primary btn-sm" id="inNew">${UI.icon(UI.ICONS.plus)}${t('newInspection')}</button>`;
+    actions.innerHTML = can('quality') ? `<button class="btn btn-primary btn-sm" id="inNew">${UI.icon(UI.ICONS.plus)}${t('newInspection')}</button>` : '';
 
     body.innerHTML = `<div class="card">${table([
       { key: 'inspectionNo', label: t('inspectionNo'), render: r => `<button class="link-btn" data-open="${esc(r.id)}">${esc(r.inspectionNo || r.inspection_no)}</button>
@@ -73,14 +82,15 @@ const ViewQuality = (() => {
       { key: 'createdAt', label: t('date'), render: r => ts(r.createdAt || r.created_at), cls: 'nowrap' },
       { key: 'act', label: t('actions'), render: r => r.result === 'pending' && can('quality')
           ? `<div class="row-actions"><button class="btn btn-primary btn-sm" data-res="${esc(r.id)}">${t('recordResult')}</button></div>` : '' }
-    ], rows)}${res.totalPages ? pager(res, () => load(el)) : ''}</div>`;
+    ], rows)}${res.totalPages ? pager(res, () => reload()) : ''}</div>`;
 
-    document.getElementById('inNew')?.addEventListener('click', () => inspForm(el));
-    body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openInspection(el, b.dataset.open));
-    body.querySelectorAll('[data-res]').forEach(b => b.onclick = () => resultDialog(el, b.dataset.res));
+    document.getElementById('inNew')?.addEventListener('click', () => inspForm());
+    body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openInspection(b.dataset.open));
+    body.querySelectorAll('[data-res]').forEach(b => b.onclick = () => resultDialog(b.dataset.res));
   }
 
-  function inspForm(el) {
+  function inspForm() {
+    const items = itemsRef.current, suppliers = suppliersRef.current;
     modal({
       title: t('newInspection'), size: 'wide',
       body: `
@@ -125,14 +135,14 @@ const ViewQuality = (() => {
               sampleSize: intVal('inSample'), inspectedQty: numVal('inQty'),
               aql: val('inAql'), notes: val('inNote')
             });
-            closeModal(); UI.ok(t('saved')); load(el); App.refreshBadges();
+            closeModal(); UI.ok(t('saved')); reload(); App.refreshBadges();
           } catch (e) { UI.err(e); }
         };
       }
     });
   }
 
-  async function openInspection(el, id) {
+  async function openInspection(id) {
     let i;
     try { i = await Api.inspection(id); } catch (e) { UI.err(e); return; }
     modal({
@@ -172,12 +182,12 @@ const ViewQuality = (() => {
       footer: `<button class="btn btn-ghost" data-close>${t('close')}</button>
                ${i.result === 'pending' && can('quality') ? `<button class="btn btn-primary" id="inRes">${t('recordResult')}</button>` : ''}`,
       onOpen: (box) => {
-        box.querySelector('#inRes')?.addEventListener('click', () => { closeModal(); resultDialog(el, id); });
+        box.querySelector('#inRes')?.addEventListener('click', () => { closeModal(); resultDialog(id); });
       }
     });
   }
 
-  async function resultDialog(el, id) {
+  async function resultDialog(id) {
     let i;
     try { i = await Api.inspection(id); } catch (e) { UI.err(e); return; }
     const lines = i.lines || [];
@@ -257,7 +267,7 @@ const ViewQuality = (() => {
               result: val('rsRes'), acceptedQty: numVal('rsAcc'), rejectedQty: numVal('rsRej'),
               notes: val('rsNote'), lines: lineResults
             });
-            closeModal(); UI.ok(t('saved')); load(el); App.refreshBadges();
+            closeModal(); UI.ok(t('saved')); reload(); App.refreshBadges();
           } catch (e) { UI.err(e); }
         };
       }
@@ -275,11 +285,11 @@ const ViewQuality = (() => {
     return_to_supplier: t('dispReturn'), scrap: t('dispScrap')
   }[d] || t('dispPending'));
 
-  async function renderNcrs(el, body, actions) {
+  async function renderNcrs(body, actions) {
     let res;
     try { res = await Api.ncrs({ pageSize: 25 }); } catch (e) { UI.err(e); return; }
     const rows = res.data || res;
-    if (can('quality')) actions.innerHTML = `<button class="btn btn-primary btn-sm" id="ncNew">${UI.icon(UI.ICONS.plus)}${t('newNcr')}</button>`;
+    actions.innerHTML = can('quality') ? `<button class="btn btn-primary btn-sm" id="ncNew">${UI.icon(UI.ICONS.plus)}${t('newNcr')}</button>` : '';
 
     body.innerHTML = `<div class="card">${table([
       { key: 'ncrNo', label: t('ncrNo'), render: r => `<button class="link-btn" data-open="${esc(r.id)}">${esc(r.ncrNo || r.ncr_no)}</button>
@@ -298,17 +308,18 @@ const ViewQuality = (() => {
           ${r.status !== 'closed' && can('quality') ? `<button class="btn btn-ghost btn-sm" data-disp="${esc(r.id)}">${t('disposition')}</button>` : ''}
           ${r.status !== 'closed' && r.disposition && can('quality') ? `<button class="icon-btn ok" data-close2="${esc(r.id)}">${UI.icon(UI.ICONS.check)}</button>` : ''}
         </div>` }
-    ], rows)}${res.totalPages ? pager(res, () => load(el)) : ''}</div>`;
+    ], rows)}${res.totalPages ? pager(res, () => reload()) : ''}</div>`;
 
-    document.getElementById('ncNew')?.addEventListener('click', () => ncrForm(el));
-    body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openNcr(el, rows.find(x => x.id === b.dataset.open)));
-    body.querySelectorAll('[data-disp]').forEach(b => b.onclick = () => dispositionDialog(el, b.dataset.disp));
+    document.getElementById('ncNew')?.addEventListener('click', () => ncrForm());
+    body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openNcr(rows.find(x => x.id === b.dataset.open)));
+    body.querySelectorAll('[data-disp]').forEach(b => b.onclick = () => dispositionDialog(b.dataset.disp));
     body.querySelectorAll('[data-close2]').forEach(b => b.onclick = () => UI.confirmDialog(
       UI.getLang() === 'tr' ? 'Uygunsuzluğu kapatmak istediğinize emin misiniz?' : 'Close this non-conformance?',
-      async () => { try { await Api.closeNcr(b.dataset.close2); UI.ok(t('saved')); load(el); App.refreshBadges(); } catch (e) { UI.err(e); } }));
+      async () => { try { await Api.closeNcr(b.dataset.close2); UI.ok(t('saved')); reload(); App.refreshBadges(); } catch (e) { UI.err(e); } }));
   }
 
-  function ncrForm(el) {
+  function ncrForm() {
+    const items = itemsRef.current, suppliers = suppliersRef.current;
     modal({
       title: t('newNcr'), size: 'wide',
       body: `
@@ -353,14 +364,14 @@ const ViewQuality = (() => {
               supplierId: val('ncSup') ? intVal('ncSup') : undefined,
               qtyAffected: numVal('ncQty'), description: val('ncDesc')
             });
-            closeModal(); UI.ok(t('saved')); load(el); App.refreshBadges();
+            closeModal(); UI.ok(t('saved')); reload(); App.refreshBadges();
           } catch (e) { UI.err(e); }
         };
       }
     });
   }
 
-  function openNcr(el, n) {
+  function openNcr(n) {
     modal({
       title: n.ncrNo || n.ncr_no, sub: n.itemName || n.item_name || '', size: 'wide',
       body: `
@@ -379,12 +390,12 @@ const ViewQuality = (() => {
       footer: `<button class="btn btn-ghost" data-close>${t('close')}</button>
                ${can('quality') ? `<button class="btn btn-ghost" id="ncCapa">${t('newCapa')}</button>` : ''}`,
       onOpen: (box) => {
-        box.querySelector('#ncCapa')?.addEventListener('click', () => { closeModal(); capaForm(el, n.id); });
+        box.querySelector('#ncCapa')?.addEventListener('click', () => { closeModal(); capaForm(n.id); });
       }
     });
   }
 
-  function dispositionDialog(el, id) {
+  function dispositionDialog(id) {
     modal({
       title: t('disposition'),
       body: `
@@ -401,7 +412,7 @@ const ViewQuality = (() => {
         box.querySelector('#dpGo').onclick = async () => {
           try {
             await Api.setDisposition(id, { disposition: val('dpD'), notes: val('dpNote') });
-            closeModal(); UI.ok(t('saved')); load(el);
+            closeModal(); UI.ok(t('saved')); reload();
           } catch (e) { UI.err(e); }
         };
       }
@@ -409,11 +420,11 @@ const ViewQuality = (() => {
   }
 
   /* ================= CAPA ================= */
-  async function renderCapas(el, body, actions) {
+  async function renderCapas(body, actions) {
     let res;
     try { res = await Api.capas({ pageSize: 25 }); } catch (e) { UI.err(e); return; }
     const rows = res.data || res;
-    if (can('quality')) actions.innerHTML = `<button class="btn btn-primary btn-sm" id="cpNew">${UI.icon(UI.ICONS.plus)}${t('newCapa')}</button>`;
+    actions.innerHTML = can('quality') ? `<button class="btn btn-primary btn-sm" id="cpNew">${UI.icon(UI.ICONS.plus)}${t('newCapa')}</button>` : '';
 
     body.innerHTML = `<div class="card">${table([
       { key: 'capaNo', label: t('capaNo'), render: r => `<button class="link-btn" data-open="${esc(r.id)}">${esc(r.capaNo || r.capa_no)}</button>` },
@@ -437,12 +448,13 @@ const ViewQuality = (() => {
           ? `<div class="row-actions"><button class="btn btn-ghost btn-sm" data-cl="${esc(r.id)}">${UI.getLang() === 'tr' ? 'Kapat' : 'Close'}</button></div>` : '' }
     ], rows)}</div>`;
 
-    document.getElementById('cpNew')?.addEventListener('click', () => capaForm(el, null));
+    document.getElementById('cpNew')?.addEventListener('click', () => capaForm(null));
     body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openCapa(rows.find(x => x.id === b.dataset.open)));
-    body.querySelectorAll('[data-cl]').forEach(b => b.onclick = () => closeCapaDialog(el, b.dataset.cl));
+    body.querySelectorAll('[data-cl]').forEach(b => b.onclick = () => closeCapaDialog(b.dataset.cl));
   }
 
-  async function capaForm(el, ncrId) {
+  async function capaForm(ncrId) {
+    const users = usersRef.current;
     let ncrs = [];
     try { ncrs = (await Api.ncrs({ pageSize: 100 })).data || []; } catch {}
     modal({
@@ -469,7 +481,7 @@ const ViewQuality = (() => {
               responsibleUserId: val('cpResp') ? intVal('cpResp') : undefined,
               dueDate: val('cpDue') || undefined
             });
-            closeModal(); UI.ok(t('saved')); load(el);
+            closeModal(); UI.ok(t('saved')); reload();
           } catch (e) { UI.err(e); }
         };
       }
@@ -494,7 +506,7 @@ const ViewQuality = (() => {
     });
   }
 
-  function closeCapaDialog(el, id) {
+  function closeCapaDialog(id) {
     modal({
       title: UI.getLang() === 'tr' ? 'DÖF Kapat' : 'Close CAPA',
       body: `${field(t('effectivenessCheck'), textarea('clEff', {
@@ -506,7 +518,7 @@ const ViewQuality = (() => {
                <button class="btn btn-primary" id="clGo">${UI.getLang() === 'tr' ? 'Kapat' : 'Close'}</button>`,
       onOpen: (box) => {
         box.querySelector('#clGo').onclick = async () => {
-          try { await Api.closeCapa(id, { effectivenessCheck: val('clEff') }); closeModal(); UI.ok(t('saved')); load(el); }
+          try { await Api.closeCapa(id, { effectivenessCheck: val('clEff') }); closeModal(); UI.ok(t('saved')); reload(); }
           catch (e) { UI.err(e); }
         };
       }
@@ -514,11 +526,11 @@ const ViewQuality = (() => {
   }
 
   /* ================= EQUIPMENT / CALIBRATION ================= */
-  async function renderEquipment(el, body, actions) {
+  async function renderEquipment(body, actions) {
     let res;
     try { res = await Api.equipment({ pageSize: 50 }); } catch (e) { UI.err(e); return; }
     const rows = res.data || res;
-    if (can('quality')) actions.innerHTML = `<button class="btn btn-primary btn-sm" id="eqNew">${UI.icon(UI.ICONS.plus)}${t('newEquipment')}</button>`;
+    actions.innerHTML = can('quality') ? `<button class="btn btn-primary btn-sm" id="eqNew">${UI.icon(UI.ICONS.plus)}${t('newEquipment')}</button>` : '';
 
     body.innerHTML = `<div class="card">${table([
       { key: 'code', label: t('equipmentCode'), render: r => `<span class="mono">${esc(r.code || '—')}</span>` },
@@ -537,11 +549,11 @@ const ViewQuality = (() => {
           ? `<div class="row-actions"><button class="btn btn-ghost btn-sm" data-cal="${esc(r.id)}">${t('addCalibration')}</button></div>` : '' }
     ], rows)}</div>`;
 
-    document.getElementById('eqNew')?.addEventListener('click', () => eqForm(el));
-    body.querySelectorAll('[data-cal]').forEach(b => b.onclick = () => calForm(el, b.dataset.cal, rows.find(x => String(x.id) === b.dataset.cal)));
+    document.getElementById('eqNew')?.addEventListener('click', () => eqForm());
+    body.querySelectorAll('[data-cal]').forEach(b => b.onclick = () => calForm(b.dataset.cal, rows.find(x => String(x.id) === b.dataset.cal)));
   }
 
-  function eqForm(el) {
+  function eqForm() {
     modal({
       title: t('newEquipment'), size: 'wide',
       body: `
@@ -566,14 +578,14 @@ const ViewQuality = (() => {
               code: val('eqCode'), name: val('eqName'), serialNo: val('eqSerial'), location: val('eqLoc'),
               calibrationIntervalDays: intVal('eqInt'), lastCalibrationDate: val('eqLast') || undefined
             });
-            closeModal(); UI.ok(t('saved')); load(el);
+            closeModal(); UI.ok(t('saved')); reload();
           } catch (e) { UI.err(e); }
         };
       }
     });
   }
 
-  function calForm(el, id, eq) {
+  function calForm(id, eq) {
     modal({
       title: t('addCalibration'), sub: eq ? `${eq.code || ''} ${eq.name || ''}` : '',
       body: `
@@ -596,7 +608,7 @@ const ViewQuality = (() => {
               calibrationDate: val('caDate'), result: val('caRes'),
               certificateNo: val('caCert'), performedBy: val('caBy'), notes: val('caNote')
             });
-            closeModal(); UI.ok(t('saved')); load(el); App.refreshBadges();
+            closeModal(); UI.ok(t('saved')); reload(); App.refreshBadges();
           } catch (e) { UI.err(e); }
         };
       }
@@ -604,11 +616,11 @@ const ViewQuality = (() => {
   }
 
   /* ================= INSPECTION PLANS ================= */
-  async function renderPlans(el, body, actions) {
+  async function renderPlans(body, actions) {
     let res;
     try { res = await Api.inspectionPlans({ pageSize: 100 }); } catch (e) { UI.err(e); return; }
     const rows = res.data || res;
-    if (can('quality')) actions.innerHTML = `<button class="btn btn-primary btn-sm" id="plNew">${UI.icon(UI.ICONS.plus)}${t('newPlan')}</button>`;
+    actions.innerHTML = can('quality') ? `<button class="btn btn-primary btn-sm" id="plNew">${UI.icon(UI.ICONS.plus)}${t('newPlan')}</button>` : '';
 
     body.innerHTML = `
       <div class="alert info">${UI.getLang() === 'tr'
@@ -629,13 +641,14 @@ const ViewQuality = (() => {
             ? `<div class="row-actions"><button class="icon-btn danger" data-del="${esc(r.id)}">${UI.icon(UI.ICONS.trash)}</button></div>` : '' }
       ], rows)}</div>`;
 
-    document.getElementById('plNew')?.addEventListener('click', () => planForm(el));
+    document.getElementById('plNew')?.addEventListener('click', () => planForm());
     body.querySelectorAll('[data-del]').forEach(b => b.onclick = () => UI.confirmDialog(t('confirmDelete'), async () => {
-      try { await Api.deletePlan(b.dataset.del); UI.ok(t('deleted')); load(el); } catch (e) { UI.err(e); }
+      try { await Api.deletePlan(b.dataset.del); UI.ok(t('deleted')); reload(); } catch (e) { UI.err(e); }
     }, { danger: true }));
   }
 
-  function planForm(el) {
+  function planForm() {
+    const items = itemsRef.current;
     modal({
       title: t('newPlan'), size: 'wide',
       body: `
@@ -664,7 +677,7 @@ const ViewQuality = (() => {
               specMax: val('plMax') !== '' ? numVal('plMax') : undefined,
               specText: val('plText') || undefined, aql: val('plAql')
             });
-            closeModal(); UI.ok(t('saved')); load(el);
+            closeModal(); UI.ok(t('saved')); reload();
           } catch (e) { UI.err(e); }
         };
       }
@@ -672,7 +685,8 @@ const ViewQuality = (() => {
   }
 
   /* ================= TRACEABILITY ================= */
-  function renderTrace(el, body, actions) {
+  function renderTrace(body, actions) {
+    const items = itemsRef.current;
     actions.innerHTML = '';
     body.innerHTML = `
       <div class="card"><div class="card-body">
@@ -706,5 +720,21 @@ const ViewQuality = (() => {
     goBtn.onclick = () => { if (lotSel.value) ViewLots.traceDialog(lotSel.value); };
   }
 
-  return { render };
-})();
+  if (!ready) {
+    return <div dangerouslySetInnerHTML={{ __html: loading() }} />;
+  }
+
+  const html = `
+    <div class="topbar">
+      <div><h2>${t('qualTitle')}</h2><div class="sub">${t('qualSub')}</div></div>
+      <div class="topbar-actions" id="qActions"></div>
+    </div>
+    ${UI.tabs([
+      { k: 'inspections', l: t('tabInspections') }, { k: 'ncr', l: t('tabNcr') },
+      { k: 'capa', l: t('tabCapa') }, { k: 'equipment', l: t('tabEquipment') },
+      { k: 'plans', l: t('tabPlans') }, { k: 'trace', l: t('tabTrace') }
+    ], tab, k => setTab(k))}
+    <div id="qBody">${loading()}</div>`;
+
+  return <div dangerouslySetInnerHTML={{ __html: html }} />;
+}
