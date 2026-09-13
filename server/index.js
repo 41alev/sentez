@@ -63,13 +63,14 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'same-origin');
   res.setHeader('X-XSS-Protection', '0');
-  // İçerik Güvenliği Politikası: yazı tipleri ve Chart.js CDN'den geldiği için
-  // o kaynaklara izin verilir, geri kalan her şey kapalıdır. CDN'leri kendi
-  // sunucunuzdan servis ederseniz bu listeyi 'self' ile daraltabilirsiniz.
+  // İçerik Güvenliği Politikası: yazı tipleri, Chart.js ve Swagger UI (API
+  // dokümanı sayfası) CDN'den geldiği için o kaynaklara izin verilir, geri
+  // kalan her şey kapalıdır. CDN'leri kendi sunucunuzdan servis ederseniz
+  // bu listeyi 'self' ile daraltabilirsiniz.
   res.setHeader('Content-Security-Policy', [
     "default-src 'self'",
     "script-src 'self' https://cdnjs.cloudflare.com",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob:",
     "connect-src 'self'",
@@ -148,6 +149,7 @@ app.use('/api/data-health', require('./routes/data-health'));
 app.use('/api/accounting', require('./routes/accounting'));
 app.use('/api/labels', require('./routes/labels'));
 app.use('/api/webhooks', require('./routes/webhooks'));
+app.use('/api/docs', require('./routes/docs'));
 app.use('/api', require('./routes/admin'));   // users, warehouses, settings, fx, rules, audit
 
 // ---------- Health ----------

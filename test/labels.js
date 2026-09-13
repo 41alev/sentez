@@ -109,5 +109,5 @@ async function apiText(method, p, { token } = {}) {
   console.log(`GEÇTİ / PASSED: ${pass}    KALDI / FAILED: ${fail}`);
   if (failures.length) { console.log('\nBaşarısız / Failures:'); failures.forEach(f => console.log('  - ' + f)); }
   console.log('='.repeat(52));
-  process.exit(fail ? 1 : 0);
+  process.exitCode = fail ? 1 : 0; // process.exit() Windows'ta fetch handle'larıyla nadir bir libuv crash'ine yol açabiliyor
 })();

@@ -37,6 +37,7 @@
     "test:accounting": "node test/accounting-export.js",
     "test:labels": "node test/labels.js",
     "test:webhooks": "node test/webhooks.js",
+    "test:openapi": "node test/openapi.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },

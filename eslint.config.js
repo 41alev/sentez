@@ -23,7 +23,7 @@ const PUBLIC_GLOBALS = {
   ViewCounts: 'writable', ViewProduction: 'writable', ViewPurchasing: 'writable',
   ViewSales: 'writable', ViewPlanning: 'writable', ViewQuality: 'writable',
   ViewReports: 'writable', ViewAdmin: 'writable',
-  Chart: 'readonly'
+  Chart: 'readonly', SwaggerUIBundle: 'readonly'
 };
 
 module.exports = [
