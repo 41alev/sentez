@@ -5,6 +5,7 @@
     "moduleResolution": "nodenext",
     "checkJs": true,
     "allowJs": true,
+    "jsx": "react-jsx",
     "noEmit": true,
     "strict": false,
     "noImplicitAny": false,
@@ -15,7 +16,9 @@
     "server/**/*.js",
     "server/types/**/*.d.ts",
     "public/js/**/*.js",
-    "test/**/*.js"
+    "test/**/*.js",
+    "frontend-react/**/*.jsx",
+    "frontend-react/**/*.js"
   ],
   "exclude": [
     "node_modules",

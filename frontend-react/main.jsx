@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * React'e kademeli geçiş — giriş noktası.
  *

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Planlama (Planning) — React'e kademeli geçişin bir sonraki ekranı.
  *

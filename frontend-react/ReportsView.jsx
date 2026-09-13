@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Raporlar (Reports) — React'e kademeli geçişin bir sonraki ekranı.
  *

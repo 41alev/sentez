@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Üretim (Production) — React'e kademeli geçişin bir sonraki ekranı.
  * Items/Counts/Lots ile aynı desen — bkz. o dosyalardaki üst açıklamalar.

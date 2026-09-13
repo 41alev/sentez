@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Kalite (Quality) — React'e kademeli geçişin bir sonraki ekranı.
  * Planning/Purchasing ile aynı sekmeli desen (6 sekme) + ön-koşul veri

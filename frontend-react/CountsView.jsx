@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Sayımlar (Counts) — React'e kademeli geçişin bir sonraki ekranı.
  *

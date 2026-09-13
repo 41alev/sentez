@@ -60,8 +60,10 @@ module.exports = [
   {
     // frontend-react/: `UI`/`Api`/vb. burada da bare global olarak
     // kullanılıyor (bkz. public/js/**/*.js notu) — tek fark ES modül
-    // sourceType (import/export) ve JSX sözdizimi.
-    files: ['frontend-react/**/*.jsx'],
+    // sourceType (import/export) ve JSX sözdizimi. `.js` dosyaları da dahil
+    // (ör. labelPrint.js) — JSX içermeyen, birden çok view'ın paylaştığı
+    // yardımcı modüller için.
+    files: ['frontend-react/**/*.{js,jsx}'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',

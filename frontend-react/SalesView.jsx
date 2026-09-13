@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Satış (Sales) — React'e kademeli geçişin bir sonraki ekranı.
  * Planning/Purchasing/Quality ile aynı sekmeli desen (6 sekme) + ön-koşul

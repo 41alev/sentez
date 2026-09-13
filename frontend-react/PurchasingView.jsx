@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Satın Alma (Purchasing) — React'e kademeli geçişin bir sonraki ekranı.
  * Planning/Reports ile aynı sekmeli desen + Items/Production gibi bir

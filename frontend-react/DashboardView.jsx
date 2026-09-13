@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Panel (Dashboard) — React'e kademeli geçişin ilk pilotu.
  *
