@@ -29,32 +29,8 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
 
-      # node-gyp's own Visual Studio detection fails on GitHub's windows-latest
-      # image: even running inside a VS command prompt (which the step below
-      # sets up) and even when forced with msvs_version, the node-gyp version
-      # bundled with npm does not have this VS release in its lookup table and
-      # aborts ("unknown version undefined" / "msvs_version does not match").
-      # The fix is a newer node-gyp release with an updated VS version table,
-      # installed separately and pointed to via npm_config_node_gyp — this is
-      # npm's own documented workaround for exactly this class of failure.
-      # Needed as a fallback in case better-sqlite3's bundled prebuilt binary
-      # is ever unavailable and it must build from source.
-      - name: Set up MSVC (Windows native module builds)
-        if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Install up-to-date node-gyp (Windows)
-        if: runner.os == 'Windows'
-        id: nodegyp
-        shell: bash
-        run: |
-          npm install -g node-gyp@latest
-          echo "path=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_OUTPUT"
-
       - name: Install dependencies
         run: npm ci
-        env:
-          npm_config_node_gyp: ${{ runner.os == 'Windows' && steps.nodegyp.outputs.path || '' }}
 
       - name: Type check
         run: npm run typecheck
