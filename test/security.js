@@ -357,6 +357,30 @@ async function api(method, p, { token, body, headers = {}, raw } = {}) {
   ok('.env sürüm kontrolünden hariç tutulmuş', /^\.env$/m.test(gitignore));
   ok('veritabanı sürüm kontrolünden hariç tutulmuş', /\*\.sqlite/.test(gitignore));
 
+  console.log('\n=== DIŞ KAYNAK BÜTÜNLÜĞÜ / SUBRESOURCE INTEGRITY ===');
+  // CDN'den yüklenen her <script>/<link>, CDN bir gün tehlikeye girerse
+  // (tedarik zinciri saldırısı) tarayıcının içeriği reddedebilmesi için
+  // integrity özniteliği taşımalı. Ayrıca her URL'in GERÇEKTEN var olduğu
+  // (yanlış/kaldırılmış bir sürüme işaret etmediği) canlı bir istekle
+  // kanıtlanıyor — bir CDN URL'i sessizce 404 verirse (ör. yanlış sürüm
+  // numarası) özellik hiç yüklenmez ama hiçbir test bunu yakalamaz.
+  for (const htmlFile of ['index.html', 'api-docs.html']) {
+    const html = fs.readFileSync(path.join(__dirname, '..', 'public', htmlFile), 'utf8');
+    const tagRe = /<(?:script|link)[^>]*\shref=["']https:\/\/cdnjs\.cloudflare\.com[^"']+["'][^>]*>|<(?:script|link)[^>]*\ssrc=["']https:\/\/cdnjs\.cloudflare\.com[^"']+["'][^>]*>/g;
+    const tags = html.match(tagRe) || [];
+    for (const tag of tags) {
+      const urlMatch = tag.match(/(?:src|href)=["'](https:\/\/cdnjs\.cloudflare\.com[^"']+)["']/);
+      const url = urlMatch ? urlMatch[1] : '(bulunamadı)';
+      ok(`${htmlFile}: ${url} integrity taşıyor`, /\sintegrity=["']sha(256|384|512)-/.test(tag), tag.slice(0, 80));
+      try {
+        const r = await fetch(url, { method: 'GET' });
+        ok(`${htmlFile}: ${url} gerçekten erişilebilir (200)`, r.status === 200, `got ${r.status}`);
+      } catch (e) {
+        soft(`${htmlFile}: ${url} canlı erişim kontrolü yapılamadı`, false, `ağ erişimi yok olabilir — ${e.message}`);
+      }
+    }
+  }
+
   console.log('\n=== DOSYA YÜKLEME / FILE UPLOAD ===');
   const docSrc = fs.readFileSync(path.join(__dirname, '..', 'server', 'routes', 'documents.js'), 'utf8');
   ok('yüklenen dosya türü beyaz listeyle sınırlı', /ALLOWED_MIME/.test(docSrc));
