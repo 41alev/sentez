@@ -208,6 +208,51 @@ async function api(method, p, { token, body, headers = {}, raw } = {}) {
 
   await api('DELETE', `/api/items/${created.data.id}`, { token: admin });
 
+  console.log('\n=== CSV ENJEKSİYONU / CSV FORMULA INJECTION ===');
+  // Bir müşteri/ürün adı "=HYPERLINK(...)" gibi =,+,-,@ ile başlıyorsa, CSV
+  // dışa aktarımı Excel/Sheets'te açıldığında hücre metin değil FORMÜL
+  // olarak yorumlanır (OWASP "CSV Injection" — veri sızıntısı/eski Excel'lerde
+  // DDE ile komut riski). UI.exportCsv TÜM CSV butonlarının (Ürünler,
+  // Partiler, Kullanıcılar, Raporlar, Denetim, Muhasebe Aktarımı) kullandığı
+  // TEK paylaşılan fonksiyon — burada davranışsal olarak doğrulanıyor.
+  let csvBehaviour;
+  try {
+    const { JSDOM } = require('jsdom');
+    const dom2 = new JSDOM('<!DOCTYPE html><body><div id="toast"></div><div id="modalOverlay"><div id="modalBox"></div></div></body>',
+      { url: BASE, runScripts: 'dangerously', pretendToBeVisual: true });
+    const w2 = dom2.window;
+    w2.eval('var Api = { getUser: () => ({ role: "admin" }), getToken: () => "t" };');
+    for (const f of ['js/i18n.js', 'js/ui.js']) {
+      const el = w2.document.createElement('script');
+      el.textContent = fs.readFileSync(path.join(__dirname, '..', 'public', f), 'utf8');
+      w2.document.body.appendChild(el);
+    }
+    let captured = null;
+    w2.Blob = function (parts) { captured = parts.join(''); };
+    w2.URL.createObjectURL = () => 'blob:mock';
+    w2.URL.revokeObjectURL = () => {};
+
+    const formulaPayloads = ['=HYPERLINK("http://evil.test","tık")', '+1+1', '-2+3', '@SUM(1,1)', '\tformul'];
+    let leaked = 0;
+    for (const payload of formulaPayloads) {
+      captured = null;
+      w2.eval(`UI.exportCsv('x.csv', ['Ad'], [[${JSON.stringify(payload)}]])`);
+      const secondLine = (captured || '').split('\n')[1] || '';
+      // Korunuyorsa satır `"'=...` gibi başlar (tek tırnak eklendi); korunmuyorsa `"=...`
+      if (/^"[=+\-@\t]/.test(secondLine)) leaked++;
+    }
+    csvBehaviour = { tested: true, leaked, cases: formulaPayloads.length };
+  } catch (e) {
+    csvBehaviour = { tested: false, error: e.message };
+  }
+  if (csvBehaviour.tested) {
+    ok(`CSV dışa aktarımda formül enjeksiyonu etkisiz hale getiriliyor (${csvBehaviour.cases} deneme)`,
+      csvBehaviour.leaked === 0, `${csvBehaviour.leaked} payload ham kaldı`);
+  } else {
+    soft('davranışsal CSV enjeksiyon testi çalıştırılamadı', false,
+      `jsdom gerekli — ${csvBehaviour.error || 'kurulu değil'}`);
+  }
+
   console.log('\n=== SIR SIZINTISI / SECRET LEAKAGE ===');
   const me = await api('GET', '/api/auth/me', { token: admin });
   ok('kullanıcı yanıtında şifre özeti yok',

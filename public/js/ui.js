@@ -372,8 +372,18 @@ const UI = (() => {
   }
 
   /* ---------- CSV export ---------- */
+  // CSV/formül enjeksiyonu: bir müşteri/ürün adı "=HYPERLINK(...)" gibi
+  // =,+,-,@ ile başlıyorsa, bu dosya Excel/Sheets'te açıldığında hücre
+  // metin değil FORMÜL olarak yorumlanır (veri sızıntısı, eski Excel'lerde
+  // DDE ile komut çalıştırma riski — OWASP "CSV Injection"). Başına tek
+  // tırnak eklemek (Excel/Sheets'in "zorla metin" kuralı) formülü
+  // etkisiz hale getirir, görünen değeri değiştirmez.
+  function csvCell(v) {
+    const s = String(v ?? '');
+    return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+  }
   function exportCsv(filename, headers, rows) {
-    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+    const csv = [headers, ...rows].map(r => r.map(v => `"${csvCell(v).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
