@@ -1,5 +1,76 @@
 # PROJECT_STATUS.md
 
+## 2026-09-14 (devam 17) — Kapsamlı UI denetimi: kırık bir endpoint + 15 yerde ham/yanlış metin (`37a3623`)
+
+Kullanıcı "programın tüm sayfalarını ve butonları test et, boşluğa giden
+veya yanlış ilan yapan sayfa ya da buton olmasın" dedi. Önce mevcut
+otomatik testler (`test/ui-smoke.js` 100 test, Playwright
+`test/e2e-browser` 12 test) baseline olarak çalıştırıldı, ikisi de tam
+geçti. Ardından uygulamanın **tüm ekranları** (Panel, Ürünler, Partiler,
+Sayım, Üretim, Satın Alma [5 sekme], Satış [6 sekme], Kalite [6 sekme],
+Fırsatlar, Destek, Planlama [5 sekme], Raporlar [10 sekme], Yönetim
+[11 sekme], Depo Terminali) gerçek bir tarayıcıda tek tek gezildi — her
+ekranın içerik getirip getirmediği, ana diyalogların açılıp açılmadığı ve
+konsolda hata olup olmadığı kontrol edildi.
+
+**1. Kırık bir endpoint (gerçek işlevsel hata).** "Yeni Üretim Emri"
+diyaloğundaki canlı bileşen önizlemesi (`GET /production/
+requirements-preview`) sunucuda **hiç yoktu** — Express bunu `/:id`
+rotasına düşürüp "Üretim emri bulunamadı" hatası dönüyordu. Kullanıcı her
+yeni üretim emri oluştururken reçetenin ihtiyaç duyacağı bileşenleri ve
+stok yeterliliğini **hiç görmeden** kaydediyordu. `server/routes/
+production.js`'e gerçek route eklendi (mevcut `resolveComponents()`/
+`stock.availableQty()` kullanılarak, `/:id`'den ÖNCE tanımlanarak — route
+sırası kritik). `test/e2e.js`'teki daha önce hiç assert edilmeyen
+(eslint'in işaretlediği kullanılmayan `reqs` değişkeni) çağrıya gerçek
+doğrulama eklendi.
+
+**2. Ham/yanlış metin gösteren 15+ yer.** Aynı "enum değeri hiç tercüme
+edilmeden ekrana basılıyor" hata sınıfı tekrar tekrar bulundu: Satın
+Alma > Talepler/Teklifler durum sütunları, Veri Sağlığı kayıt birleştirme
+seçici, Satış > Faturalar durum sütunu, Kalite > Uygunsuzluklar "KAYNAK"
+sütunu (liste+detay), Kalite > DÖF/CAPA detay modalı, Sayım detay modalı
+(bonus bulgu: `modal()`'ın `sub` alanı `esc()`lendiği için oraya HTML
+badge koymak sessizce bozuk render üretirdi — düzeltme rozeti gövdeye
+taşıdı), Raporlar > Kalite KPI + Özel Rapor "Hareket tipi" filtresi,
+Planlama > Tatil durum sütunu, Yönetim > Onay/Bildirim Kuralları
+(BELGE+KANAL), Muhasebe Aktarımı KALEM sütunu, Denetim Kaydı KAYIT
+sütunu+filtresi. Her biri kendi dosyasında, aynı kod tabanının zaten
+kullandığı `xStatusBadge()` deseniyle düzeltildi.
+
+**En ciddi bulgu — gerçek bir "yanlış ilan":** Webhook'lar sekmesindeki
+açıklama metni "Otomatik yeniden deneme yoktur" diyordu. Bu metin
+webhook'lara otomatik yeniden deneme kuyruğu eklenmeden ÖNCE (Aşama 5)
+yazılmıştı; özellik daha sonra (devam 6 turunda) eklendiğinde bu metin
+hiç güncellenmemişti. Bir kullanıcı bu yanlış bilgiye güvenip webhook
+başarısızlıklarını gereksiz yere elle takip etmeye devam edebilirdi.
+Artık gerçek davranışı (üstel artan aralıklarla en fazla 5 otomatik
+deneme) doğru anlatıyor.
+
+**3. Denetim Kaydı ekranında 21 EKSİK çeviri anahtarı.** Bir alt-agent
+kullanılarak `server/`'daki TÜM `logAudit()` çağrıları (119 farklı
+anahtar) `i18n.js` ile karşılaştırıldı. CRM (fırsat), Webhook, Saha
+Ziyareti, Destek Talebi, Muhasebe Aktarımı, Kayıtlı Rapor ve başarısız
+giriş denemesi özellikleri eklenirken hiç i18n girişi eklenmemiş —
+Denetim Kaydı'nda bu işlemler `auditOpportunityConvert` gibi **çeviri
+anahtarının kendisi** olarak görünüyordu. 21 eksik anahtar eklendi, ayrıca
+sunucu tarafıyla ismi uyuşmayan 4 anahtar düzeltildi (`auditCountCreate`→
+`auditCountOpen`, `auditReturnAdd`→`auditSupplierReturn`,
+`auditCalibrationAdd`→`auditCalibration`, `auditPasswordChange`→
+`auditPasswordChanged`) — hepsi hem TR hem EN için.
+
+**Bilinçli olarak dokunulmayan (gerçek bir hata değil):** Webhook "Yeni
+Webhook" diyaloğundaki olay adları (`purchase_order.created` vb.) kasıtlı
+olarak ham/teknik bırakıldı — bu, GitHub/Stripe tarzı entegrasyon
+özellikleri için standart pratik, geliştirici kendi alıcı kodunda TAM BU
+dizeyi eşleştirmek zorunda.
+
+**Doğrulama:** `npm run typecheck`/`lint`/`build` temiz. `node
+test/run-all.js` → 28/28 suite geçti. `npx playwright test` → 12/12
+geçti. Her düzeltme gerçek tarayıcıda önce hatalı haliyle görülüp, kod
+değişikliğinden sonra sunucu yeniden başlatılarak düzeldiği ekran
+görüntüsü/metinle kanıtlandı — yalnızca kod okunarak değil.
+
 ## 2026-09-14 (devam 16) — SRI eklendi + kırık Chart.js sürümü bulundu ve düzeltildi (`99526d8`)
 
 Kullanıcı ısrarla "başka yapabileceğin güvenlik testi kaldı mı" diye
