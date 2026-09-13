@@ -1,7 +1,7 @@
 {
-  "name": "depo-takip",
+  "name": "sentez",
   "version": "2.0.0",
-  "description": "Depo Takip ERP - Warehouse, Production, Purchasing, Quality Management System",
+  "description": "Sentez ERP - Warehouse, Production, Purchasing, Quality Management System",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",

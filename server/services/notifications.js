@@ -185,7 +185,7 @@ async function dispatchEmails() {
     const rule = rules.find(r => r.rule_type === n.rule_type);
     const recipients = (rule.recipients || '').split(',').map(s => s.trim()).filter(Boolean);
     if (recipients.length === 0) continue;
-    const ok = await sendEmail(recipients.join(','), `[Depo Takip] ${n.title}`, n.body || n.title);
+    const ok = await sendEmail(recipients.join(','), `[Sentez] ${n.title}`, n.body || n.title);
     if (ok) {
       db.prepare('UPDATE notifications SET emailed_at = ? WHERE id = ?').run(Date.now(), n.id);
       sent++;

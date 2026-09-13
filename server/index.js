@@ -212,7 +212,7 @@ if (process.env.DISABLE_JOBS !== '1') {
 
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, () => {
-  logger.info(`Depo Takip ERP çalışıyor / running at http://localhost:${PORT}`);
+  logger.info(`Sentez ERP çalışıyor / running at http://localhost:${PORT}`);
 });
 
 function shutdown(signal) {

@@ -1,7 +1,7 @@
 {
-  "name": "Depo Terminali",
-  "short_name": "Depo Terminal",
-  "description": "Depo Takip ERP saha el terminali — mal kabul, toplama, sayım, malzeme çıkışı",
+  "name": "Sentez Terminal",
+  "short_name": "Sentez Terminal",
+  "description": "Sentez ERP saha el terminali — mal kabul, toplama, sayım, malzeme çıkışı",
   "start_url": "/mobile.html",
   "scope": "/",
   "display": "standalone",

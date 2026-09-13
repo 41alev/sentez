@@ -176,7 +176,7 @@ const ROOT = path.join(__dirname, '..');
   ok('uyarı e-postası iki alıcıya da gitti',
     (alertMsg.to || []).length === 2, JSON.stringify(alertMsg.to));
   const alertSubject = header(alertMsg.data, 'Subject');
-  ok('konu [Depo Takip] ile etiketlendi', /\[Depo Takip\]/.test(alertSubject), alertSubject);
+  ok('konu [Sentez] ile etiketlendi', /\[Sentez\]/.test(alertSubject), alertSubject);
 
   // Aynı uyarı ikinci kez gönderilmemeli, aksi halde kutu dolar.
   const beforeSecond = smtp.received.length;

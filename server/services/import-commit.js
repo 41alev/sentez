@@ -366,7 +366,7 @@ async function template(importType) {
   if (!schema) throw new AppError('Bilinmeyen aktarım tipi / Unknown import type', 400);
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'Depo Takip ERP';
+  wb.creator = 'Sentez ERP';
   const ws = wb.addWorksheet(schema.label);
 
   const fields = Object.entries(schema.fields);

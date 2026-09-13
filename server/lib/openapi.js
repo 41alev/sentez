@@ -49,7 +49,7 @@ function buildOpenApiSpec() {
   return {
     openapi: '3.0.3',
     info: {
-      title: 'Depo Takip ERP — Entegrasyon API',
+      title: 'Sentez ERP — Entegrasyon API',
       version: '2.0.0',
       description:
         'Bu, sistemin TÜM iç uçlarının değil, dış sistemlerin (e-ticaret, ' +

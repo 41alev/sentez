@@ -59,7 +59,7 @@ router.post('/test-mail', requireRole('admin'), async (req, res, next) => {
   try {
     const to = (req.body && req.body.to) || process.env.SMTP_FROM;
     if (!to) throw new AppError('Alıcı adresi gerekli / Recipient required', 400);
-    const r = await notifications.sendEmail(to, '[Depo Takip] Test e-postası',
+    const r = await notifications.sendEmail(to, '[Sentez] Test e-postası',
       'Bu bir test mesajıdır. Bu e-postayı aldıysanız SMTP ayarlarınız çalışıyor demektir.');
     if (!r) {
       const st = notifications.mailStatus();

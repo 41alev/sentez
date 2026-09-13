@@ -1,4 +1,4 @@
-# Depo Takip ERP — Kullanım Kılavuzu
+# Sentez ERP — Kullanım Kılavuzu
 
 Bu kılavuz sistemi kullanacak kişiler içindir. Teknik kurulum için `README.md` dosyasına bakın.
 
