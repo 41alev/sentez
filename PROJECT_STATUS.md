@@ -1,5 +1,43 @@
 # PROJECT_STATUS.md
 
+## 2026-09-14 (devam 18) — KRİTİK: İzlenebilirlik/geri çağırma raporu hiç çalışmıyordu (`f9144ce`)
+
+Kullanıcı "çok daha uzun, sistematik bir tur yap — test etmediğin en ufak
+bir buton/özellik kalmasın" dedi. Bu turda bulunan **oturumun en ciddi
+hatası**: Partiler/Lotlar ekranındaki İzlenebilirlik diyaloğu — kalite/geri
+çağırma soruşturmaları için kritik bir özellik — **gerçekte hiçbir zaman
+doğru çalışmamış**.
+
+`server/services/traceability.js` düz (flat) nesneler dönüyor
+(`itemName`/`lotNo`/`usedIn`/`shippedTo` hep KÖKTE), ama
+`frontend-react/LotsView.jsx` bunları hiç var olmayan alan adlarıyla
+(`.lot`, `usedInProduction`, `shipments`, `customerName`, `children`)
+okumaya çalışıyordu. Sonuç: başlık HER ZAMAN boş ("—"), ileriye izleme HER
+ZAMAN "kayıt yok", geri çağırma raporunda etkilenen müşterinin adı/sevkiyat
+no'su/tarihi/varış noktası HER ZAMAN "—" gösteriyordu — gerçek veri olsa
+bile. Bu, özellik yalnızca geçmişi olmayan partilerle test edildiğinde
+"çalışıyor gibi" göründüğü için hiç fark edilmemişti (boş durumlar makul
+görünüyordu).
+
+Gerçek, üretilmiş VE sevk edilmiş bir parti (seed'deki `PARTI-SET-0901`)
+ile canlı test edilip tüm alan adı uyuşmazlıkları düzeltildi. Bu sınıf bir
+hatayı (veri var ama render edilmiyor) yalnızca gerçek DOM içeriğini
+kontrol eden bir test yakalayabildiği için `test/e2e-browser/
+lots-traceability.spec.js` (yeni) eklendi — modalın gerçekten "Elektrik
+Bağlantı Seti", "SVK-2026-001", "Anadolu Makine A.Ş." içerdiğini VE "kayıt
+yok" içermediğini kanıtlıyor.
+
+**Doğrulama:** `npm run typecheck`/`lint`/`build` temiz. `npx playwright
+test` → 13/13 geçti (yeni test dahil). `node test/run-all.js` → 28/28
+suite geçti. Gerçek tarayıcıda önce bozuk hali (ekran görüntüsüyle),
+sonra düzeltilmiş hali ayrıca doğrulandı.
+
+**Bu turun geri kalanı devam ediyor** — Ürünler modülü (oluştur/düzenle/
+BOM/stok girişi/etiket/silme-engeli/barkod) tam test edildi, Partiler/
+Lotlar devam ediyor; Sayım, Üretim, Satın Alma, Satış, Kalite, CRM,
+Destek, Planlama, Raporlar, Yönetim ve Depo Terminali'nin her düğmesi/
+diyaloğu sırayla test edilecek.
+
 ## 2026-09-14 (devam 17) — Kapsamlı UI denetimi: kırık bir endpoint + 15 yerde ham/yanlış metin (`37a3623`)
 
 Kullanıcı "programın tüm sayfalarını ve butonları test et, boşluğa giden
