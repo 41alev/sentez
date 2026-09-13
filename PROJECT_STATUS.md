@@ -1,5 +1,72 @@
 # PROJECT_STATUS.md
 
+## 2026-09-13 (devam 12) — KVKK sıfır-eksik: anonimleştirme, veri raporu, saklama süresi taraması (`b1d82bb`)
+
+"kapatılabilir olanların tümünü kapatalım eksik kalmasın" talimatının KVKK
+kısmı tamamlandı — `docs/KVKK-DEGERLENDIRME.md`'de tespit edilen 4 maddeden
+3'ü kapatıldı (4. madde — alan bazlı şifreleme — bilinçli olarak ayrı bir
+oturuma bırakıldı, aşağıda gerekçesiyle).
+
+**1. Geri döndürülemez anonimleştirme (KVKK m.7).** `server/lib/kvkk.js`
+(yeni): müşteri/tedarikçi/kullanıcı için `anonymizeCustomer/Supplier/User` —
+ad, iletişim, VKN/TCKN, banka bilgisi kalıcı olarak silinir; sipariş/fatura
+**geçmişi (tutar/tarih) korunur**. Geçmiş e-Belge XML'leri üretim anındaki
+bir kopyayı zaten kendi içinde taşıdığı için (bkz. e-Fatura turundaki
+`e_documents.xml` — hiç purge edilmiyor) bu işlem VUK'un 10 yıllık belge
+saklama zorunluluğunu ihlal etmiyor. Yeni route'lar (`POST .../:id/anonymize`)
+**yalnızca admin** — manager bile yetkili değil, geri dönüşü olmadığı için.
+İkinci çağrı 409 döner (idempotency değil, kalıcı durum değişikliği —
+tekrar denenemez). Kendi hesabını veya son yönetici hesabını anonimleştirme
+reddediliyor. Migration 016: `customers`/`suppliers`'a `deactivated_at` +
+`anonymized_at`, `users`'a `anonymized_at`.
+
+**2. "Hangi veri tutuluyor" raporu (KVKK m.11/b).** Aynı dosyada
+`exportCustomerData/SupplierData/UserData` — kimlik verisi + ilgili
+sipariş/fatura/e-Belge/destek talebi/ziyaret/fırsat/denetim kaydı özeti.
+`GET .../:id/data-export` (admin) — arayüzde JSON dosyası olarak indiriliyor
+(`UI.downloadJson()`, yeni — `exportCsv` ile aynı Blob deseni).
+
+**3. Saklama süresi taraması (KVKK — "ilişkisi sona eren veri N yıl sonra
+anonimleştirilir").** `server/services/data-retention.js` (yeni):
+`webhooks.js`/`notifications.js` ile AYNI `setInterval` + `try/catch`
+zamanlayıcı deseni. **Varsayılan olarak KAPALI** (`kvkkAutoAnonymizeEnabled`
+ayarı, varsayılan `'0'`) — otomatik, geri dönüşü olmayan bir silme işlemini
+varsayılan olarak açık bırakmak güvensiz bir varsayılan olurdu (CLAUDE.md
+§26). Yalnızca müşteri/tedarikçi (iş ortağı) verisini kapsıyor —
+**kullanıcı/çalışan kayıtları kasıtlı olarak dışında**: bir çalışanın ne
+zaman anonimleştirileceği İK politikası gerektirir, bu proje İK/bordroya
+hiç girmiyor (bkz. standing constraint). Admin > Ayarlar'a "KVKK Saklama
+Politikası" kartı eklendi (saklama yılı + anahtar + "şimdi çalıştır").
+
+**Gerçek bulunan hata (test sırasında yakalandı):** `runRetentionSweep()`
+ilk yazımda `Number(getSetting(...)) || 10` kullanıyordu — saklama süresi
+**0** yıl olarak ayarlandığında (test senaryosu: "hemen anonimleştir")
+`0 || 10` JavaScript'te `10`'a değerleniyor, yani 0 hiçbir zaman gerçek bir
+değer olarak kullanılamıyordu. `test/kvkk.js`'in retention testi bunu
+YAKALADI (0 yıl ayarlanınca hiçbir şey anonimleşmedi); `Number.isFinite`
+kontrolüyle düzeltildi.
+
+**Doğrulama:** `npm run typecheck`/`lint`/`build` temiz. `test/kvkk.js`
+(yeni, 39 test). `node test/run-all.js` → **28/28 suite geçti**. Gerçek
+tarayıcıda doğrulandı: müşteri anonimleştirme (liste görünümünden
+kayboluyor, `is_active=0`) + veri dışa aktarım (200, JSON indirildi),
+Admin > Kullanıcılar'daki KVKK butonları, Ayarlar'daki saklama kartı ve
+"şimdi çalıştır" butonunun gerçekten `POST /api/data-retention/run`'ı
+tetiklediği.
+
+**Bilinçli olarak dışarıda bırakılan (KVKK-DEGERLENDIRME.md §3.3):**
+veritabanı/yedeklerin "at rest" şifrelenmesi (TCKN/banka bilgisi için alan
+bazlı şifreleme) — kod incelemesi şunu gösterdi: `tax_no` alanı
+`data-health.js`'de SQL `GROUP BY tax_no` ile mükerrer VKN taraması için
+kullanılıyor, `einvoice.js`/`ubl.js` e-Fatura XML'i için düz metin VKN
+gerektiriyor, `import-commit.js` toplu içe aktarımda okuyup yazıyor —
+rastgele IV'li standart şifreleme bu üç noktayı gerçek bir riskle
+(mükerrer tespitinin bozulması, e-Belge'ye şifreli veri sızması) kırar.
+Bu, "değerlendir" değil şimdi "kapat" kapsamında bile ayrı, dikkatli bir
+mühendislik geçişi (uygulama katmanında şifrele/çöz sarmalayıcı + en az
+3 dosyanın okuma yollarının güncellenmesi) gerektiriyor — sessizce
+atlanmadı, burada kayda geçirilip kullanıcıya bildirilecek.
+
 ## 2026-09-13 (devam 11) — e-Fatura sıfır-eksik: GİB resmi şema doğrulaması + iade izlenebilirliği (`212aabb`)
 
 Destek/Saha Ziyaret modüllerinden sonra kullanıcı sordu: "e-Fatura ve KVKK
