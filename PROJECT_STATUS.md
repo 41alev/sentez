@@ -1,5 +1,43 @@
 # PROJECT_STATUS.md
 
+## 2026-09-13 (devam 7) — Proje adı "Sentez" olarak değiştirildi (`79ac1ff`)
+
+Kullanıcı "bu olan isim çok olmuyor bence" dedi, yeni isim arayışına
+girildi. İlk iki turdaki önerilerim ("Yekpare/Kervan/Meridyen/Pusula/
+Sinerji/Ekosis" gibi soyut/kavramsal isimler) kullanıcı tarafından
+reddedildi — "piyasadakilere benzer bişey olsun, duyunca bizim yazılım
+belli olsun" dedi (Logo/Netsis/Mikro/Nebim tarzı, kısa, marka gibi duran
+bir isim istendi). Üçüncü turda sunulan seçeneklerden **"Sentez"**
+seçildi (bir araya getirme/bütünleştirme anlamı, kapsayıcılığı doğrudan
+anlatıyor; ciddi/kurumsal, gerçek Türkçe kelime).
+
+**Kapsam kararı (kendi inisiyatifimle, CLAUDE.md §14 değişim bütçesi
+gereği):** yalnızca **görünen marka/başlık katmanı** güncellendi —
+`package.json` adı, HTML `<title>`/`<h1>` etiketleri, mobil terminal
+logosu, PWA manifest, OpenAPI başlığı, sunucu log mesajı, e-posta konu
+etiketi (`[Sentez]`), README/kullanım kılavuzu başlıkları, kurulum/
+yükseltme script banner'ları, nginx.conf yorumu (18 dosya, +25/-25 satır).
+**Bilinçli olarak DOKUNULMADI** (teknik/dosya sistemi katmanı —
+değiştirmek gereksiz risk/geniş kapsam yaratırdı): `depo-takip.sqlite`
+veritabanı dosya adı, JWT secret varsayılan değeri
+(`depo-takip-dev-secret-change-me`), `SMTP_FROM` varsayılanı,
+`docker-compose.yml` container adı, `.env.example` örnek yolları,
+`docs/KURULUM.md` örnek komutları, test dosyalarındaki dosya yolu
+referansları, ve bu dosyanın (`PROJECT_STATUS.md`) önceki tüm tarihsel
+kayıtları.
+
+**Doğrulama:** `npm run typecheck`, `npm run lint`, `npm run build`,
+`node test/run-all.js` — tümü geçti (`test/email.js`'teki `[Sentez]`
+konu etiketi testi dahil); tek istisna yine bilinen `planning`
+kırılganlığı (dokunulmadı).
+
+**Hâlâ açık:** proje hâlâ hiçbir uzak depoya push edilmedi (`git remote
+-v` boş) — bu makinede `gh` CLI kurulu değil, "Claude in Chrome" uzantısı
+bağlı değil, bu yüzden GitHub repo oluşturma otomatikleştirilemedi.
+Kullanıcıya iki seçenek sunuldu: (A) uzantıyı kurup bağlaması, (B) kendisi
+GitHub'da manuel bir private repo oluşturup URL'sini vermesi. Cevap
+bekleniyor.
+
 ## 2026-09-13 (devam 6) — Genel gözden geçirme sonrası düzeltmeler (4 commit)
 
 5 maddelik yol haritası tamamlandıktan sonra kullanıcı "genel bir gözden
