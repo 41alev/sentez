@@ -1,5 +1,50 @@
 # PROJECT_STATUS.md
 
+## 2026-09-13 (devam 9) — "Sadece kod olarak eksik var mı" denetimi (`9ca0101`)
+
+5 maddelik satışa hazırlık turundan sonra kullanıcı "sadece yazılım ve kod
+olarak değerlendirirsen eksik var mı" diye sordu. Üç somut alanı (dosya
+yükleme güvenliği, `npm audit`, gözlemlenebilirlik/çökme bildirimi)
+detaylı inceledim; `npm audit` temiz çıktı, diğer ikisinde 5 gerçek bulgu
+vardı, kullanıcı "tümünü düzelt" dedi:
+
+1. **`server/services/import.js`** — Excel içe aktarımında satır sayısına
+   üst sınır yoktu (DoS riski: sıkıştırılmış küçük bir dosya bellekte çok
+   büyük bir yapıya açılabilir). 50.000 satır sınırı eklendi, gerçek
+   50.001 satırlık bir dosya üretilerek reddedildiği kanıtlandı
+   (`test/import.js`'e kalıcı regresyon testi eklendi).
+2. **`server/routes/documents.js`** — diskteki dosya uzantısı istemcinin
+   ham dosya adından türetiliyordu (`image/png` MIME'li ama adı
+   `"zararli.php"` olan bir dosya diskte `.php` uzantısıyla durabilirdi).
+   Artık uzantı, zaten doğrulanmış MIME tipinden bir haritayla
+   türetiliyor. Gerçek bir HTTP isteğiyle doğrulandı; `test/security.js`
+   içindeki daha önce tamamen STATİK (kaynak kodu regex) olan dosya
+   yükleme testlerine gerçek davranışsal bir test eklendi.
+3. **`server/routes/import.js`** — dosya filtresi "MIME veya uzantı
+   tutarsa kabul et" mantığındaydı ve kabul edilen MIME'ler arasında
+   `application/octet-stream` (pratikte her şey) vardı — MIME kontrolü
+   büyük ölçüde etkisizdi. Uzantı artık zorunlu tek kapı; gerçek
+   doğrulamanın zaten ExcelJS'in dosyayı açabilmesiyle yapıldığı yorumda
+   açıkça belirtildi.
+4. **`server/lib/webhooks.js`** — bildirim zamanlayıcısı (`notifications.js`)
+   kendi `try/catch` korumasına sahipken, webhook yeniden deneme
+   zamanlayıcısı aynı korumaya sahip değildi; `setInterval` içindeki
+   senkron bir DB hatası tüm süreci çökertebilirdi. Aynı desene getirildi.
+5. **`server/index.js`** — hiçbir global `uncaughtException`/
+   `unhandledRejection` yakalayıcısı yoktu. Docker'da `restart:
+   unless-stopped` olduğu için bir çökme sürekli kesinti yaratmaz, ama
+   kimseye haber verilmiyordu. Net bir "fatal" log satırı yazıp kasıtlı
+   olarak çıkan yakalayıcılar eklendi.
+
+**Dürüstçe belirtilmesi gereken:** madde 4 ve 5 davranışsal olarak test
+EDİLMEDİ — senkron/async bir DB hatasını deterministik olarak tetiklemek
+ya production koduna bir test-arka-kapısı eklemeyi ya da iç mock'lamayı
+gerektirirdi. Bunun yerine kod incelemesiyle `notifications.js`'teki
+zaten kanıtlanmış desenle birebir aynı olduğu doğrulandı.
+
+**Doğrulama:** `npm run typecheck`/`lint`/`build` temiz, `node
+test/run-all.js` 26/26 paket geçti (yeni 2 test dahil), CI yeşil.
+
 ## 2026-09-13 (devam 8) — Satışa hazırlık: 5 madde (7 commit)
 
 GitHub'a ilk push'tan sonra kullanıcı "bu yazılım bir firmaya/fabrikaya
