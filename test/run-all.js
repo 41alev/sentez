@@ -73,7 +73,11 @@ function waitForHealth(timeoutMs = 20000) {
 // API_RATE_LIMIT (300/dk) ile çalıştırılırsa okuma/yazma testlerinin
 // neredeyse tamamı 429 alır ve paket anlamsızlaşır.
 const SUITE_ENV_OVERRIDES = {
-  load: { API_RATE_LIMIT: '200000' }
+  load: { API_RATE_LIMIT: '200000' },
+  // webhooks.js otomatik yeniden deneme kuyruğunun GERÇEKTEN çalıştığını
+  // kanıtlamak için process-retry-queue'yu tetikliyor — varsayılan 60sn'lik
+  // ilk gecikmeyle test dakikalarca beklerdi.
+  webhooks: { WEBHOOK_RETRY_BASE_MS: '50' }
 };
 
 function startServer(name) {

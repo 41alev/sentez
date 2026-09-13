@@ -1339,8 +1339,14 @@ export default function AdminView() {
         body: table([
           { key: 'attemptedAt', label: t('date'), render: d => ts(d.attemptedAt), cls: 'nowrap' },
           { key: 'event', label: UI.getLang() === 'tr' ? 'Olay' : 'Event', render: d => `<span class="mono">${esc(d.event)}</span>` },
-          { key: 'statusCode', label: UI.getLang() === 'tr' ? 'Durum' : 'Status', render: d => d.success
-              ? `<span class="badge ok">${d.statusCode ?? 'OK'}</span>` : `<span class="badge crit">${esc(d.error || d.statusCode || '—')}</span>` },
+          { key: 'statusCode', label: UI.getLang() === 'tr' ? 'Durum' : 'Status', render: d => {
+              if (d.success) return `<span class="badge ok">${d.statusCode ?? 'OK'}</span>`;
+              const badge = `<span class="badge crit">${esc(d.error || d.statusCode || '—')}</span>`;
+              const retryNote = d.nextRetryAt
+                ? `<div class="sub-line">${UI.getLang() === 'tr' ? 'Otomatik yeniden denenecek' : 'Will auto-retry'}: ${ts(d.nextRetryAt)}</div>`
+                : `<div class="sub-line">${UI.getLang() === 'tr' ? 'Otomatik deneme hakkı bitti' : 'Auto-retry exhausted'} (${d.retryCount})</div>`;
+              return badge + retryNote;
+            } },
           { key: 'durationMs', label: UI.getLang() === 'tr' ? 'Süre' : 'Duration', num: true, render: d => d.durationMs != null ? `${num(d.durationMs)} ms` : '—' },
           { key: 'act', label: '', render: d => d.success ? '' : `<button class="btn btn-ghost btn-sm" data-retry="${esc(d.id)}">${t('retry')}</button>` }
         ], rows.data, { emptyText: UI.getLang() === 'tr' ? 'Henüz teslimat yok.' : 'No deliveries yet.' })

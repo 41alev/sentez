@@ -6,7 +6,7 @@ const { AppError, uuid, logAudit, paginate } = require('../lib/core');
 const { companyIdOf } = require('../lib/tenant');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { validate, z } = require('../middleware/validate');
-const { EVENT_CATALOG, sendDelivery } = require('../lib/webhooks');
+const { EVENT_CATALOG, sendDelivery, processRetryQueue } = require('../lib/webhooks');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -29,6 +29,17 @@ router.get('/', ADMIN, (req, res) => {
 });
 
 router.get('/events', ADMIN, (req, res) => res.json(EVENT_CATALOG));
+
+/**
+ * Otomatik kuyruk normalde 60 saniyede bir kendiliğinden çalışır (bkz.
+ * server/lib/webhooks.js startWebhookRetryScheduler) — bu, bir yöneticinin
+ * "beklemeden şimdi dene" diyebilmesi için VE test paketinin gerçek zamanlı
+ * bekleme yapmadan retry mantığını doğrulayabilmesi için var.
+ */
+router.post('/process-retry-queue', ADMIN, (req, res) => {
+  processRetryQueue();
+  res.json({ ok: true });
+});
 
 const createSchema = z.object({
   url: z.string().trim().url('Geçerli bir URL olmalı / Must be a valid URL'),
@@ -92,7 +103,9 @@ router.get('/:id/deliveries', ADMIN, (req, res) => {
   if (!w) throw new AppError('Webhook bulunamadı / Webhook not found', 404);
   const { page = 1, pageSize = 25 } = req.query;
   const result = paginate(
-    'SELECT id, event, status_code AS statusCode, success, error, duration_ms AS durationMs, attempted_at AS attemptedAt FROM webhook_deliveries WHERE webhook_id = ? ORDER BY attempted_at DESC',
+    `SELECT id, event, status_code AS statusCode, success, error, duration_ms AS durationMs, attempted_at AS attemptedAt,
+            retry_count AS retryCount, next_retry_at AS nextRetryAt
+     FROM webhook_deliveries WHERE webhook_id = ? ORDER BY attempted_at DESC`,
     [req.params.id], page, pageSize
   );
   // SQLite'ta boolean yok — 0/1 integer olarak gelir; API sözleşmesi gerçek boolean vermeli (bkz. admin.js'teki isActive deseni).

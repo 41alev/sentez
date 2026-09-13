@@ -133,9 +133,42 @@ function startReceiver() {
   const retry = await api('POST', `/api/webhooks/${deadId}/deliveries/${failedDelivery.id}/retry`, { token: admin });
   ok('yeniden deneme çalışıyor (aynı şekilde başarısız olsa da)', retry.data.success === false);
 
+  console.log('\n=== OTOMATİK YENİDEN DENEME KUYRUĞU / AUTO-RETRY QUEUE ===');
+  ok('ilk başarısızlık otomatik kuyruğa alınmış (nextRetryAt dolu)', failedDelivery.retryCount === 0 && failedDelivery.nextRetryAt > Date.now(),
+    JSON.stringify({ retryCount: failedDelivery.retryCount, nextRetryAt: failedDelivery.nextRetryAt }));
+
+  // Yukarıdaki elle "retry" çağrısı da kendi kaydını (retryCount=0) ekleyip
+  // kuyruğa aldığı için, otomatik kuyruğu İZOLE test etmek adına TAZE,
+  // ayrı bir ulaşılamayan webhook kullanılıyor — karışma olmasın.
+  const deadHook2 = await api('POST', '/api/webhooks', {
+    token: admin, body: { url: 'http://127.0.0.1:2/unreachable', events: ['ncr.opened'] }
+  });
+  const deadId2 = deadHook2.data.id;
+  await api('POST', `/api/webhooks/${deadId2}/test`, { token: admin });
+  const before = await api('GET', `/api/webhooks/${deadId2}/deliveries`, { token: admin });
+  ok('izole webhook\'ta tam olarak bir başarısız kayıt var', before.data.total === 1, JSON.stringify(before.data));
+
+  // WEBHOOK_RETRY_BASE_MS test ortamında küçük tutulur (bkz. test/run-all.js)
+  // — nextRetryAt'in gerçekten geçmişte kalmasını garantiye almak için bekle.
+  await sleep(300);
+  const triggered = await api('POST', '/api/webhooks/process-retry-queue', { token: admin });
+  ok('kuyruk tetikleme çalışıyor (admin)', triggered.status === 200);
+  await sleep(150); // sendDelivery fire-and-forget'tir; küçük bir bekleme payı
+
+  const after = await api('GET', `/api/webhooks/${deadId2}/deliveries`, { token: admin });
+  ok('otomatik yeniden deneme GERÇEKTEN yeni bir teslimat denemesi yaptı', after.data.total === 2, `beklenen 2, gelen ${after.data.total}`);
+  const original = after.data.data.find(d => d.id === before.data.data[0].id);
+  const autoRetried = after.data.data.find(d => d.id !== before.data.data[0].id);
+  ok('otomatik denemenin retryCount\'u arttı (1)', autoRetried && autoRetried.retryCount === 1, JSON.stringify(autoRetried));
+  ok('ilk denemenin nextRetryAt\'i temizlendi (iki kez işlenmesin diye)', original && original.nextRetryAt === null);
+
+  ok('yönetici olmayan kuyruğu elle tetikleyemiyor (403)',
+    (await api('POST', '/api/webhooks/process-retry-queue', { token: manager })).status === 403);
+
   console.log('\n=== SİLME / DELETE ===');
   ok('webhook silinebiliyor (204)', (await api('DELETE', `/api/webhooks/${webhookId}`, { token: admin })).status === 204);
   ok('ikinci test webhook\'u silinebiliyor', (await api('DELETE', `/api/webhooks/${deadId}`, { token: admin })).status === 204);
+  await api('DELETE', `/api/webhooks/${deadId2}`, { token: admin });
   ok('silinen webhook artık listede yok', !(await api('GET', '/api/webhooks', { token: admin })).data.find(w => w.id === webhookId));
 
   server.close();

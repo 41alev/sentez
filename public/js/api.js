@@ -285,6 +285,7 @@ const Api = (() => {
     deleteWebhook: (id) => req('DELETE', '/webhooks/' + id),
     webhookDeliveries: (id, p) => req('GET', `/webhooks/${id}/deliveries` + qs(p)),
     retryWebhookDelivery: (id, deliveryId) => req('POST', `/webhooks/${id}/deliveries/${deliveryId}/retry`),
+    processWebhookRetryQueue: () => req('POST', '/webhooks/process-retry-queue'),
     testWebhook: (id) => req('POST', `/webhooks/${id}/test`),
 
     // labels (ZPL)

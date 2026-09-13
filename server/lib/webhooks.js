@@ -19,6 +19,24 @@ const { uuid } = require('./core');
 
 const SEND_TIMEOUT_MS = 8000;
 
+/**
+ * Otomatik yeniden deneme — üstel geri çekilme + jitter (CLAUDE.md §35).
+ * 5 deneme hakkı: ~1dk, ~2dk, ~4dk, ~8dk, ~16dk (üst sınır 30dk) sonra
+ * dead-letter olur (next_retry_at NULL kalır, elle "yeniden dene" ile
+ * hâlâ denenebilir — otomatik kuyruk sonsuza dek denemez).
+ */
+const MAX_AUTO_RETRIES = 5;
+// Test paketi gerçek dakikalarca bekleyemez — yalnızca test ortamında
+// WEBHOOK_RETRY_BASE_MS ile kısaltılabilir (bkz. test/run-all.js). Üretimde
+// bu değişken hiç ayarlanmaz, varsayılan 60 saniye geçerli olur.
+const RETRY_BASE_MS = Number(process.env.WEBHOOK_RETRY_BASE_MS) || 60000;
+const RETRY_MAX_MS = 30 * 60000;
+
+function nextRetryDelay(retryCount) {
+  const exp = Math.min(RETRY_BASE_MS * 2 ** retryCount, RETRY_MAX_MS);
+  return Math.round(exp * (0.85 + Math.random() * 0.3)); // ±15% jitter — art arda tekrar deneme fırtınasını önler
+}
+
 /** Bu sistemin ürettiği olay kataloğu — server/routes/webhooks.js'teki ADMIN CRUD arayüzü de bunu kullanır. */
 const EVENT_CATALOG = [
   'purchase_order.created', 'purchase_order.approved', 'purchase_order.received',
@@ -33,8 +51,14 @@ function activeSubscribersFor(event, companyId = 1) {
   });
 }
 
-/** Tek bir teslimatı gönderir ve sonucunu (başarı da olsa hata da olsa) kaydeder. */
-async function sendDelivery(webhook, event, data) {
+/**
+ * Tek bir teslimatı gönderir ve sonucunu (başarı da olsa hata da olsa) kaydeder.
+ * @param {number} [retryCount] Bu, kaçıncı deneme (0 = ilk deneme veya elle
+ *   yeniden deneme — elle deneme kullanıcının "sorunu düzelttim" sinyalidir,
+ *   otomatik kuyruk sayacını sıfırdan başlatması doğrudur). Otomatik kuyruk
+ *   (bkz. processRetryQueue) bir önceki denemenin retry_count + 1'ini geçer.
+ */
+async function sendDelivery(webhook, event, data, retryCount = 0) {
   const body = JSON.stringify({ event, timestamp: new Date().toISOString(), data });
   const signature = crypto.createHmac('sha256', webhook.secret).update(body).digest('hex');
   const start = Date.now();
@@ -64,9 +88,15 @@ async function sendDelivery(webhook, event, data) {
     error = e.name === 'AbortError' ? 'Zaman aşımı / Timed out' : e.message;
   }
 
-  db.prepare(`INSERT INTO webhook_deliveries (id, webhook_id, event, payload, status_code, success, error, duration_ms, attempted_at)
-    VALUES (?,?,?,?,?,?,?,?,?)`)
-    .run(uuid(), webhook.id, event, body, statusCode, success ? 1 : 0, error, Date.now() - start, Date.now());
+  // Başarısızsa VE hâlâ otomatik deneme hakkı varsa bir sonraki deneme zamanı
+  // hesaplanır; başarılıysa veya hak tükendiyse next_retry_at NULL kalır —
+  // processRetryQueue bu kaydı bir daha hiç görmez (dead-letter, elle
+  // "yeniden dene" ile hâlâ mümkün).
+  const nextRetryAt = (!success && retryCount < MAX_AUTO_RETRIES) ? Date.now() + nextRetryDelay(retryCount) : null;
+
+  db.prepare(`INSERT INTO webhook_deliveries (id, webhook_id, event, payload, status_code, success, error, duration_ms, attempted_at, retry_count, next_retry_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(uuid(), webhook.id, event, body, statusCode, success ? 1 : 0, error, Date.now() - start, Date.now(), retryCount, nextRetryAt);
 
   return { success, statusCode, error };
 }
@@ -80,4 +110,35 @@ function dispatchEvent(event, data, companyId = 1) {
   }
 }
 
-module.exports = { EVENT_CATALOG, dispatchEvent, sendDelivery };
+/**
+ * Otomatik yeniden deneme kuyruğu — süresi gelmiş (next_retry_at <= now),
+ * hâlâ deneme hakkı olan başarısız teslimatları bulup tekrar dener. Her
+ * çağrıda önce next_retry_at NULL'a çekilir (bir sonraki tick aynı kaydı
+ * TEKRAR işlemesin — yeni deneme kendi next_retry_at'ini kuracak).
+ * Bilinçli kapsam sınırı: gerçek bir mesaj kuyruğu değil, basit bir
+ * polling taraması — tek sunuculu bir ERP için yeterli (bkz. 012 migration).
+ */
+function processRetryQueue() {
+  const due = db.prepare(`
+    SELECT wd.id, wd.event, wd.payload, wd.retry_count, w.id AS webhook_id, w.url, w.secret, w.is_active, w.company_id
+    FROM webhook_deliveries wd JOIN webhooks w ON w.id = wd.webhook_id
+    WHERE wd.success = 0 AND wd.next_retry_at IS NOT NULL AND wd.next_retry_at <= ?
+  `).all(Date.now());
+
+  for (const d of due) {
+    db.prepare('UPDATE webhook_deliveries SET next_retry_at = NULL WHERE id = ?').run(d.id);
+    if (!d.is_active) continue; // webhook o sırada devre dışı bırakılmışsa yeniden denenmez
+    let payload;
+    try { payload = JSON.parse(d.payload).data; } catch { continue; } // bozuk kayıt: sessizce atla, veri kaybı değil (orijinal kayıt zaten duruyor)
+    sendDelivery({ id: d.webhook_id, url: d.url, secret: d.secret }, d.event, payload, d.retry_count + 1).catch(() => {});
+  }
+}
+
+let retryTimer = null;
+function startWebhookRetryScheduler() {
+  if (retryTimer) return; // testler arka arkaya server başlatıp durdurabiliyor — çift zamanlayıcı kurulmasın
+  retryTimer = setInterval(processRetryQueue, 60000);
+  retryTimer.unref?.(); // açık bir zamanlayıcı process'in kapanmasını engellemesin (testlerde graceful shutdown)
+}
+
+module.exports = { EVENT_CATALOG, dispatchEvent, sendDelivery, processRetryQueue, startWebhookRetryScheduler };
