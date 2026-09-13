@@ -276,6 +276,12 @@ export default function ReportsView() {
   }
 
   /* ---------- quality KPIs ---------- */
+  const ncrSourceLabel = (s) => ({
+    incoming: t('inspIncoming'), in_process: t('inspInProcess'), final: t('inspFinal'),
+    customer: UI.getLang() === 'tr' ? 'Müşteri şikayeti' : 'Customer complaint',
+    internal: UI.getLang() === 'tr' ? 'İç denetim' : 'Internal'
+  }[s] || s);
+
   async function qualityKpi(body, actions) {
     const d = await Api.qualityKpis(365);
     actions.innerHTML = '';
@@ -295,7 +301,7 @@ export default function ReportsView() {
       </div>
       <div class="card"><div class="card-head"><h3>${t('source')}</h3></div>
         ${table([
-          { key: 'source', label: t('source'), render: r => esc(r.source) },
+          { key: 'source', label: t('source'), render: r => esc(ncrSourceLabel(r.source)) },
           { key: 'c', label: UI.getLang() === 'tr' ? 'Adet' : 'Count', num: true, render: r => num(r.c) }
         ], d.ncrBySource)}</div>`;
 
@@ -358,6 +364,14 @@ export default function ReportsView() {
   }
 
   /* ---------- özel rapor (pivot) — BI derinliği ---------- */
+  const movementTypeLabel = (mt) => ({
+    in: UI.getLang() === 'tr' ? 'Stok girişi' : 'Stock in',
+    out: UI.getLang() === 'tr' ? 'Stok çıkışı' : 'Stock out',
+    transfer: UI.getLang() === 'tr' ? 'Depo transferi' : 'Transfer',
+    adjust: UI.getLang() === 'tr' ? 'Sayım düzeltmesi' : 'Count adjustment',
+    status_change: UI.getLang() === 'tr' ? 'Durum değişikliği' : 'Status change'
+  }[mt] || mt);
+
   async function customReport(body, actions) {
     actions.innerHTML = '';
     let meta, saved;
@@ -380,7 +394,7 @@ export default function ReportsView() {
           ${field(t('pivotDimension'), select('pvDim', ds.dimensions.map(d => ({ v: d.key, l: d.label })), dimVal))}
           ${field(t('pivotMetric'), select('pvMet', ds.metrics.map(m => ({ v: m.key, l: m.label })), metVal))}
           ${ds.extraFilterKeys.includes('type')
-            ? field(t('pivotTypeFilter'), select('pvType', [{ v: '', l: t('all') }, ...meta.movementTypes.map(mt => ({ v: mt, l: mt }))], cfg.filters.type || ''))
+            ? field(t('pivotTypeFilter'), select('pvType', [{ v: '', l: t('all') }, ...meta.movementTypes.map(mt => ({ v: mt, l: movementTypeLabel(mt) }))], cfg.filters.type || ''))
             : ''}
         </div>`;
     }

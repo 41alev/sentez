@@ -467,6 +467,19 @@ export default function PurchasingView() {
   }
 
   /* ================= REQUESTS ================= */
+  const reqStatusBadge = (s) => {
+    const m = {
+      draft: ['plain', UI.getLang() === 'tr' ? 'Taslak' : 'Draft'],
+      submitted: ['warn', UI.getLang() === 'tr' ? 'Onay bekliyor' : 'Awaiting approval'],
+      approved: ['ok', UI.getLang() === 'tr' ? 'Onaylandı' : 'Approved'],
+      rejected: ['crit', UI.getLang() === 'tr' ? 'Reddedildi' : 'Rejected'],
+      converted: ['ok', UI.getLang() === 'tr' ? 'Siparişe dönüştürüldü' : 'Converted to order'],
+      cancelled: ['plain', UI.getLang() === 'tr' ? 'İptal' : 'Cancelled']
+    };
+    const [c, l] = m[s] || ['plain', s];
+    return `<span class="badge ${c}">${esc(l)}</span>`;
+  };
+
   async function renderRequests(body, actions) {
     let res;
     try { res = await Api.requests({ pageSize: 50 }); } catch (e) { UI.err(e); return; }
@@ -478,7 +491,7 @@ export default function PurchasingView() {
       { key: 'department', label: t('department'), render: r => esc(r.department || '—') },
       { key: 'neededBy', label: t('neededBy'), render: r => dt(r.neededBy || r.needed_by) },
       { key: 'lines', label: UI.getLang() === 'tr' ? 'Kalem' : 'Lines', num: true, render: r => num((r.lines || []).length) },
-      { key: 'status', label: t('status'), render: r => `<span class="badge ${r.status === 'approved' ? 'ok' : r.status === 'rejected' ? 'crit' : 'warn'}">${esc(r.status)}</span>` },
+      { key: 'status', label: t('status'), render: r => reqStatusBadge(r.status) },
       { key: 'act', label: t('actions'), render: r => `<div class="row-actions">
           ${r.status === 'submitted' && can('approve') ? `<button class="icon-btn ok" data-ap="${esc(r.id)}">${UI.icon(UI.ICONS.check)}</button>
              <button class="icon-btn danger" data-rj="${esc(r.id)}">${UI.icon(UI.ICONS.x)}</button>` : ''}
@@ -536,6 +549,17 @@ export default function PurchasingView() {
   }
 
   /* ================= RFQ ================= */
+  const rfqStatusBadge = (s) => {
+    const m = {
+      open: ['info', UI.getLang() === 'tr' ? 'Açık' : 'Open'],
+      closed: ['plain', UI.getLang() === 'tr' ? 'Kapalı' : 'Closed'],
+      awarded: ['ok', UI.getLang() === 'tr' ? 'Verildi' : 'Awarded'],
+      cancelled: ['plain', UI.getLang() === 'tr' ? 'İptal' : 'Cancelled']
+    };
+    const [c, l] = m[s] || ['plain', s];
+    return `<span class="badge ${c}">${esc(l)}</span>`;
+  };
+
   async function renderRfqs(body, actions) {
     let res;
     try { res = await Api.rfqs({ pageSize: 50 }); } catch (e) { UI.err(e); return; }
@@ -546,7 +570,7 @@ export default function PurchasingView() {
       { key: 'rfqNo', label: t('rfqNo'), render: r => `<span class="mono">${esc(r.rfqNo || r.rfq_no)}</span>` },
       { key: 'dueDate', label: t('dueDate'), render: r => dt(r.dueDate || r.due_date) },
       { key: 'quoteCount', label: UI.getLang() === 'tr' ? 'Teklif' : 'Quotes', num: true, render: r => num(r.quoteCount ?? (r.quotes || []).length) },
-      { key: 'status', label: t('status'), render: r => `<span class="badge ${r.status === 'awarded' ? 'ok' : 'info'}">${esc(r.status)}</span>` },
+      { key: 'status', label: t('status'), render: r => rfqStatusBadge(r.status) },
       { key: 'act', label: t('actions'), render: r => `<div class="row-actions">
           <button class="btn btn-ghost btn-sm" data-cmp="${esc(r.id)}">${t('compareQuotes')}</button>
           ${can('write') ? `<button class="btn btn-ghost btn-sm" data-q="${esc(r.id)}">${t('addQuote')}</button>` : ''}</div>` }

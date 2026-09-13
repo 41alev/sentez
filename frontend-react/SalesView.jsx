@@ -446,7 +446,8 @@ export default function SalesView() {
       <div class="g">
         <div><b>${t('shipmentNo')}:</b> ${esc(s.shipmentNo)}</div><div><b>${t('date')}:</b> ${dt(s.date)}</div>
         <div><b>${t('destination')}:</b> ${esc(s.destination || '')}</div><div><b>${t('carrier')}:</b> ${esc(s.carrier || '—')}</div>
-        <div><b>${t('trackingNo')}:</b> ${esc(s.trackingNo || '—')}</div><div><b>${t('status')}:</b> ${esc(s.status)}</div>
+        <div><b>${t('trackingNo')}:</b> ${esc(s.trackingNo || '—')}</div><div><b>${t('status')}:</b> ${esc(UI.getLang() === 'tr' ? s.status
+          : ({ 'Hazırlanıyor': 'Preparing', 'Yolda': 'In transit', 'Teslim Edildi': 'Delivered' }[s.status] || s.status))}</div>
       </div>
       <h4>${UI.getLang() === 'tr' ? 'Kalemler' : 'Items'}</h4>
       <table><tr><th>${t('itemName')}</th><th>${t('lotNo')}</th><th class="r">${t('qty')}</th></tr>
@@ -579,6 +580,17 @@ export default function SalesView() {
   }
 
   /* ================= CUSTOMER INVOICES ================= */
+  const invoiceStatusBadge = (s) => {
+    const m = {
+      draft: ['plain', UI.getLang() === 'tr' ? 'Taslak' : 'Draft'],
+      issued: ['warn', UI.getLang() === 'tr' ? 'Kesildi' : 'Issued'],
+      paid: ['ok', UI.getLang() === 'tr' ? 'Tahsil edildi' : 'Paid'],
+      cancelled: ['plain', UI.getLang() === 'tr' ? 'İptal' : 'Cancelled']
+    };
+    const [c, l] = m[s] || ['plain', s];
+    return `<span class="badge ${c}">${esc(l)}</span>`;
+  };
+
   async function renderInvoices(body, actions) {
     let res;
     try { res = await Api.customerInvoices({ pageSize: 50 }); } catch (e) { UI.err(e); return; }
@@ -600,7 +612,7 @@ export default function SalesView() {
           return overdue ? `<span class="badge crit">${dt(r.due_date)}</span>` : dt(r.due_date);
         } },
       { key: 'amount', label: UI.getLang() === 'tr' ? 'Tutar' : 'Amount', num: true, render: r => `${num(r.amount, 2)} ${cur(r.currency)}` },
-      { key: 'status', label: t('status'), render: r => `<span class="badge ${r.status === 'paid' ? 'ok' : 'warn'}">${esc(r.status)}</span>` },
+      { key: 'status', label: t('status'), render: r => invoiceStatusBadge(r.status) },
       { key: 'edoc', label: t('edocTitle'), render: r => {
           const d = edocByInvoice[r.id];
           if (!d) return `<span class="badge plain">—</span>`;

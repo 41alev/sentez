@@ -285,6 +285,11 @@ export default function QualityView() {
     use_as_is: t('dispUseAsIs'), rework: t('dispRework'),
     return_to_supplier: t('dispReturn'), scrap: t('dispScrap')
   }[d] || t('dispPending'));
+  const ncrSourceLabel = (s) => ({
+    incoming: t('inspIncoming'), in_process: t('inspInProcess'), final: t('inspFinal'),
+    customer: UI.getLang() === 'tr' ? 'Müşteri şikayeti' : 'Customer complaint',
+    internal: UI.getLang() === 'tr' ? 'İç denetim' : 'Internal'
+  }[s] || s);
 
   async function renderNcrs(body, actions) {
     let res;
@@ -295,7 +300,7 @@ export default function QualityView() {
     body.innerHTML = `<div class="card">${table([
       { key: 'ncrNo', label: t('ncrNo'), render: r => `<button class="link-btn" data-open="${esc(r.id)}">${esc(r.ncrNo || r.ncr_no)}</button>
           <div class="sub-line">${esc(r.itemName || r.item_name || '')}</div>` },
-      { key: 'source', label: t('source'), render: r => `<span class="badge plain">${esc(r.source)}</span>` },
+      { key: 'source', label: t('source'), render: r => `<span class="badge plain">${esc(ncrSourceLabel(r.source))}</span>` },
       { key: 'severity', label: t('severity'), render: r => sevBadge(r.severity) },
       { key: 'qtyAffected', label: t('qtyAffected'), num: true, render: r => num(r.qtyAffected ?? r.qty_affected ?? 0) },
       { key: 'disposition', label: t('disposition'), render: r => esc(dispLabel(r.disposition)) },
@@ -377,7 +382,7 @@ export default function QualityView() {
       title: n.ncrNo || n.ncr_no, sub: n.itemName || n.item_name || '', size: 'wide',
       body: `
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
-          ${sevBadge(n.severity)}<span class="badge plain">${esc(n.source)}</span>
+          ${sevBadge(n.severity)}<span class="badge plain">${esc(ncrSourceLabel(n.source))}</span>
           <span class="badge plain">${esc(dispLabel(n.disposition))}</span>
         </div>
         <div class="kv-grid">
@@ -421,6 +426,12 @@ export default function QualityView() {
   }
 
   /* ================= CAPA ================= */
+  const capaStatusBadge = (s) => {
+    const m = { open: ['crit', t('ncrOpen')], in_progress: ['warn', t('ncrInProgress')], verifying: ['info', t('capaVerifying')], closed: ['ok', t('ncrClosed')] };
+    const [c, l] = m[s] || ['plain', s];
+    return `<span class="badge ${c}">${esc(l)}</span>`;
+  };
+
   async function renderCapas(body, actions) {
     let res;
     try { res = await Api.capas({ pageSize: 25 }); } catch (e) { UI.err(e); return; }
@@ -440,11 +451,7 @@ export default function QualityView() {
           const late = new Date(d) < new Date() && r.status !== 'closed';
           return late ? `<span class="badge crit">${dt(d)}</span>` : dt(d);
         } },
-      { key: 'status', label: t('status'), render: r => {
-          const m = { open: ['crit', t('ncrOpen')], in_progress: ['warn', t('ncrInProgress')], verifying: ['info', t('capaVerifying')], closed: ['ok', t('ncrClosed')] };
-          const [c, l] = m[r.status] || ['plain', r.status];
-          return `<span class="badge ${c}">${esc(l)}</span>`;
-        } },
+      { key: 'status', label: t('status'), render: r => capaStatusBadge(r.status) },
       { key: 'act', label: t('actions'), render: r => r.status !== 'closed' && can('quality')
           ? `<div class="row-actions"><button class="btn btn-ghost btn-sm" data-cl="${esc(r.id)}">${UI.getLang() === 'tr' ? 'Kapat' : 'Close'}</button></div>` : '' }
     ], rows)}</div>`;
@@ -495,7 +502,7 @@ export default function QualityView() {
       body: `
         <div class="kv-grid">
           <div class="kv"><div class="k">${t('capaType')}</div><div class="v">${c.type === 'preventive' ? t('capaPreventive') : t('capaCorrective')}</div></div>
-          <div class="kv"><div class="k">${t('status')}</div><div class="v">${esc(c.status)}</div></div>
+          <div class="kv"><div class="k">${t('status')}</div><div class="v">${capaStatusBadge(c.status)}</div></div>
         </div>
         <div class="section-title">${t('rootCause')}</div>
         <div style="font-size:13px;line-height:1.6;color:var(--text-muted)">${esc(c.rootCause || c.root_cause || '—')}</div>

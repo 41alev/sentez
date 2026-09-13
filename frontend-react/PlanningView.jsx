@@ -301,7 +301,11 @@ export default function PlanningView() {
             { key: 'work_center_name', label: t('workCenter'), render: e2 => esc(e2.work_center_name ||
                 (UI.getLang() === 'tr' ? 'Tüm fabrika' : 'Whole plant')) },
             { key: 'reason', label: t('holidayReason'), render: e2 => esc(e2.reason || '—') },
-            { key: 'exception_type', label: t('status'), render: e2 => `<span class="badge ${e2.exception_type === 'holiday' ? 'crit' : 'warn'}">${esc(e2.exception_type)}</span>` },
+            { key: 'exception_type', label: t('status'), render: e2 => {
+                const l = e2.exception_type === 'holiday' ? (UI.getLang() === 'tr' ? 'Tatil' : 'Holiday')
+                  : (UI.getLang() === 'tr' ? 'Kısmi' : 'Partial');
+                return `<span class="badge ${e2.exception_type === 'holiday' ? 'crit' : 'warn'}">${esc(l)}</span>`;
+              } },
             { key: 'act', label: '', render: e2 => can('approve')
                 ? `<div class="row-actions"><button class="icon-btn danger" data-delex="${e2.id}">${UI.icon(UI.ICONS.trash)}</button></div>` : '' }
           ], exceptions)}

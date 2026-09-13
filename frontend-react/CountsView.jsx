@@ -75,9 +75,10 @@ export default function CountsView() {
     const editable = c.status === 'open' || c.status === 'counted';
 
     modal({
-      title: c.countNo, sub: `${c.warehouse || ''} · ${t('status')}: ${esc(c.status)}`,
+      title: c.countNo, sub: c.warehouse || '',
       size: 'xwide',
       body: `
+        <div style="margin-bottom:12px">${statusBadge(c.status)}</div>
         ${c.status === 'approved' ? `<div class="alert ok">${UI.getLang() === 'tr' ? 'Bu sayım onaylanmış ve farklar stoğa işlenmiştir.' : 'This count is approved and variances have been posted.'}</div>` : ''}
         ${editable ? `<div class="alert warn">${t('countWarning')}</div>` : ''}
         <div class="table-wrap"><table>

@@ -287,7 +287,9 @@ export default function AdminView() {
             ? 'Bir sipariş, eşik tutarı aştığında ilgili yetkinin onayı olmadan teslim alınamaz.'
             : 'An order above the threshold cannot be received until the required role approves it.'}</div>
           ${table([
-            { key: 'doc_type', label: UI.getLang() === 'tr' ? 'Belge' : 'Document', render: r => `<span class="badge plain">${esc(r.doc_type)}</span>` },
+            { key: 'doc_type', label: UI.getLang() === 'tr' ? 'Belge' : 'Document', render: r => `<span class="badge plain">${esc(
+                { purchase_order: UI.getLang() === 'tr' ? 'Satın Alma Siparişi' : 'Purchase Order',
+                  purchase_request: UI.getLang() === 'tr' ? 'Satın Alma Talebi' : 'Purchase Request' }[r.doc_type] || r.doc_type)}</span>` },
             { key: 'threshold_base', label: t('thresholdAmount'), num: true, render: r => '₺' + money(r.threshold_base) },
             { key: 'required_role', label: t('requiredRole'), render: r => UI.roleLabel(r.required_role) },
             { key: 'act', label: t('actions'), render: r => can('admin')
@@ -302,7 +304,8 @@ export default function AdminView() {
         <div class="card-body" style="padding-top:0">
           ${table([
             { key: 'rule_type', label: t('ruleType'), render: r => esc(ruleTypeLabel(r.rule_type)) },
-            { key: 'channel', label: t('channel'), render: r => `<span class="badge ${r.channel === 'email' ? 'info' : 'plain'}">${esc(r.channel)}</span>` },
+            { key: 'channel', label: t('channel'), render: r => `<span class="badge ${r.channel === 'email' ? 'info' : 'plain'}">${esc(
+                r.channel === 'email' ? (UI.getLang() === 'tr' ? 'E-posta' : 'Email') : (UI.getLang() === 'tr' ? 'Uygulama içi' : 'In-app'))}</span>` },
             { key: 'threshold_days', label: t('thresholdDays'), num: true, render: r => r.threshold_days == null ? '—' : num(r.threshold_days) },
             { key: 'recipients', label: t('recipients'), render: r => esc(r.recipients || '—') },
             { key: 'act', label: t('actions'), render: r => can('approve')
@@ -378,13 +381,20 @@ export default function AdminView() {
         `${a.entityType || ''} ${a.entityId || ''}`, JSON.stringify(a.oldValue || ''), JSON.stringify(a.newValue || ''), a.ip]));
 
     const types = ['item', 'stock_lot', 'purchase_order', 'sales_order', 'production_order', 'inspection', 'ncr', 'user', 'settings'];
+    const entityTypeLabel = (v) => (UI.getLang() === 'tr' ? {
+      item: 'Ürün', stock_lot: 'Stok partisi', purchase_order: 'Satın alma siparişi', sales_order: 'Satış siparişi',
+      production_order: 'Üretim emri', inspection: 'Muayene', ncr: 'Uygunsuzluk', capa: 'DÖF', user: 'Kullanıcı',
+      settings: 'Ayarlar', customer: 'Müşteri', supplier: 'Tedarikçi', warehouse: 'Depo', opportunity: 'Fırsat',
+      visit: 'Saha ziyareti', ticket: 'Destek talebi', webhook: 'Webhook', saved_report: 'Kayıtlı rapor',
+      work_center: 'İş merkezi', shift: 'Vardiya', equipment: 'Cihaz', document: 'Doküman', e_document: 'e-Belge'
+    }[v] || v : v.replace(/_/g, ' '));
 
     body.innerHTML = `
       <div class="alert info">${UI.getLang() === 'tr'
         ? 'Her değişiklik kim, ne zaman, eski ve yeni değeriyle birlikte kaydedilir. Bu kayıt silinemez.'
         : 'Every change is recorded with who, when, and the old and new value. This log cannot be deleted.'}</div>
       <div class="filters">
-        ${select('auType', [{ v: '', l: t('all') }, ...types.map(x => ({ v: x, l: x }))], auditFilter.entityType)}
+        ${select('auType', [{ v: '', l: t('all') }, ...types.map(x => ({ v: x, l: entityTypeLabel(x) }))], auditFilter.entityType)}
         <input id="auUser" placeholder="${t('auditUser')}" value="${esc(auditFilter.username)}">
       </div>
       <div class="card">${table([
@@ -392,7 +402,7 @@ export default function AdminView() {
         { key: 'username', label: t('auditUser'), render: a => `${esc(a.username || '—')}<div class="sub-line">${UI.roleLabel(a.role)}</div>` },
         { key: 'actionKey', label: t('auditAction'), render: a => esc(t(a.actionKey)) },
         { key: 'entity', label: t('auditEntity'), render: a => a.entityType
-            ? `<span class="badge plain">${esc(a.entityType)}</span><div class="sub-line mono">${esc(String(a.entityId || '').slice(0, 12))}</div>` : '—' },
+            ? `<span class="badge plain">${esc(entityTypeLabel(a.entityType))}</span><div class="sub-line mono">${esc(String(a.entityId || '').slice(0, 12))}</div>` : '—' },
         { key: 'detail', label: t('detail'), render: a => esc(a.detail || '—') },
         { key: 'change', label: `${t('auditOld')} → ${t('auditNew')}`, render: a => {
             if (!a.oldValue && !a.newValue) return '—';
@@ -1186,7 +1196,9 @@ export default function AdminView() {
             : 'Merges two records representing the same thing. All references move to the target and the source is removed.'}</div>
           <div class="field-row three">
             ${field(UI.getLang() === 'tr' ? 'Kayıt tipi' : 'Record type', select('mgType', [
-              { v: 'item', l: t('itemName') }, { v: 'supplier', l: t('supplier') }, { v: 'customer', l: t('customerName') }]))}
+              { v: 'item', l: UI.getLang() === 'tr' ? 'Ürün' : 'Item' },
+              { v: 'supplier', l: UI.getLang() === 'tr' ? 'Tedarikçi' : 'Supplier' },
+              { v: 'customer', l: UI.getLang() === 'tr' ? 'Müşteri' : 'Customer' }]))}
             ${field(t('mergeSource'), input('mgSource', { placeholder: 'ID' }))}
             ${field(t('mergeTarget'), input('mgTarget', { placeholder: 'ID' }))}
           </div>
@@ -1285,7 +1297,12 @@ export default function AdminView() {
           ? 'Muhasebe programı değiştiğinde yalnızca burayı güncelleyin — dışa aktarım mantığı değişmez.'
           : 'When you switch accounting software, update only this — the export logic stays the same.'}</div>
         ${table([
-          { key: 'key', label: UI.getLang() === 'tr' ? 'Kalem' : 'Item', render: r => `<span class="mono">${esc(r.key)}</span>` },
+          { key: 'key', label: UI.getLang() === 'tr' ? 'Kalem' : 'Item', render: r => {
+              const m = { accounts_payable: 'Satıcılar', accounts_receivable: 'Alıcılar', inventory: 'Stok',
+                purchase_vat: 'İndirilecek KDV', sales_revenue: 'Yurtiçi Satışlar', sales_vat: 'Hesaplanan KDV' };
+              const label = UI.getLang() === 'tr' ? (m[r.key] || r.key) : r.key.replace(/_/g, ' ');
+              return `${esc(label)} <span class="mono" style="color:var(--text-muted);font-size:11px">${esc(r.key)}</span>`;
+            } },
           { key: 'accountCode', label: UI.getLang() === 'tr' ? 'Hesap Kodu' : 'Account Code',
             render: r => input(`accCode_${r.key}`, { value: r.accountCode, style: 'width:100px' }) },
           { key: 'accountName', label: UI.getLang() === 'tr' ? 'Hesap Adı' : 'Account Name',

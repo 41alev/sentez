@@ -98,7 +98,15 @@ async function login(username, password) {
   ok('weak password rejected', weakPw.status === 422 || weakPw.status === 400, `got ${weakPw.status}`);
 
   console.log('\n=== PRODUCTION (BOM → stock consumption) ===');
+  // Bu route /:id ile ayni segment sayisina sahip oldugu icin production.js'de
+  // /:id'DEN ONCE tanimli olmali - aksi halde Express "requirements-preview"
+  // dizesini bir emir kimligi sanip yanlislikla 404 doner (bkz. gercek tarayicida
+  // bulunan hata: "Yeni Uretim Emri" dialogu hep bu hatayi gosteriyordu).
   const reqs = await api('GET', `/api/production/requirements-preview?itemId=${setItem.id}&qty=5`, { token: admin });
+  ok('requirements-preview gerçek reçete bileşenlerini döndürüyor (404 değil)',
+    reqs.status === 200 && Array.isArray(reqs.data) && reqs.data.length > 0, JSON.stringify(reqs.data).slice(0, 200));
+  ok('requirements-preview miktarı ölçekliyor (qty=5)',
+    reqs.status === 200 && reqs.data[0].needed > 0, JSON.stringify(reqs.data[0]));
   const prodOrders = await api('GET', '/api/production', { token: admin });
   ok('production orders listed', prodOrders.status === 200);
   const completed = (prodOrders.data.data || prodOrders.data).find?.(p => p.status === 'Tamamlandı');

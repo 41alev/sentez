@@ -42,6 +42,36 @@ router.get('/', validateQuery(pageQuery.extend({ status: z.string().max(1000).op
   res.json({ data: rows.map(serialize), page: q.page, pageSize: q.pageSize, total, totalPages: Math.ceil(total / q.pageSize) });
 });
 
+/**
+ * Yeni üretim emri oluşturmadan ÖNCE reçetenin ihtiyaç duyacağı bileşenleri ve
+ * şu anki stok yeterliliğini gösterir (bkz. frontend-react/ProductionView.jsx
+ * "Yeni Üretim Emri" diyaloğu — canlı önizleme). `/:id/requirements`'tan farkı:
+ * henüz VAR OLMAYAN bir emir için, doğrudan ürün+miktardan hesaplar. Bu route
+ * MUTLAKA `/:id`'DEN ÖNCE tanımlanmalı — aksi halde Express "requirements-preview"
+ * dizesini bir emir kimliği sanıp yanlışlıkla 404 döner (bulunan ve düzeltilen
+ * gerçek hata).
+ */
+router.get('/requirements-preview', validateQuery(z.object({
+  itemId: z.string().min(1),
+  qty: z.coerce.number().positive()
+})), (req, res, next) => {
+  try {
+    const { itemId, qty } = req.validatedQuery;
+    const item = db.prepare('SELECT id FROM items WHERE id = ? AND deleted_at IS NULL').get(itemId);
+    if (!item) throw new AppError('Ürün bulunamadı / Item not found', 404);
+    const components = resolveComponents(itemId, qty);
+    res.json(components.map(c => {
+      const compItem = db.prepare('SELECT name, unit FROM items WHERE id = ?').get(c.componentItemId);
+      const available = stock.availableQty(c.componentItemId);
+      return {
+        componentItemId: c.componentItemId, componentName: compItem ? compItem.name : c.componentItemId,
+        unit: compItem ? compItem.unit : '', needed: c.qtyUsed, available,
+        sufficient: available >= c.qtyUsed - 1e-9, shortfall: Math.max(0, c.qtyUsed - available)
+      };
+    }));
+  } catch (e) { next(e); }
+});
+
 router.get('/:id', (req, res, next) => {
   try {
     const r = db.prepare('SELECT * FROM production_orders WHERE id = ?').get(req.params.id);
