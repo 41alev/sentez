@@ -8,6 +8,7 @@ const { requireAuth, requirePermission } = require('../middleware/auth');
 const { validate, validateQuery, z, pageQuery, currency } = require('../middleware/validate');
 const stock = require('../services/stock');
 const costing = require('../services/costing');
+const { dispatchEvent } = require('../lib/webhooks');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -419,7 +420,9 @@ router.post('/orders', requirePermission('purchase.write'), validate(poSchema), 
     });
 
     const row = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(result.poId);
-    res.status(201).json({ ...serializePO(row), approvalRequired: result.needsApproval });
+    const serialized = { ...serializePO(row), approvalRequired: result.needsApproval };
+    dispatchEvent('purchase_order.created', serialized, companyIdOf(req));
+    res.status(201).json(serialized);
   } catch (e) { next(e); }
 });
 
@@ -439,6 +442,7 @@ router.post('/orders/:id/approve', requirePermission('purchase.approve'), (req, 
       .run(req.user.id, Date.now(), po.id);
     logAudit(req, 'auditPOApprove', { entityType: 'purchase_order', entityId: po.id,
       oldValue: { status: po.status }, newValue: { status: 'approved' }, detail: po.po_no });
+    dispatchEvent('purchase_order.approved', { id: po.id, poNo: po.po_no, totalBase: po.total_base }, companyIdOf(req));
     res.json({ ok: true });
   } catch (e) { next(e); }
 });
@@ -531,6 +535,7 @@ router.post('/orders/:id/receipts', requirePermission('purchase.write'), validat
       return { receiptId, receiptNo, created, fullyReceived: remaining <= 1e-9 };
     });
 
+    dispatchEvent('purchase_order.received', { poId: po.id, poNo: po.po_no, ...result }, companyIdOf(req));
     res.status(201).json(result);
   } catch (e) { next(e); }
 });

@@ -8,6 +8,8 @@ const { requireAuth, requirePermission } = require('../middleware/auth');
 const { validate, validateQuery, z, pageQuery } = require('../middleware/validate');
 const stock = require('../services/stock');
 const trace = require('../services/traceability');
+const { companyIdOf } = require('../lib/tenant');
+const { dispatchEvent } = require('../lib/webhooks');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -280,7 +282,9 @@ router.post('/ncrs', requirePermission('quality.write'), validate(ncrSchema), (r
       logAudit(req, 'auditNcrAdd', { entityType: 'ncr', entityId: ncrId, newValue: { ncrNo: no, severity: b.severity }, detail: no });
       return ncrId;
     });
-    res.status(201).json(serializeNcr(db.prepare('SELECT * FROM ncrs WHERE id = ?').get(id)));
+    const serialized = serializeNcr(db.prepare('SELECT * FROM ncrs WHERE id = ?').get(id));
+    dispatchEvent('ncr.opened', serialized, companyIdOf(req));
+    res.status(201).json(serialized);
   } catch (e) { next(e); }
 });
 

@@ -36,6 +36,7 @@
     "test:multitenancy": "node test/multitenancy.js",
     "test:accounting": "node test/accounting-export.js",
     "test:labels": "node test/labels.js",
+    "test:webhooks": "node test/webhooks.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },

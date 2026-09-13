@@ -7,6 +7,8 @@ const { requireAuth, requirePermission } = require('../middleware/auth');
 const { validate, validateQuery, z, pageQuery } = require('../middleware/validate');
 const stock = require('../services/stock');
 const costing = require('../services/costing');
+const { companyIdOf } = require('../lib/tenant');
+const { dispatchEvent } = require('../lib/webhooks');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -217,7 +219,9 @@ router.post('/:id/complete', requirePermission('production.write'), validate(com
       return { outputLotId, cost, producedQty, scrapQty };
     });
 
-    res.json({ ok: true, ...result, order: serialize(db.prepare('SELECT * FROM production_orders WHERE id = ?').get(po.id)) });
+    const order = serialize(db.prepare('SELECT * FROM production_orders WHERE id = ?').get(po.id));
+    dispatchEvent('production_order.completed', { ...result, order }, companyIdOf(req));
+    res.json({ ok: true, ...result, order });
   } catch (e) { next(e); }
 });
 

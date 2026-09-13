@@ -6,6 +6,7 @@ const { validate, z } = require('../middleware/validate');
 const { AppError, uuid, nextNumber, logAudit, diff, toBase, paginate } = require('../lib/core');
 const { companyIdOf } = require('../lib/tenant');
 const stock = require('../services/stock');
+const { dispatchEvent } = require('../lib/webhooks');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -157,7 +158,9 @@ router.post('/orders', WRITE, validate(soSchema), (req, res) => {
     logAudit(req, 'auditSalesOrderAdd', { entityType: 'sales_order', entityId: id, newValue: { soNo, customer: customer.name, totalBase }, detail: soNo });
     return db.prepare('SELECT * FROM sales_orders WHERE id = ?').get(id);
   });
-  res.status(201).json(serializeSO(result));
+  const serialized = serializeSO(result);
+  dispatchEvent('sales_order.created', serialized, companyIdOf(req));
+  res.status(201).json(serialized);
 });
 
 router.post('/orders/:id/cancel', ADMIN, (req, res) => {
@@ -277,7 +280,9 @@ router.post('/shipments', WRITE, validate(shipmentSchema), (req, res) => {
     logAudit(req, 'auditShipAdd', { entityType: 'shipment', entityId: id, newValue: { shipmentNo, destination: b.destination }, detail: shipmentNo });
     return db.prepare('SELECT * FROM shipments WHERE id = ?').get(id);
   });
-  res.status(201).json(serializeShipment(result));
+  const serialized = serializeShipment(result);
+  dispatchEvent('shipment.created', serialized, companyIdOf(req));
+  res.status(201).json(serialized);
 });
 
 router.patch('/shipments/:id/status', WRITE, (req, res) => {
@@ -287,7 +292,9 @@ router.patch('/shipments/:id/status', WRITE, (req, res) => {
   const next = order[Math.min(order.indexOf(s.status) + 1, order.length - 1)];
   db.prepare('UPDATE shipments SET status = ? WHERE id = ?').run(next, s.id);
   logAudit(req, 'auditShipStatus', { entityType: 'shipment', entityId: s.id, oldValue: { status: s.status }, newValue: { status: next }, detail: s.shipment_no });
-  res.json(serializeShipment(db.prepare('SELECT * FROM shipments WHERE id = ?').get(s.id)));
+  const serialized = serializeShipment(db.prepare('SELECT * FROM shipments WHERE id = ?').get(s.id));
+  dispatchEvent('shipment.status_changed', { ...serialized, previousStatus: s.status }, companyIdOf(req));
+  res.json(serialized);
 });
 
 router.delete('/shipments/:id', requireRole('admin'), (req, res) => {

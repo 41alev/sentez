@@ -262,6 +262,17 @@ const Api = (() => {
     accountingExport: (from, to) => req('GET', `/accounting/export${qs({ from, to })}`),
     audit: (p) => req('GET', '/audit' + qs(p)),
 
+    // webhooks
+    webhooks: () => req('GET', '/webhooks'),
+    webhookEvents: () => req('GET', '/webhooks/events'),
+    createWebhook: (d) => req('POST', '/webhooks', d),
+    updateWebhook: (id, d) => req('PUT', '/webhooks/' + id, d),
+    regenerateWebhookSecret: (id) => req('POST', `/webhooks/${id}/regenerate-secret`),
+    deleteWebhook: (id) => req('DELETE', '/webhooks/' + id),
+    webhookDeliveries: (id, p) => req('GET', `/webhooks/${id}/deliveries` + qs(p)),
+    retryWebhookDelivery: (id, deliveryId) => req('POST', `/webhooks/${id}/deliveries/${deliveryId}/retry`),
+    testWebhook: (id) => req('POST', `/webhooks/${id}/test`),
+
     // labels (ZPL)
     printLabel: (d) => req('POST', '/labels/print', d),
     /** ZPL dosyasını indirir — yetki başlığı gerektiği için doğrudan <a href> kullanılamaz. */

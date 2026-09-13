@@ -26,6 +26,7 @@ export default function AdminView() {
   const accFromRef = useRef(UI.addDays(UI.today(), -30));
   const accToRef = useRef(UI.today());
   const accResultRef = useRef(null);
+  const eventCatalogRef = useRef([]);
 
   function reload() { setReloadToken(x => x + 1); }
 
@@ -33,7 +34,7 @@ export default function AdminView() {
     const body = document.getElementById('adBody');
     const actions = document.getElementById('adActions');
     if (!body || !actions) return;
-    const fns = { users: usersTab, warehouses: whTab, fx: fxTab, rules: rulesTab, audit: auditTab, settings: settingsTab, edoc: edocTab, import: importTab, templates: templatesTab, health: healthTab, accounting: accountingTab };
+    const fns = { users: usersTab, warehouses: whTab, fx: fxTab, rules: rulesTab, audit: auditTab, settings: settingsTab, edoc: edocTab, import: importTab, templates: templatesTab, health: healthTab, accounting: accountingTab, webhooks: webhooksTab };
     (async () => {
       try { await fns[tab](body, actions); }
       catch (e) { UI.err(e); body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
@@ -1243,6 +1244,122 @@ export default function AdminView() {
       ], r.rows)}`;
   }
 
+  /* ================= WEBHOOKS ================= */
+  async function webhooksTab(body, actions) {
+    const [rows, events] = await Promise.all([Api.webhooks(), Api.webhookEvents()]);
+    eventCatalogRef.current = events;
+    actions.innerHTML = `<button class="btn btn-primary btn-sm" id="whNew2">${UI.icon(UI.ICONS.plus)}${t('newWebhook')}</button>`;
+
+    body.innerHTML = `
+      <div class="alert info">${t('webhookHint')}</div>
+      <div class="card">${table([
+        { key: 'url', label: t('webhookUrl'), render: w => `<span class="mono" style="word-break:break-all">${esc(w.url)}</span>
+            ${w.description ? `<div class="sub-line">${esc(w.description)}</div>` : ''}` },
+        { key: 'events', label: t('webhookEvents'), render: w => w.events.map(e => `<span class="badge plain" style="margin:1px">${esc(e)}</span>`).join(' ') },
+        { key: 'isActive', label: t('webhookActive'), render: w => w.isActive ? `<span class="badge ok">${t('webhookActive')}</span>` : `<span class="badge plain">${t('webhookInactive')}</span>` },
+        { key: 'act', label: t('actions'), render: w => `<div class="row-actions">
+            <button class="btn btn-ghost btn-sm" data-test="${esc(w.id)}">${t('testWebhook')}</button>
+            <button class="btn btn-ghost btn-sm" data-deliveries="${esc(w.id)}">${t('webhookDeliveries')}</button>
+            <button class="icon-btn" data-edit2="${esc(w.id)}" title="${t('edit')}">${UI.icon(UI.ICONS.edit)}</button>
+            <button class="icon-btn danger" data-del2="${esc(w.id)}" title="${t('del')}">${UI.icon(UI.ICONS.trash)}</button>
+          </div>` }
+      ], rows, { emptyText: UI.getLang() === 'tr' ? 'Henüz webhook yok.' : 'No webhooks yet.' })}</div>`;
+
+    document.getElementById('whNew2').onclick = () => webhookForm(null);
+    body.querySelectorAll('[data-edit2]').forEach(b => b.onclick = () => webhookForm(rows.find(x => x.id === b.dataset.edit2)));
+    body.querySelectorAll('[data-del2]').forEach(b => b.onclick = () => UI.confirmDialog(t('confirmDelete'), async () => {
+      try { await Api.deleteWebhook(b.dataset.del2); UI.ok(t('deleted')); reload(); } catch (e) { UI.err(e); }
+    }, { danger: true }));
+    body.querySelectorAll('[data-test]').forEach(b => b.onclick = async () => {
+      try {
+        const r = await Api.testWebhook(b.dataset.test);
+        r.success ? UI.ok(UI.getLang() === 'tr' ? `Gönderildi (HTTP ${r.statusCode})` : `Sent (HTTP ${r.statusCode})`)
+                  : UI.toast(`${UI.getLang() === 'tr' ? 'Başarısız' : 'Failed'}: ${r.error || r.statusCode}`, 'err');
+      } catch (e) { UI.err(e); }
+    });
+    body.querySelectorAll('[data-deliveries]').forEach(b => b.onclick = () => webhookDeliveriesDialog(rows.find(x => x.id === b.dataset.deliveries)));
+  }
+
+  function webhookForm(w) {
+    const events = eventCatalogRef.current;
+    modal({
+      title: w ? t('edit') : t('newWebhook'), size: 'wide',
+      body: `
+        ${field(t('webhookUrl'), input('whUrl2', { value: w?.url || '', placeholder: 'https://example.com/webhooks/depo-takip' }))}
+        ${field(t('webhookDescription'), input('whDesc2', { value: w?.description || '' }))}
+        <div class="field"><label>${t('webhookEvents')}</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+            ${events.map(e => `<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer;
+              background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;padding:5px 9px">
+              <input type="checkbox" class="wh-event" value="${esc(e)}" ${(w?.events || []).includes(e) ? 'checked' : ''} style="width:auto">
+              <span class="mono">${esc(e)}</span></label>`).join('')}
+          </div>
+        </div>
+        ${w ? checkbox('whActive2', t('webhookActive'), w.isActive) : ''}`,
+      footer: `<button class="btn btn-ghost" data-close>${t('cancel')}</button>
+               <button class="btn btn-primary" id="whGo2">${t('save')}</button>`,
+      onOpen: (box) => {
+        box.querySelector('#whGo2').onclick = async () => {
+          const selectedEvents = [...box.querySelectorAll('.wh-event:checked')].map(i => i.value);
+          if (!selectedEvents.length) return UI.toast(UI.getLang() === 'tr' ? 'En az bir olay seçin.' : 'Pick at least one event.', 'err');
+          const payload = { url: val('whUrl2'), description: val('whDesc2'), events: selectedEvents };
+          try {
+            if (w) {
+              await Api.updateWebhook(w.id, { ...payload, isActive: checked('whActive2') });
+              closeModal(); UI.ok(t('saved')); reload();
+            } else {
+              const created = await Api.createWebhook(payload);
+              closeModal();
+              showSecretDialog(created.secret);
+              reload();
+            }
+          } catch (e) { UI.err(e); }
+        };
+      }
+    });
+  }
+
+  function showSecretDialog(secret) {
+    modal({
+      title: t('webhookSecret'),
+      body: `<div class="alert warn">${t('webhookSecretHint')}</div>
+        <div class="field-row">
+          <input type="text" readonly value="${esc(secret)}" class="mono" style="flex:1;background:var(--panel-2);border:1px solid var(--border-input);border-radius:6px;padding:8px 10px;color:var(--text)">
+        </div>`,
+      footer: `<button class="btn btn-primary" data-close>${UI.getLang() === 'tr' ? 'Anladım' : 'Got it'}</button>`
+    });
+  }
+
+  async function webhookDeliveriesDialog(w) {
+    let page = 1;
+    const render2 = async () => {
+      const rows = await Api.webhookDeliveries(w.id, { page, pageSize: 20 });
+      modal({
+        title: t('webhookDeliveries'), sub: w.url, size: 'xwide',
+        body: table([
+          { key: 'attemptedAt', label: t('date'), render: d => ts(d.attemptedAt), cls: 'nowrap' },
+          { key: 'event', label: UI.getLang() === 'tr' ? 'Olay' : 'Event', render: d => `<span class="mono">${esc(d.event)}</span>` },
+          { key: 'statusCode', label: UI.getLang() === 'tr' ? 'Durum' : 'Status', render: d => d.success
+              ? `<span class="badge ok">${d.statusCode ?? 'OK'}</span>` : `<span class="badge crit">${esc(d.error || d.statusCode || '—')}</span>` },
+          { key: 'durationMs', label: UI.getLang() === 'tr' ? 'Süre' : 'Duration', num: true, render: d => d.durationMs != null ? `${num(d.durationMs)} ms` : '—' },
+          { key: 'act', label: '', render: d => d.success ? '' : `<button class="btn btn-ghost btn-sm" data-retry="${esc(d.id)}">${t('retry')}</button>` }
+        ], rows.data, { emptyText: UI.getLang() === 'tr' ? 'Henüz teslimat yok.' : 'No deliveries yet.' })
+          + pager(rows, p2 => { page = p2; closeModal(); render2(); }),
+        footer: `<button class="btn btn-ghost" data-close>${t('close')}</button>`,
+        onOpen: (box) => {
+          box.querySelectorAll('[data-retry]').forEach(b => b.onclick = async () => {
+            try {
+              const r = await Api.retryWebhookDelivery(w.id, b.dataset.retry);
+              r.success ? UI.ok(UI.getLang() === 'tr' ? 'Başarılı' : 'Succeeded') : UI.toast(r.error || 'HTTP ' + r.statusCode, 'err');
+              closeModal(); render2();
+            } catch (e) { UI.err(e); }
+          });
+        }
+      });
+    };
+    await render2();
+  }
+
   const html = `
     <div class="topbar">
       <div><h2>${t('adminTitle')}</h2><div class="sub">${t('adminSub')}</div></div>
@@ -1253,7 +1370,7 @@ export default function AdminView() {
       { k: 'fx', l: t('tabFx') }, { k: 'rules', l: t('tabRules') },
       { k: 'audit', l: t('tabAudit') }, { k: 'settings', l: t('tabSettings') },
       { k: 'import', l: t('tabImport') }, { k: 'templates', l: t('tabTemplates') }, { k: 'health', l: t('tabDataHealth') }, { k: 'edoc', l: t('edocSettings') },
-      { k: 'accounting', l: t('tabAccounting') }
+      { k: 'accounting', l: t('tabAccounting') }, { k: 'webhooks', l: t('tabWebhooks') }
     ], tab, k => setTab(k))}
     <div id="adBody">${loading()}</div>`;
 
