@@ -1,5 +1,70 @@
 # PROJECT_STATUS.md
 
+## 2026-09-13 (devam 4) — Aşama 7 TAMAMLANDI: CRM / satış hunisi (`d89384d`)
+
+Rekabet-eksikliği önceliğinde Aşama 6'dan (PWA/Offline) sonraki madde.
+`sales_orders`'ın ÖNCESİNE eklenen yeni bir modül: bir satış fırsatı
+(opportunity) doğar, aşamalardan geçer (yeni → iletişimde → teklif verildi →
+kazanıldı/kaybedildi), kazanılırsa gerçek bir satış siparişine dönüşür.
+
+**Şema:** `010_crm.js` — `opportunities` + `opportunity_lines`, `sales_orders`'a
+nullable `opportunity_id` (geriye izlenebilirlik). Fırsat, mevcut bir müşteriye
+bağlanabilir VEYA henüz müşteri olmayan bir "aday" adıyla açılabilir
+(`customerId` opsiyonel, `customerName` her zaman zorunlu).
+
+**Gerçek bir kod-tekrarı önlendi:** `server/services/sales-orders.js` (yeni) —
+satış siparişi oluşturma mantığı (kredi limiti kontrolü, kur kilitleme, denetim
+kaydı) `server/routes/sales.js`'ten çıkarılıp tek bir yere taşındı; hem normal
+`POST /sales/orders` hem CRM'in `POST /crm/opportunities/:id/convert`'i AYNI
+fonksiyonu çağırıyor. `sales.js`'in davranışı değişmedi — bu, iki ayrı route'un
+aynı işlemi yapması gereken bir durumda kopya mantık yazmamak için haklı,
+küçük bir refactor (CLAUDE.md §17 DRY).
+
+**Aşama geçiş kuralları (gerçekten test edildi, bkz. `test/crm.js`):**
+kaybedilme sebebi olmadan "kaybedildi" işaretlenemiyor; kapanmış (won/lost)
+bir fırsat ne düzenlenebiliyor ne yeniden açılabiliyor; yalnızca "won" VE
+henüz dönüştürülmemiş fırsatlar dönüştürülebiliyor (aynı fırsat ikinci kez
+dönüştürülemiyor — idempotency); müşterisi olmayan bir adayı dönüştürmek
+dönüştürme anında müşteri seçimini zorunlu kılıyor; kalemsiz bir fırsat
+dönüştürülemiyor.
+
+**Webhook entegrasyonu:** `EVENT_CATALOG`'a `opportunity.won` eklendi — bir
+fırsat kazanıldığında Aşama 5'te kurulan webhook altyapısı üzerinden dış
+sistemlere (ör. bir satış bildirim aracı) bildirilebiliyor.
+
+**Frontend:** `frontend-react/CrmView.jsx` (yeni) — "Fırsatlar" adında yeni bir
+üst-seviye ekran (Operasyon grubunda, Satış'tan önce, mantıksal akışa uygun).
+2 sekme: **Huni** (sürükle-bırak YOK — bilinçli olarak minimal tutulan sütunlu
+görünüm + "İlerlet"/"Kaybedildi" butonları) ve **Fırsatlar** (filtrelenebilir
+tam liste).
+
+**Gerçek bulunan hata (geliştirme sırasında, ESLint tarafından yakalandı):**
+CRM için `source` adında yeni bir i18n anahtarı eklerken, NCR modülünde
+ZATEN VAR OLAN bir `source` anahtarıyla çakıştığı fark edilmedi — JS nesne
+literalinde son tanım sessizce kazanır. Değerler aynı metni taşıdığı için
+(`"Kaynak"`) görsel bir hataya yol açmadı ama gerçek bir kod kalitesi
+sorunuydu (projenin daha önce bulduğu `dueDate` çakışmasıyla aynı sınıf —
+bkz. "İkinci tur" kaydı). `npx eslint .`'in `no-dupe-keys` kuralı bunu
+DERLEME ANINDA yakaladı; yeni anahtar `oppSource` olarak ayrıldı, NCR
+tarafına dokunulmadı.
+
+**Doğrulama:** `tsc`/`eslint` temiz. `test/crm.js` (yeni, 31 test) — en
+değerli kontrol: kazanılmış bir fırsatı dönüştürmenin GERÇEKTEN bir satış
+siparişi oluşturduğu ve bu siparişin doğru müşteri/kalemleri taşıdığı,
+doğrudan `GET /sales/orders/:id` ile doğrulandı (yalnızca "201 döndü" değil).
+`node test/run-all.js`: `crm` + güncellenen `ui-smoke` (yeni ekran + 2 sekme
+kontrolü) dahil TÜM paketler tam geçti; tek başarısız paket yine `planning`
+(tarihe bağlı, önceden bilinen, bu oturumda dokunulmayan kırılganlık — bkz.
+Aşama 3 kaydı). Tarayıcıda gerçekten doğrulandı: huni görünümü (4 sütun,
+doğru gruplama/toplam), fırsat detay modalı, yeni fırsat formu (müşteri/yeni
+aday seçimi), Fırsatlar liste sekmesi.
+
+**Sırada:** Kullanıcının "5 maddeyi sırayla yap" talimatına göre Aşama 8 —
+BI/raporlama derinliği (yapılandırılabilir pivot tablo veya en azından
+sürükle-bırak rapor oluşturucu; talep tahmini kapsam dışı bırakılmıştı).
+
+---
+
 ## 2026-09-13 (devam 3) — Aşama 6 TAMAMLANDI: PWA / çevrimdışı mobil terminal (`d3cf0e0`)
 
 Rekabet-eksikliği önceliğinde Aşama 5'ten (Webhook+OpenAPI) sonraki madde.
