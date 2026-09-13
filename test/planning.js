@@ -25,6 +25,19 @@ async function api(method, path, { token, body } = {}) {
   return { status: r.status, data: d };
 }
 const dstr = (off = 0) => new Date(Date.now() + off * 86400000).toISOString().slice(0, 10);
+// Varsayılan vardiyalar yalnızca hafta içi çalışır (bkz. 003_planning.js:
+// weekdays '1,2,3,4,5'). "dstr(-1)" testin çalıştığı güne göre bir
+// Cumartesi/Pazar'a denk gelirse o gün planlanan kapasite 0 olur — bu bir
+// uygulama hatası değil, ama testin kendisi haftanın hangi günü çalıştığına
+// bağımlı olmamalı. Geriye doğru en yakın hafta içi günü seçer.
+function lastWeekdayStr(startOffset = -1) {
+  for (let off = startOffset; off > startOffset - 14; off--) {
+    const d = dstr(off);
+    const jsDay = new Date(d + 'T12:00:00').getDay(); // 0=Pazar, 6=Cumartesi
+    if (jsDay !== 0 && jsDay !== 6) return d;
+  }
+  throw new Error('hafta içi tarih bulunamadı');
+}
 
 (async () => {
   const login = async (u, p) => (await api('POST', '/api/auth/login', { body: { username: u, password: p } })).data.token;
@@ -267,7 +280,7 @@ const dstr = (off = 0) => new Date(Date.now() + off * 86400000).toISOString().sl
   console.log('\n=== VARDİYA KAYDI VE OEE ===');
   const logRes = await api('POST', '/api/planning/shift-logs', {
     token: operator,
-    body: { date: dstr(-1), shiftId: 2, workCenterId: kesim.id, workedMinutes: 400,
+    body: { date: lastWeekdayStr(-1), shiftId: 2, workCenterId: kesim.id, workedMinutes: 400,
             downtimeMinutes: 40, downtimeReason: 'Tezgâh arızası', producedQty: 55, scrapQty: 3, operatorCount: 1 }
   });
   ok('vardiya kaydı girildi', logRes.status === 201, `got ${logRes.status} ${JSON.stringify(logRes.data)}`);

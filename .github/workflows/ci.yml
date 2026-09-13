@@ -30,18 +30,23 @@ jobs:
           cache: npm
 
       # node-gyp's own Visual Studio detection fails on GitHub's windows-latest
-      # image (it does not recognize the VS version bundled there and aborts
-      # with "could not find any Visual Studio installation to use"). This
-      # step runs vcvarsall.bat and exports the resulting environment so
-      # node-gyp finds the compiler directly, without relying on its own
-      # detection. Needed as a fallback in case better-sqlite3's bundled
-      # prebuilt binary is ever unavailable and it must build from source.
+      # image: even running inside a VS command prompt (which the step below
+      # sets up), it cannot map the bundled VS version to a known MSVS_VERSION
+      # and aborts with "unknown version undefined ... could not find any
+      # Visual Studio installation to use". Needed as a fallback in case
+      # better-sqlite3's bundled prebuilt binary is ever unavailable and it
+      # must build from source.
       - name: Set up MSVC (Windows native module builds)
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: Install dependencies
         run: npm ci
+        env:
+          # Bypasses node-gyp's broken auto-detection above by telling it
+          # directly which toolset to use (the actual compiler is already on
+          # PATH from the step above regardless of this version label).
+          npm_config_msvs_version: '2022'
 
       - name: Type check
         run: npm run typecheck
