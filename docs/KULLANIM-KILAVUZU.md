@@ -315,6 +315,33 @@ Belge önce **Taslak** durumunda oluşur. **Gönder** yetkisi müdürdedir.
 > **Gönderilmiş bir e-Fatura tek taraflı iptal edilemez.** Yanlış fatura kestiyseniz iade faturası
 > düzenlemeniz gerekir. Sistem yanlışlıkla iptal etmenizi engeller.
 
+### Müşteri Destek (talepler)
+
+Sol menüdeki **Destek** ekranı, müşteriden gelen şikayet/soru/iade/garanti taleplerini takip eder.
+
+Bir talep açtığınızda **kategori** seçersiniz — bu, talebin nasıl işleneceğini belirler:
+
+- **Şikayet**, **Soru**, **İade**, **Garanti**, **Diğer**
+
+Talep durumları sırayla ilerler: **Açık → İşlemde/Müşteri Bekleniyor → Çözüldü → Kapalı**.
+**Çözüldü** işaretlemek için bir çözüm açıklaması yazmanız zorunludur — "ne yapıldığı" kaydı
+tutulmadan talep kapanamaz. **Kapatılan bir talep yeniden açılamaz**; yanlışlıkla kapattıysanız
+yeni bir talep açın.
+
+> **Şikayet kategorisindeki** ve **kayıtlı bir müşterisi olan** talepler, talep detayındaki
+> **Uygunsuzluğa Dönüştür** düğmesiyle tek adımda Kalite modülündeki bir uygunsuzluk (NCR)
+> kaydına dönüşür — gerçek bir ürün kusuru şikayeti geldiğinde veriyi iki kez girmezsiniz.
+
+### Saha Ziyaretleri
+
+**Fırsatlar** ekranındaki **Ziyaretler** sekmesi, müşteri ziyaretlerinizin kaydını tutar.
+İsteğe bağlı olarak bir fırsatla (opportunity) ilişkilendirebilirsiniz — böylece bir fırsatın
+geçmişinde hangi ziyaretlerin yapıldığı görülebilir.
+
+**Konumu Al** düğmesi tarayıcınızdan konum izni ister; izin verirseniz ziyaretin enlem/boylamı
+kaydedilir. İzin vermezseniz veya ofis içi bir görüşmeyse konum alanı boş kalır — bu bir hata
+değildir, ziyaret yine de kaydedilir.
+
 ---
 
 ## 8. Planlama sorumlusu

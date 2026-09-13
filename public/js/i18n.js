@@ -107,6 +107,27 @@ tr: {
   convertedToSO:"Siparişe dönüştürüldü", noOpportunities:"Bu aşamada fırsat yok",
   oppConvertNeedsCustomer:"Dönüştürmek için önce bir müşteri seçilmeli.",
 
+  // saha ziyaretleri
+  tabVisits:"Ziyaretler", newVisit:"Yeni Ziyaret", visitDate:"Ziyaret tarihi", visitPurpose:"Konu",
+  visitNotes:"Notlar", visitedBy:"Ziyaret eden", followUpDate:"Takip tarihi", visitLocation:"Konum",
+  visitLocationCapture:"Konumu Al", visitLocationCaptured:"Konum alındı", visitLocationDenied:"Konum alınamadı, izin verilmedi",
+  visitLocationNone:"Konum yok", noVisits:"Henüz ziyaret kaydı yok", relatedOpportunity:"İlgili fırsat",
+  confirmDeleteVisit:"Bu ziyaret kaydı silinsin mi?",
+
+  // müşteri destek / ticket
+  navSupport:"Destek", supportTitle:"Müşteri Destek", supportSub:"Talep, şikayet ve sorularınızın takibi",
+  newTicket:"Yeni Talep", ticketNo:"Talep no", ticketSubject:"Konu", ticketDescription:"Açıklama",
+  ticketCategory:"Kategori", ticketPriority:"Öncelik", ticketStatus:"Durum", ticketResolution:"Çözüm",
+  catComplaint:"Şikayet", catQuestion:"Soru", catReturn:"İade", catWarranty:"Garanti", catOther:"Diğer",
+  prioLow:"Düşük", prioNormal:"Normal", prioHigh:"Yüksek", prioUrgent:"Acil",
+  ticketOpen:"Açık", ticketInProgress:"İşlemde", ticketWaitingCustomer:"Müşteri Bekleniyor",
+  ticketResolved:"Çözüldü", ticketClosed:"Kapalı",
+  markResolved:"Çözüldü Olarak İşaretle", closeTicket:"Talebi Kapat", reopenBlocked:"Kapalı talepler yeniden açılamaz",
+  addComment:"Yorum Ekle", comments:"Yorumlar", noComments:"Henüz yorum yok",
+  convertToNcr:"Uygunsuzluğa Dönüştür", convertedToNcr:"Uygunsuzluğa dönüştürüldü",
+  ticketConvertHint:"Yalnızca şikayet kategorisindeki ve müşterisi kayıtlı talepler bir uygunsuzluk (NCR) kaydına dönüştürülebilir.",
+  noTickets:"Henüz talep yok",
+
   // sales
   salesTitle:"Satış", salesSub:"Müşteri, sipariş, sevkiyat ve kârlılık",
   tabCustomers:"Müşteriler", tabSalesOrders:"Satış Siparişleri", tabShipments:"Sevkiyatlar",
@@ -455,6 +476,25 @@ en: {
   advanceStage:"Advance to Next Stage", convertToSO:"Convert to Sales Order",
   convertedToSO:"Converted to order", noOpportunities:"No opportunities in this stage",
   oppConvertNeedsCustomer:"Select a customer before converting.",
+
+  tabVisits:"Visits", newVisit:"New Visit", visitDate:"Visit date", visitPurpose:"Purpose",
+  visitNotes:"Notes", visitedBy:"Visited by", followUpDate:"Follow-up date", visitLocation:"Location",
+  visitLocationCapture:"Capture Location", visitLocationCaptured:"Location captured", visitLocationDenied:"Location unavailable, permission denied",
+  visitLocationNone:"No location", noVisits:"No visits yet", relatedOpportunity:"Related opportunity",
+  confirmDeleteVisit:"Delete this visit record?",
+
+  navSupport:"Support", supportTitle:"Customer Support", supportSub:"Track requests, complaints and questions",
+  newTicket:"New Ticket", ticketNo:"Ticket no", ticketSubject:"Subject", ticketDescription:"Description",
+  ticketCategory:"Category", ticketPriority:"Priority", ticketStatus:"Status", ticketResolution:"Resolution",
+  catComplaint:"Complaint", catQuestion:"Question", catReturn:"Return", catWarranty:"Warranty", catOther:"Other",
+  prioLow:"Low", prioNormal:"Normal", prioHigh:"High", prioUrgent:"Urgent",
+  ticketOpen:"Open", ticketInProgress:"In Progress", ticketWaitingCustomer:"Waiting on Customer",
+  ticketResolved:"Resolved", ticketClosed:"Closed",
+  markResolved:"Mark as Resolved", closeTicket:"Close Ticket", reopenBlocked:"Closed tickets cannot be reopened",
+  addComment:"Add Comment", comments:"Comments", noComments:"No comments yet",
+  convertToNcr:"Convert to NCR", convertedToNcr:"Converted to NCR",
+  ticketConvertHint:"Only complaint-category tickets with a registered customer can convert to a nonconformity (NCR).",
+  noTickets:"No tickets yet",
 
   salesTitle:"Sales", salesSub:"Customers, orders, shipments and profitability",
   tabCustomers:"Customers", tabSalesOrders:"Sales Orders", tabShipments:"Shipments",

@@ -54,6 +54,8 @@ function collectRefs(node, out = []) {
     '/labels/item/{id}/zpl', '/labels/print',
     '/crm/opportunities', '/crm/opportunities/pipeline', '/crm/opportunities/{id}',
     '/crm/opportunities/{id}/stage', '/crm/opportunities/{id}/convert',
+    '/support', '/support/{id}', '/support/{id}/status', '/support/{id}/comments', '/support/{id}/to-ncr',
+    '/visits', '/visits/{id}',
     '/reports/pivot-meta', '/reports/pivot', '/reports/saved', '/reports/saved/{id}'
   ];
   const missing = expectedPaths.filter(p => !spec.paths[p]);

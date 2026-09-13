@@ -22,7 +22,7 @@ const PUBLIC_GLOBALS = {
   ViewDashboard: 'writable', ViewItems: 'writable', ViewLots: 'writable',
   ViewCounts: 'writable', ViewProduction: 'writable', ViewPurchasing: 'writable',
   ViewSales: 'writable', ViewPlanning: 'writable', ViewQuality: 'writable',
-  ViewReports: 'writable', ViewAdmin: 'writable', ViewCrm: 'writable',
+  ViewReports: 'writable', ViewAdmin: 'writable', ViewCrm: 'writable', ViewSupport: 'writable',
   Chart: 'readonly', SwaggerUIBundle: 'readonly', MobileDB: 'readonly'
 };
 

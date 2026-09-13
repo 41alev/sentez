@@ -2,7 +2,7 @@
 const App = (() => {
   const VIEWS = {
     dashboard: ViewDashboard, items: ViewItems, lots: ViewLots, counts: ViewCounts,
-    production: ViewProduction, purchasing: ViewPurchasing, crm: ViewCrm, sales: ViewSales, planning: ViewPlanning,
+    production: ViewProduction, purchasing: ViewPurchasing, crm: ViewCrm, support: ViewSupport, sales: ViewSales, planning: ViewPlanning,
     quality: ViewQuality, reports: ViewReports, admin: ViewAdmin
   };
   let current = null;

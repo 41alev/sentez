@@ -42,6 +42,8 @@
     "test:crm": "node test/crm.js",
     "test:pivot": "node test/pivot.js",
     "test:license": "node test/license.js",
+    "test:support": "node test/support.js",
+    "test:visits": "node test/visits.js",
     "test:e2e-browser": "playwright test",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

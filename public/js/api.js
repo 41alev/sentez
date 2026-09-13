@@ -113,6 +113,22 @@ const Api = (() => {
     setOpportunityStage: (id, d) => req('POST', `/crm/opportunities/${id}/stage`, d),
     convertOpportunity: (id, d) => req('POST', `/crm/opportunities/${id}/convert`, d || {}),
 
+    // saha ziyaretleri
+    visits: (p) => req('GET', '/visits' + qs(p)),
+    visit: (id) => req('GET', '/visits/' + id),
+    createVisit: (d) => req('POST', '/visits', d),
+    updateVisit: (id, d) => req('PUT', '/visits/' + id, d),
+    deleteVisit: (id) => req('DELETE', '/visits/' + id),
+
+    // müşteri destek / ticket
+    tickets: (p) => req('GET', '/support' + qs(p)),
+    ticket: (id) => req('GET', '/support/' + id),
+    createTicket: (d) => req('POST', '/support', d),
+    updateTicket: (id, d) => req('PUT', '/support/' + id, d),
+    setTicketStatus: (id, d) => req('POST', `/support/${id}/status`, d),
+    addTicketComment: (id, d) => req('POST', `/support/${id}/comments`, d),
+    convertTicketToNcr: (id, d) => req('POST', `/support/${id}/to-ncr`, d || {}),
+
     // sales
     customers: (p) => req('GET', '/sales/customers' + qs(p)),
     customer: (id) => req('GET', '/sales/customers/' + id),

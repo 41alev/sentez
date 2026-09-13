@@ -43,7 +43,7 @@ export default function CrmView() {
     const body = document.getElementById('crmBody');
     const actions = document.getElementById('crmActions');
     if (!body || !actions) return;
-    const fns = { pipeline: renderPipeline, list: renderList };
+    const fns = { pipeline: renderPipeline, list: renderList, visits: renderVisits };
     (async () => {
       try { await fns[tab](body, actions); }
       catch (e) { UI.err(e); body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
@@ -119,6 +119,88 @@ export default function CrmView() {
     ], rows)}</div>`;
 
     body.querySelectorAll('[data-open]').forEach(el => el.onclick = () => openOpportunity(el.dataset.open));
+  }
+
+  /* ================= ZİYARETLER ================= */
+  async function renderVisits(body, actions) {
+    const customerFilter = actions.dataset.customer || '';
+    let res;
+    try { res = await Api.visits({ pageSize: 100, customerId: customerFilter || undefined }); } catch (e) { UI.err(e); return; }
+    const rows = res.data || res;
+    const customers = customersRef.current;
+    actions.innerHTML = `
+      ${select('visitCusFilter', [{ v: '', l: t('all') }, ...customers.map(c => ({ v: c.id, l: c.name }))], customerFilter)}
+      ${can('write') ? `<button class="btn btn-primary btn-sm" id="visitNew">${UI.icon(UI.ICONS.plus)}${t('newVisit')}</button>` : ''}`;
+    actions.querySelector('#visitCusFilter').onchange = (e) => { actions.dataset.customer = e.target.value; renderVisits(body, actions); };
+    document.getElementById('visitNew')?.addEventListener('click', () => visitForm());
+
+    body.innerHTML = `<div class="card">${rows.length ? table([
+      { key: 'visitDate', label: t('visitDate'), render: r => dt(r.visitDate) },
+      { key: 'customerName', label: t('customerName'), render: r => `${esc(r.customerName || '')}${r.oppNo ? `<div class="sub-line mono">${esc(r.oppNo)}</div>` : ''}` },
+      { key: 'purpose', label: t('visitPurpose'), render: r => esc(r.purpose || '—') },
+      { key: 'visitedUsername', label: t('visitedBy'), render: r => esc(r.visitedUsername || '—') },
+      { key: 'location', label: t('visitLocation'), render: r => r.latitude != null
+          ? `<span class="badge ok">${UI.icon(UI.ICONS.check)}</span>` : `<span class="sub-line">${t('visitLocationNone')}</span>` },
+      { key: 'followUpDate', label: t('followUpDate'), render: r => r.followUpDate ? dt(r.followUpDate) : '—' },
+      { key: 'actions', label: '', render: r => can('approve')
+          ? `<button class="btn btn-ghost btn-sm" data-del="${esc(r.id)}">${UI.icon(UI.ICONS.x)}</button>` : '' }
+    ], rows) : `<div class="empty" style="padding:36px">${t('noVisits')}</div>`}</div>`;
+
+    body.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+      UI.confirmDialog(t('confirmDeleteVisit'), async () => {
+        try { await Api.deleteVisit(b.dataset.del); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); }
+      });
+    });
+  }
+
+  function visitForm() {
+    const customers = customersRef.current;
+    let coords = null;
+    modal({
+      title: t('newVisit'),
+      body: `
+        <div class="field-row">
+          ${field(t('customerName'), select('visitCus', customers.map(c => ({ v: c.id, l: c.name }))))}
+          ${field(t('visitDate'), input('visitDate', { type: 'date', value: UI.today() }))}
+        </div>
+        ${field(t('visitPurpose'), input('visitPurpose'))}
+        ${field(t('visitNotes'), textarea('visitNotes'))}
+        <div class="field-row">
+          ${field(t('followUpDate'), input('visitFollowUp', { type: 'date' }))}
+          <div class="field">
+            <label>${t('visitLocation')}</label>
+            <div style="display:flex;align-items:center;gap:8px">
+              <button class="btn btn-ghost btn-sm" id="visitGps" type="button">${t('visitLocationCapture')}</button>
+              <span class="sub-line" id="visitGpsStatus">${t('visitLocationNone')}</span>
+            </div>
+          </div>
+        </div>`,
+      footer: `<button class="btn btn-ghost" data-close>${t('cancel')}</button>
+               <button class="btn btn-primary" id="visitGo">${t('save')}</button>`,
+      onOpen: (box) => {
+        box.querySelector('#visitGps').onclick = () => {
+          if (!navigator.geolocation) { box.querySelector('#visitGpsStatus').textContent = t('visitLocationDenied'); return; }
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+              box.querySelector('#visitGpsStatus').textContent = t('visitLocationCaptured');
+            },
+            () => { box.querySelector('#visitGpsStatus').textContent = t('visitLocationDenied'); }
+          );
+        };
+        box.querySelector('#visitGo').onclick = async () => {
+          try {
+            await Api.createVisit({
+              customerId: intVal('visitCus'), visitDate: val('visitDate'),
+              purpose: val('visitPurpose') || undefined, notes: val('visitNotes') || undefined,
+              followUpDate: val('visitFollowUp') || undefined,
+              ...(coords || {})
+            });
+            closeModal(); UI.ok(t('saved')); reload();
+          } catch (e) { UI.err(e); }
+        };
+      }
+    });
   }
 
   /* ================= FORM / OLUŞTURMA ================= */
@@ -273,7 +355,7 @@ export default function CrmView() {
       <div><h2>${t('crmTitle')}</h2><div class="sub">${t('crmSub')}</div></div>
       <div class="topbar-actions" id="crmActions"></div>
     </div>
-    ${UI.tabs([{ k: 'pipeline', l: t('tabPipeline') }, { k: 'list', l: t('tabOpportunities') }], tab, k => setTab(k))}
+    ${UI.tabs([{ k: 'pipeline', l: t('tabPipeline') }, { k: 'list', l: t('tabOpportunities') }, { k: 'visits', l: t('tabVisits') }], tab, k => setTab(k))}
     <div id="crmBody">${loading()}</div>`;
 
   return <div dangerouslySetInnerHTML={{ __html: html }} />;

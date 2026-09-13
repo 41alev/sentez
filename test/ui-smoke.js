@@ -138,7 +138,7 @@ async function until(fn, timeout = 6000, step = 60) {
 
   console.log('\n=== EKRANLAR / VIEWS ===');
   // Every screen must render real content, not stay on the spinner and not go blank.
-  const views = ['dashboard', 'items', 'lots', 'counts', 'production', 'purchasing', 'crm', 'sales', 'planning', 'quality', 'reports', 'admin'];
+  const views = ['dashboard', 'items', 'lots', 'counts', 'production', 'purchasing', 'crm', 'support', 'sales', 'planning', 'quality', 'reports', 'admin'];
   for (const v of views) {
     const before = jsErrors.length;
     go(v);
@@ -153,7 +153,7 @@ async function until(fn, timeout = 6000, step = 60) {
 
   console.log('\n=== SEKMELER / TABS ===');
   // Tabbed modules re-render on click; a broken tab handler leaves the pane empty.
-  for (const [view, count] of [['purchasing', 5], ['crm', 2], ['sales', 6], ['planning', 5], ['quality', 6], ['reports', 10], ['admin', 12]]) {
+  for (const [view, count] of [['purchasing', 5], ['crm', 3], ['sales', 6], ['planning', 5], ['quality', 6], ['reports', 10], ['admin', 12]]) {
     go(view);
     await until(() => doc.getElementById('view-' + view).querySelector('.chip-row'));
     const chips = [...doc.getElementById('view-' + view).querySelectorAll('.chip-row .chip')];

@@ -64,7 +64,7 @@ function buildOpenApiSpec() {
     tags: [
       { name: 'Auth' }, { name: 'Items' }, { name: 'Stock' },
       { name: 'Purchasing' }, { name: 'Sales' }, { name: 'Production' },
-      { name: 'Quality' }, { name: 'CRM' }, { name: 'Reports' },
+      { name: 'Quality' }, { name: 'CRM' }, { name: 'Support' }, { name: 'Visits' }, { name: 'Reports' },
       { name: 'Notifications' }, { name: 'Webhooks' }, { name: 'Labels' }
     ],
     components: {
@@ -402,6 +402,67 @@ function buildOpenApiSpec() {
           type: 'object',
           properties: { opportunity: ref('Opportunity'), salesOrder: { type: 'object', properties: { id: { type: 'string' }, soNo: { type: 'string' } } } }
         },
+        TicketComment: {
+          type: 'object',
+          properties: { id: { type: 'integer' }, userId: { type: 'integer', nullable: true }, username: { type: 'string', nullable: true }, ts: { type: 'integer' }, comment: { type: 'string' } }
+        },
+        Ticket: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' }, ticketNo: { type: 'string' }, customerId: { type: 'integer', nullable: true }, customerName: { type: 'string' },
+            subject: { type: 'string' }, description: { type: 'string', nullable: true },
+            category: { type: 'string', enum: ['complaint', 'question', 'return', 'warranty', 'other'] },
+            priority: { type: 'string', enum: ['low', 'normal', 'high', 'urgent'] },
+            status: { type: 'string', enum: ['open', 'in_progress', 'waiting_customer', 'resolved', 'closed'] },
+            assignedTo: { type: 'integer', nullable: true },
+            relatedOrderId: { type: 'string', nullable: true }, relatedShipmentId: { type: 'string', nullable: true }, relatedLotId: { type: 'string', nullable: true },
+            resolution: { type: 'string', nullable: true },
+            resultingNcrId: { type: 'string', nullable: true, description: 'Dolu ise talep bir uygunsuzluk (NCR) kaydına dönüştürülmüştür' },
+            createdAt: { type: 'integer' }, resolvedAt: { type: 'integer', nullable: true }, closedAt: { type: 'integer', nullable: true },
+            comments: { type: 'array', items: ref('TicketComment') }
+          }
+        },
+        TicketCreate: {
+          type: 'object', required: ['customerName', 'subject'],
+          properties: {
+            customerId: { type: 'integer', description: 'Boş bırakılırsa kayıtlı olmayan bir müşteri için talep açılır' },
+            customerName: { type: 'string' }, subject: { type: 'string' }, description: { type: 'string' },
+            category: { type: 'string', enum: ['complaint', 'question', 'return', 'warranty', 'other'], default: 'question' },
+            priority: { type: 'string', enum: ['low', 'normal', 'high', 'urgent'], default: 'normal' },
+            assignedTo: { type: 'integer' }, relatedOrderId: { type: 'string' }, relatedShipmentId: { type: 'string' }, relatedLotId: { type: 'string' }
+          }
+        },
+        TicketStatusUpdate: {
+          type: 'object', required: ['status'],
+          properties: {
+            status: { type: 'string', enum: ['open', 'in_progress', 'waiting_customer', 'resolved', 'closed'] },
+            resolution: { type: 'string', description: "status='resolved' iken zorunlu (daha önce girilmemişse)" }
+          }
+        },
+        TicketToNcrResult: {
+          type: 'object',
+          properties: { ncrId: { type: 'string' }, ncrNo: { type: 'string' } }
+        },
+        Visit: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' }, customerId: { type: 'integer' }, customerName: { type: 'string', nullable: true },
+            opportunityId: { type: 'string', nullable: true }, oppNo: { type: 'string', nullable: true },
+            visitedBy: { type: 'integer', nullable: true }, visitedUsername: { type: 'string', nullable: true },
+            visitDate: { type: 'string', format: 'date' }, purpose: { type: 'string', nullable: true }, notes: { type: 'string', nullable: true },
+            latitude: { type: 'number', nullable: true }, longitude: { type: 'number', nullable: true },
+            followUpDate: { type: 'string', format: 'date', nullable: true }, createdAt: { type: 'integer' }
+          }
+        },
+        VisitCreate: {
+          type: 'object', required: ['customerId', 'visitDate'],
+          properties: {
+            customerId: { type: 'integer' }, opportunityId: { type: 'string' }, visitDate: { type: 'string', format: 'date' },
+            purpose: { type: 'string' }, notes: { type: 'string' },
+            latitude: { type: 'number', minimum: -90, maximum: 90, description: 'Tarayıcı Geolocation API\'sinden — isteğe bağlı' },
+            longitude: { type: 'number', minimum: -180, maximum: 180 }, followUpDate: { type: 'string', format: 'date' }
+          }
+        },
         PivotMeta: {
           type: 'object',
           description: "GET /reports/pivot-meta çağrısı, mevcut veri kaynağı BAŞINA kendi boyut/ölçü whitelist'ini döner — 'movements' (stok hareketleri), 'sales' (satış kalemleri), 'purchasing' (satın alma kalemleri), 'quality' (muayeneler).",
@@ -686,6 +747,77 @@ function buildOpenApiSpec() {
           parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
           requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { customerId: { type: 'integer', description: 'Fırsatın kendi müşterisi yoksa (yeni aday) zorunlu' } } } } } },
           responses: { 201: jsonResponse('Dönüştürüldü — gerçek bir satış siparişi oluşur', ref('OpportunityConvertResult')), 404: errorResponse, 409: jsonResponse('Yalnızca won VE henüz dönüştürülmemiş fırsatlar dönüştürülebilir', ref('Error')), 422: jsonResponse('Müşteri veya kalem eksik', ref('Error')) }
+        }
+      },
+      '/support': {
+        get: {
+          tags: ['Support'], summary: 'Destek taleplerini listele / List support tickets', security: bearerAuth,
+          parameters: ['status', 'priority', 'assignedTo', 'customerId', 'q'].map(n => ({ name: n, in: 'query', schema: { type: 'string' } })),
+          responses: { 200: jsonResponse('Sayfalanmış liste', envelope('Ticket')) }
+        },
+        post: {
+          tags: ['Support'], summary: 'Yeni destek talebi / Create a support ticket', security: bearerAuth,
+          requestBody: { required: true, content: { 'application/json': { schema: ref('TicketCreate') } } },
+          responses: { 201: jsonResponse('Oluşturuldu', ref('Ticket')), 403: errorResponse, 404: jsonResponse('customerId verildiyse ve müşteri bulunamazsa', ref('Error')), 422: errorResponse }
+        }
+      },
+      '/support/{id}': {
+        get: { tags: ['Support'], summary: 'Talep detayı (yorumlarla birlikte) / Ticket detail with comments', security: bearerAuth, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: jsonResponse('Talep', ref('Ticket')), 404: errorResponse } },
+        put: {
+          tags: ['Support'], summary: 'Talebi güncelle (kapalı değilse) / Update ticket (if not closed)', security: bearerAuth,
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: { content: { 'application/json': { schema: ref('TicketCreate') } } },
+          responses: { 200: jsonResponse('Güncellendi', ref('Ticket')), 404: errorResponse, 409: jsonResponse('Kapalı talep düzenlenemez', ref('Error')) }
+        }
+      },
+      '/support/{id}/status': {
+        post: {
+          tags: ['Support'], summary: 'Durum geçişi / Change status', security: bearerAuth,
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: { required: true, content: { 'application/json': { schema: ref('TicketStatusUpdate') } } },
+          responses: { 200: jsonResponse('Güncellendi', ref('Ticket')), 404: errorResponse, 409: jsonResponse('Kapalı talep yeniden açılamaz', ref('Error')), 422: jsonResponse('resolved için resolution eksik', ref('Error')) }
+        }
+      },
+      '/support/{id}/comments': {
+        post: {
+          tags: ['Support'], summary: 'Yorum ekle / Add a comment', security: bearerAuth,
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['comment'], properties: { comment: { type: 'string' } } } } } },
+          responses: { 201: jsonResponse('Eklendi', ref('TicketComment')), 404: errorResponse }
+        }
+      },
+      '/support/{id}/to-ncr': {
+        post: {
+          tags: ['Support'], summary: 'Şikayeti uygunsuzluğa (NCR) dönüştür / Convert a complaint to a nonconformity', security: bearerAuth,
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { itemId: { type: 'string' }, lotId: { type: 'string' }, severity: { type: 'string', enum: ['minor', 'major', 'critical'], default: 'minor' }, qtyAffected: { type: 'number' } } } } } },
+          responses: { 201: jsonResponse('Dönüştürüldü — gerçek bir NCR kaydı oluşur', ref('TicketToNcrResult')), 404: errorResponse, 409: jsonResponse('Yalnızca şikayet kategorisi VE henüz dönüştürülmemiş talepler dönüştürülebilir', ref('Error')), 422: jsonResponse('Talepte kayıtlı müşteri yok', ref('Error')) }
+        }
+      },
+      '/visits': {
+        get: {
+          tags: ['Visits'], summary: 'Saha ziyaretlerini listele / List field visits', security: bearerAuth,
+          parameters: ['customerId', 'opportunityId', 'visitedBy', 'from', 'to'].map(n => ({ name: n, in: 'query', schema: { type: 'string' } })),
+          responses: { 200: jsonResponse('Sayfalanmış liste', envelope('Visit')) }
+        },
+        post: {
+          tags: ['Visits'], summary: 'Yeni ziyaret kaydı / Log a field visit', security: bearerAuth,
+          requestBody: { required: true, content: { 'application/json': { schema: ref('VisitCreate') } } },
+          responses: { 201: jsonResponse('Oluşturuldu', ref('Visit')), 403: errorResponse, 404: jsonResponse('Müşteri veya fırsat bulunamazsa', ref('Error')), 422: errorResponse }
+        }
+      },
+      '/visits/{id}': {
+        get: { tags: ['Visits'], summary: 'Ziyaret detayı / Visit detail', security: bearerAuth, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: jsonResponse('Ziyaret', ref('Visit')), 404: errorResponse } },
+        put: {
+          tags: ['Visits'], summary: 'Ziyareti güncelle / Update visit', security: bearerAuth,
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: { content: { 'application/json': { schema: ref('VisitCreate') } } },
+          responses: { 200: jsonResponse('Güncellendi', ref('Visit')), 404: errorResponse }
+        },
+        delete: {
+          tags: ['Visits'], summary: 'Ziyaret kaydını sil (yalnızca yönetici) / Delete a visit (manager only)', security: bearerAuth,
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: { 204: { description: 'Silindi' }, 403: errorResponse, 404: errorResponse }
         }
       },
       '/reports/pivot-meta': {

@@ -178,6 +178,8 @@ app.use('/api/labels', require('./routes/labels'));
 app.use('/api/webhooks', require('./routes/webhooks'));
 app.use('/api/docs', require('./routes/docs'));
 app.use('/api/crm', require('./routes/crm'));
+app.use('/api/support', require('./routes/support'));
+app.use('/api/visits', require('./routes/visits'));
 app.use('/api', require('./routes/admin'));   // users, warehouses, settings, fx, rules, audit
 
 // ---------- Health ----------
