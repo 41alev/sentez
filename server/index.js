@@ -146,6 +146,7 @@ app.use('/api/templates', require('./routes/templates'));
 app.use('/api/mobile', require('./routes/mobile'));
 app.use('/api/data-health', require('./routes/data-health'));
 app.use('/api/accounting', require('./routes/accounting'));
+app.use('/api/labels', require('./routes/labels'));
 app.use('/api', require('./routes/admin'));   // users, warehouses, settings, fx, rules, audit
 
 // ---------- Health ----------

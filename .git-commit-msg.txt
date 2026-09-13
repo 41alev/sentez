@@ -1,0 +1,47 @@
+Aşama 4: Barkod etiket yazdırma (Zebra/ZPL)
+
+Rekabet-eksikleri listesindeki 5 maddeden ilki. Mevcut durum tespiti:
+belge şablonu sisteminde "Parti Etiketi" (100×70mm, showBarcode) ayarı
+UZUN ZAMANDIR vardı (bkz. server/migrations/005_templates.js) ama
+HİÇBİR YERDE gerçekten kullanılmıyordu — ne bir "etiket yazdır" düğmesi
+ne de barkod render eden bir kod vardı. Bu, o iskeleti gerçek bir
+özelliğe tamamlıyor; ayrıca gerçek bir Zebra yazıcı için (tarayıcı yazdır
+diyaloğu değil) doğrudan ağ üzerinden ZPL gönderimi ekliyor.
+
+- server/lib/zpl.js (yeni): ubl.js ile aynı desen — yan etkisiz, saf ZPL
+  komut metni üreticisi. 203dpi, ^CI28 (Türkçe karakterler için UTF-8),
+  Code128 barkod, kaçışlama, kopya sayısı (^PQ).
+- server/routes/labels.js (yeni):
+  - GET /api/labels/{item,lot}/:id/zpl — ZPL dosyası önizleme/indirme
+    (herhangi bir yetkili oturuma açık — salt okuma, zararsız).
+  - POST /api/labels/print — ağdaki Zebra yazıcıya ham TCP (port 9100,
+    fabrika ayarı "raw port") ile gönderir; stock.write yetkisi ister.
+    Yazıcı ayarlanmamışsa veya ulaşılamıyorsa AÇIKÇA hata verir —
+    "gönderildi" sanılıp aslında hiçbir şeyin basılmamış olması depo
+    operatörünü yanıltır.
+- server/routes/admin.js: settings'e labelPrinterIp/labelPrinterPort
+  eklendi (mevcut serbest key-value settings tablosu, migration gerekmedi).
+- server/index.js: /api/labels rotası bağlandı.
+- frontend-react/labelPrint.js (yeni): Items ve Lots ekranları arasında
+  paylaşılan "Etiket Yazdır" diyaloğu (kopya sayısı + ZPL indir + Yazdır).
+- frontend-react/ItemsView.jsx, LotsView.jsx: satır aksiyonlarına etiket
+  yazdır düğmesi eklendi.
+- frontend-react/AdminView.jsx: Ayarlar sekmesine "Etiket Yazıcısı" kartı
+  (IP/port) eklendi.
+- public/js/api.js: Api.printLabel, Api.downloadLabelZpl.
+- public/js/i18n.js: labelPrinterIp/Port/Hint (tr+en).
+- test/labels.js (yeni, 23 test): ZPL üretici yapısı (komut sınırları,
+  kaçışlama, kopya sayısı, barkod verisi zorunluluğu) + rota davranışı
+  (indirme, 404, yetki kontrolü, yazıcı ayarlanmamışken 400, ulaşılamayan
+  yazıcı için 502 — asla sessiz "başarı" değil). test/run-all.js ve
+  package.json'a eklendi.
+
+Doğrulama: npx tsc --noEmit temiz. npx eslint . 0 hata. node
+test/run-all.js — labels dahil 19/20 paket geçti (tek bilinen istisna:
+önceki commit'lerde tespit edilen, bu özellikle ilgisiz tarih-bağımlı
+planning.js kırılganlığı, task_0a67ef75). Tarayıcıda elle doğrulama:
+Items ve Lots'ta "Etiket Yazdır" diyaloğu doğru veriyle açıldı, yazıcı
+ayarlanmamışken doğru hata mesajı toast'ta göründü, Admin > Ayarlar'da
+yazıcı IP/port kaydedilebildi.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>

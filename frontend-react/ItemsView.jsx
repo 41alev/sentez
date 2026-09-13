@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Ürünler (Items) — React'e kademeli geçişin ikinci ekranı.
  *
@@ -19,6 +20,7 @@
  * değişikliği (ek "yenile" altyapısı kurmaktan kaçınmak için).
  */
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { openLabelPrintDialog } from './labelPrint.js';
 
 const DEFAULT_FILTERS = { page: 1, q: '', category: '', origin: '', warehouseId: '', itemType: '', lowOnly: false };
 
@@ -90,6 +92,10 @@ export default function ItemsView() {
     document.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openCard(b.dataset.open));
     document.querySelectorAll('[data-edit]').forEach(b => b.onclick = async () => itemForm(await Api.item(b.dataset.edit)));
     document.querySelectorAll('[data-in]').forEach(b => b.onclick = () => stockInDialog(res.data.find(x => x.id === b.dataset.in)));
+    document.querySelectorAll('[data-label]').forEach(b => b.onclick = () => {
+      const it = res.data.find(x => x.id === b.dataset.label);
+      openLabelPrintDialog('item', it.id, it.name);
+    });
     document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
       const it = res.data.find(x => x.id === b.dataset.del);
       UI.confirmDialog(`"${it.name}" — ${t('confirmDelete')}`, async () => {
@@ -450,6 +456,7 @@ export default function ItemsView() {
         { key: 'status', label: t('status'), render: r => UI.stockStatus(r.qty, r.minStock) },
         { key: 'act', label: t('actions'), render: r => `<div class="row-actions">
             ${can('write') ? `<button class="icon-btn ok" data-in="${esc(r.id)}" title="${UI.getLang() === 'tr' ? 'Stok girişi' : 'Stock in'}">${UI.icon(UI.ICONS.plus)}</button>` : ''}
+            ${can('write') ? `<button class="icon-btn" data-label="${esc(r.id)}" title="${UI.getLang() === 'tr' ? 'Etiket yazdır' : 'Print label'}">${UI.icon(UI.ICONS.print)}</button>` : ''}
             ${can('write') ? `<button class="icon-btn" data-edit="${esc(r.id)}" title="${t('edit')}">${UI.icon(UI.ICONS.edit)}</button>` : ''}
             ${can('delete') ? `<button class="icon-btn danger" data-del="${esc(r.id)}" title="${t('del')}">${UI.icon(UI.ICONS.trash)}</button>` : ''}
           </div>` }

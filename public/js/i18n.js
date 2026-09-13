@@ -170,6 +170,8 @@ tr: {
   companyName:"Firma adı", baseCurrency:"Ana para birimi", defaultLaborRate:"Varsayılan işçilik (TL/saat)",
   defaultOverheadPct:"Varsayılan genel gider %", expiryWarningDays:"SKT uyarı süresi (gün)",
   backupNow:"Şimdi Yedek Al", backupHint:"Yedekler sunucudaki data/backups klasörüne kaydedilir.",
+  labelPrinterIp:"Etiket yazıcısı IP", labelPrinterPort:"Port",
+  labelPrinterHint:"Ağdaki Zebra yazıcının IP adresi (ör. 192.168.1.50). Boş bırakılırsa etiketler yalnızca ZPL dosyası olarak indirilebilir.",
 
   warehouseTerminal:"Depo Terminali",
   // veri sağlığı
@@ -481,6 +483,8 @@ en: {
   companyName:"Company name", baseCurrency:"Base currency", defaultLaborRate:"Default labour rate (TRY/h)",
   defaultOverheadPct:"Default overhead %", expiryWarningDays:"Expiry warning window (days)",
   backupNow:"Back Up Now", backupHint:"Backups are written to data/backups on the server.",
+  labelPrinterIp:"Label printer IP", labelPrinterPort:"Port",
+  labelPrinterHint:"IP address of the networked Zebra printer (e.g. 192.168.1.50). Leave blank to only allow downloading the raw ZPL file.",
 
   warehouseTerminal:"Warehouse Terminal",
   // data health

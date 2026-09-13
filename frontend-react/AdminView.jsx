@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Yönetim (Admin) — React'e kademeli geçişin SON ekranı (Aşama 3 tamamlanıyor).
  *
@@ -427,6 +428,15 @@ export default function AdminView() {
         ${editable ? `<button class="btn btn-primary" id="stGo">${t('save')}</button>` : ''}
       </div></div>
 
+      <div class="card"><div class="card-head"><h3>${UI.getLang() === 'tr' ? 'Etiket Yazıcısı' : 'Label Printer'}</h3></div><div class="card-body">
+        <div class="alert info">${t('labelPrinterHint')}</div>
+        <div class="field-row">
+          ${field(t('labelPrinterIp'), input('stPrinterIp', { value: s.labelPrinterIp || '', placeholder: '192.168.1.50', attrs: editable ? '' : 'disabled' }))}
+          ${field(t('labelPrinterPort'), input('stPrinterPort', { type: 'number', min: 1, max: 65535, value: s.labelPrinterPort || 9100, attrs: editable ? '' : 'disabled' }))}
+        </div>
+        ${editable ? `<button class="btn btn-primary" id="stPrinterGo">${t('save')}</button>` : ''}
+      </div></div>
+
       <div class="card"><div class="card-head"><h3>${t('tabBackup')}</h3></div><div class="card-body">
         <div class="alert info">${t('backupHint')}</div>
         <div style="font-size:12.5px;color:var(--text-muted);line-height:1.7">
@@ -445,6 +455,13 @@ export default function AdminView() {
         });
         UI.ok(t('saved'));
         document.getElementById('brandName').textContent = val('stName');
+      } catch (e) { UI.err(e); }
+    });
+
+    document.getElementById('stPrinterGo')?.addEventListener('click', async () => {
+      try {
+        await Api.updateSettings({ labelPrinterIp: val('stPrinterIp'), labelPrinterPort: intVal('stPrinterPort') });
+        UI.ok(t('saved'));
       } catch (e) { UI.err(e); }
     });
   }

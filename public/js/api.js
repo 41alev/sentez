@@ -261,5 +261,18 @@ const Api = (() => {
     setAccountingMappings: (mappings) => req('PUT', '/accounting/mappings', { mappings }),
     accountingExport: (from, to) => req('GET', `/accounting/export${qs({ from, to })}`),
     audit: (p) => req('GET', '/audit' + qs(p)),
+
+    // labels (ZPL)
+    printLabel: (d) => req('POST', '/labels/print', d),
+    /** ZPL dosyasını indirir — yetki başlığı gerektiği için doğrudan <a href> kullanılamaz. */
+    downloadLabelZpl: async (type, id) => {
+      const res = await fetch(`/api/labels/${type}/${id}/zpl`, { headers: { Authorization: 'Bearer ' + getToken() } });
+      if (!res.ok) throw new Error('Etiket indirilemedi / Label download failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `etiket-${id}.zpl`; a.click();
+      URL.revokeObjectURL(url);
+    },
   };
 })();

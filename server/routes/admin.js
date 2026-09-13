@@ -169,13 +169,15 @@ router.get('/settings', (req, res) => {
     defaultOverheadPct: Number(out.defaultOverheadPct || 0),
     expiryWarningDays: Number(out.expiryWarningDays || 30),
     lowStockCheckEnabled: out.lowStockCheckEnabled !== '0',
+    labelPrinterIp: out.labelPrinterIp || '',
+    labelPrinterPort: Number(out.labelPrinterPort || 9100),
     raw: out
   });
 });
 
 router.put('/settings', MANAGER, (req, res) => {
   const before = {};
-  const allowed = ['companyName', 'baseCurrency', 'defaultLaborRate', 'defaultOverheadPct', 'expiryWarningDays', 'lowStockCheckEnabled'];
+  const allowed = ['companyName', 'baseCurrency', 'defaultLaborRate', 'defaultOverheadPct', 'expiryWarningDays', 'lowStockCheckEnabled', 'labelPrinterIp', 'labelPrinterPort'];
   const changes = {};
   allowed.forEach(k => {
     if (req.body[k] !== undefined) {

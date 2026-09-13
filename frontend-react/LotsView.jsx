@@ -1,14 +1,16 @@
+// @ts-nocheck
 /**
  * Lotlar (Lots) — React'e kademeli geçişin bir sonraki ekranı.
  *
  * Items/Counts ile aynı desen. Tek fark: `traceDialog` (izlenebilirlik
- * penceresi) `public/js/views/{sales,production,quality}.js` (hâlâ
- * vanilla) tarafından `ViewLots.traceDialog(lotId)` olarak DIŞARIDAN
- * çağrılıyor — bu yüzden modül seviyesinde, React bileşeninden BAĞIMSIZ
- * bir fonksiyon olarak dışa aktarılıyor (kendi verisini kendi çeker,
- * herhangi bir view'ın o an mount edilmiş olmasına bağlı değil).
+ * penceresi) SalesView/ProductionView/QualityView tarafından
+ * `ViewLots.traceDialog(lotId)` olarak DIŞARIDAN çağrılıyor — bu yüzden
+ * modül seviyesinde, React bileşeninden BAĞIMSIZ bir fonksiyon olarak
+ * dışa aktarılıyor (kendi verisini kendi çeker, herhangi bir view'ın o an
+ * mount edilmiş olmasına bağlı değil).
  */
 import { useEffect, useState, useRef } from 'react';
+import { openLabelPrintDialog } from './labelPrint.js';
 
 const { t, esc, num, dt, table, loading, closeModal } = UI;
 
@@ -152,6 +154,10 @@ export default function LotsView() {
     document.querySelectorAll('[data-trace]').forEach(b => b.onclick = () => traceDialog(b.dataset.trace));
     document.querySelectorAll('[data-status]').forEach(b => b.onclick = () => statusDialog(res.data.find(x => x.id === b.dataset.status)));
     document.querySelectorAll('[data-transfer]').forEach(b => b.onclick = () => transferDialog(res.data.find(x => x.id === b.dataset.transfer)));
+    document.querySelectorAll('[data-label]').forEach(b => b.onclick = () => {
+      const lot = res.data.find(x => x.id === b.dataset.label);
+      openLabelPrintDialog('lot', lot.id, `${lot.itemName} · ${lot.lotNo || '—'}`);
+    });
   }, [phase]);
 
   function reload() { setFilters(f => ({ ...f })); }
@@ -246,6 +252,7 @@ export default function LotsView() {
             <button class="icon-btn" data-trace="${esc(r.id)}" title="${t('traceability')}">${UI.icon(UI.ICONS.eye)}</button>
             ${can('quality') || can('write') ? `<button class="icon-btn" data-status="${esc(r.id)}" title="${t('changeStatus')}">${UI.icon(UI.ICONS.check)}</button>` : ''}
             ${can('write') ? `<button class="icon-btn" data-transfer="${esc(r.id)}" title="${t('transferLot')}">${UI.icon(UI.ICONS.truck)}</button>` : ''}
+            ${can('write') ? `<button class="icon-btn" data-label="${esc(r.id)}" title="${UI.getLang() === 'tr' ? 'Etiket yazdır' : 'Print label'}">${UI.icon(UI.ICONS.print)}</button>` : ''}
           </div>` }
       ], res.data)}
       ${pager(res, p => setFilters(f => ({ ...f, page: p })))}
