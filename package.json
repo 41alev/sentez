@@ -41,6 +41,7 @@
     "test:pwa": "node test/pwa.js",
     "test:crm": "node test/crm.js",
     "test:pivot": "node test/pivot.js",
+    "test:e2e-browser": "playwright test",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },
@@ -67,6 +68,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
     "@types/node": "^22.20.2",
     "@vitejs/plugin-react": "^6.1.1",
     "eslint": "^10.10.0",

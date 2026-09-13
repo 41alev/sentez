@@ -38,8 +38,33 @@ jobs:
       - name: Build frontend (React pilot)
         run: npm run build
 
-      - name: Run full test suite (872 checks, isolated per package)
+      - name: Run full test suite (isolated per package)
         run: npm run test:all
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/AppData/Local/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright browser (Chromium)
+        run: npx playwright install --with-deps chromium
+
+      # Gerçek bir Chromium'a karşı çalışır — jsdom'un YAKALAYAMADIĞI hata
+      # sınıfını kapatır (bkz. Aşama 6: public/css/mobile.css'teki
+      # [hidden]{display:none} eksikliği yalnızca burada ortaya çıkardı).
+      - name: Run real-browser E2E tests (Playwright)
+        run: npm run test:e2e-browser
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.os }}-node${{ matrix.node }}
+          path: playwright-report/
+          retention-days: 14
 
       - name: Audit production dependencies
         run: npm audit --omit=dev

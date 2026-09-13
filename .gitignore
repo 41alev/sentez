@@ -10,3 +10,7 @@ npm-debug.log*
 .DS_Store
 *.zip
 coverage/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
