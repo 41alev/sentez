@@ -39,6 +39,24 @@ process.on('unhandledRejection', (reason) => {
 runMigrations({ silent: false });
 
 /**
+ * JWT_SECRET tanımlanmazsa server/middleware/auth.js sessizce herkesin
+ * bildiği bir varsayılan değere düşer — bu değerle imzalanmış bir token
+ * (dolayısıyla admin dahil her kullanıcı kimliği) GitHub'daki bu kaynak
+ * koduna bakan herkes tarafından sahtelenebilir. Docker Compose kendi
+ * `${JWT_SECRET:?...}` sözdizimiyle bunu zaten zorunlu kılıyor, ama
+ * docs/KURULUM.md'deki elle (Docker'sız) kurulum yolunda hiçbir kod
+ * denetimi yoktu — yalnızca dokümandaki bir uyarıya güveniliyordu.
+ * Üretimde sessizce güvensiz bir varsayılanla açılmak yerine, aynen boş
+ * veritabanı / lisans kontrolündeki gibi açıkça durup yönlendirir.
+ */
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  console.error('\n  JWT_SECRET tanımlı değil — üretimde herkesçe bilinen bir varsayılan anahtarla açılamaz.');
+  console.error('  JWT_SECRET is not set — refusing to start in production with a publicly known default key.\n');
+  console.error('  .env dosyasına uzun, rastgele bir JWT_SECRET ekleyin (bkz. docs/KURULUM.md).\n');
+  process.exit(1);
+}
+
+/**
  * Demo verisi ASLA kendiliğinden yüklenmez.
  *
  * Eskiden boş bir veritabanıyla başlayan her kurulum örnek firmayı, sahte

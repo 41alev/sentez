@@ -11,6 +11,8 @@
  */
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+const { execFileSync, spawn } = require('child_process');
 
 const BASE = process.env.BASE || 'http://localhost:3000';
 let pass = 0, fail = 0, warn = 0;
@@ -260,9 +262,50 @@ async function api(method, p, { token, body, headers = {}, raw } = {}) {
 
   const idx = fs.readFileSync(path.join(__dirname, '..', 'server', 'index.js'), 'utf8');
   ok('JWT sırrı koda gömülü değil', !/JWT_SECRET\s*=\s*['"][^'"]{8,}/.test(idx));
-  const authSrc = fs.readFileSync(path.join(__dirname, '..', 'server', 'middleware', 'auth.js'), 'utf8');
-  soft('varsayılan JWT sırrı üretimde uyarı veriyor',
-    /JWT_SECRET/.test(authSrc), 'ortam değişkeninden okunmalı');
+  // Davranışsal kanıt: statik regex "auth.js JWT_SECRET'ı env'den okuyor mu" diyebilir
+  // ama üretimde varsayılana sessizce düşülüp düşülmediğini KANITLAYAMAZ — gerçekten
+  // ayrı bir sunucu süreci NODE_ENV=production + JWT_SECRET boş ile başlatılıp
+  // reddedildiği doğrulanıyor (bkz. server/index.js'teki startup kontrolü).
+  try {
+    const ROOT = path.join(__dirname, '..');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentez-jwtsecret-'));
+    execFileSync('node', [path.join(ROOT, 'server', 'migrate.js')], {
+      cwd: ROOT, env: { ...process.env, DATA_DIR: dir, DB_PATH: path.join(dir, 'depo-takip.sqlite') }
+    });
+    execFileSync('node', [path.join(ROOT, 'server', 'seed.js')], {
+      cwd: ROOT, env: { ...process.env, DATA_DIR: dir, DB_PATH: path.join(dir, 'depo-takip.sqlite') }
+    });
+    const port = 3900 + Math.floor(Math.random() * 500);
+    const noSecretResult = await new Promise((resolve) => {
+      const env = { ...process.env, DATA_DIR: dir, DB_PATH: path.join(dir, 'depo-takip.sqlite'),
+        BACKUP_DIR: path.join(dir, 'backups'), PORT: String(port), NODE_ENV: 'production', JWT_SECRET: '' };
+      const proc = spawn('node', [path.join(ROOT, 'server', 'index.js')], { cwd: ROOT, env });
+      let output = ''; let settled = false;
+      proc.stdout.on('data', d => output += d); proc.stderr.on('data', d => output += d);
+      proc.on('exit', (code) => { if (!settled) { settled = true; resolve({ crashed: true, code, output }); } });
+      const deadline = Date.now() + 6000;
+      const poll = () => {
+        if (settled) return;
+        fetch(`http://127.0.0.1:${port}/health`).then(r => {
+          if (settled) return;
+          if (r.ok) { settled = true; proc.kill(); resolve({ crashed: false, output }); }
+          else if (Date.now() < deadline) setTimeout(poll, 200);
+          else { settled = true; proc.kill(); resolve({ crashed: true, code: null, output: output + '\n(zaman aşımı)' }); }
+        }).catch(() => {
+          if (settled) return;
+          if (Date.now() < deadline) setTimeout(poll, 200);
+          else { settled = true; proc.kill(); resolve({ crashed: true, code: null, output: output + '\n(zaman aşımı)' }); }
+        });
+      };
+      setTimeout(poll, 300);
+    });
+    ok('JWT_SECRET tanımsızken üretimde sunucu açılmıyor',
+      noSecretResult.crashed === true && noSecretResult.code === 1, noSecretResult.output.slice(-300));
+    fs.rmSync(dir, { recursive: true, force: true });
+  } catch (e) {
+    soft('JWT_SECRET üretim kontrolü çalıştırılamadı', false, e.message);
+  }
+
   const envExample = fs.readFileSync(path.join(__dirname, '..', '.env.example'), 'utf8');
   ok('.env.example gerçek sır içermiyor', /CHANGE-ME|change-me/i.test(envExample));
   const gitignore = fs.readFileSync(path.join(__dirname, '..', '.gitignore'), 'utf8');

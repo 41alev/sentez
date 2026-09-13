@@ -86,7 +86,7 @@ router.post('/change-password', requireAuth, validate(changePwSchema), (req, res
     return res.status(400).json({ error: 'Mevcut şifre hatalı / Current password is incorrect' });
   }
   db.prepare('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?')
-    .run(bcrypt.hashSync(req.body.newPassword, 10), user.id);
+    .run(bcrypt.hashSync(req.body.newPassword, 12), user.id);
   // Force re-login everywhere else after a password change
   db.prepare('UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND jti != ? AND revoked_at IS NULL')
     .run(Date.now(), user.id, req.user.jti);
