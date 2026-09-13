@@ -334,6 +334,16 @@ async function uploadPreview(token, importType, buffer, fileName = 'test.xlsx', 
   const commitMs = Date.now() - t1;
   ok('1000 satır kaydedildi', bigCommit.data.created === 1000, JSON.stringify(bigCommit.data));
   ok('kaydetme makul sürede bitiyor (<20 sn)', commitMs < 20000, `${commitMs} ms`);
+
+  // 50.000 satır üst sınırı: üst sınır olmadan yoğun bir dosya belleği ve
+  // işlem süresini makul olmayan şekilde tüketebilir (DoS riski). Gerçekten
+  // 50.001 satırlık bir dosya üreterek reddedildiğini kanıtlıyoruz — yalnızca
+  // kodu okuyup "olması gerekir" varsaymıyoruz.
+  const tooManyRows = Array.from({ length: 50001 }, (_, i) => [`Aşırı Ürün ${i}`, `TOOMANY-${i}`, 'adet']);
+  const tooManyFile = await makeXlsx(['Ad', 'Kod', 'Birim'], tooManyRows);
+  const tooManyPrev = await uploadPreview(manager, 'items', tooManyFile, '50001-satir.xlsx');
+  ok('50.000 satır üst sınırını aşan dosya reddediliyor (413)', tooManyPrev.status === 413,
+    `got ${tooManyPrev.status} ${JSON.stringify(tooManyPrev.data).slice(0, 160)}`);
   ok('önizleme yalnızca örnek döndürüyor (yanıt şişmiyor)', bigPrev.data.sample.length === 20,
     `${bigPrev.data.sample.length} örnek satır`);
 

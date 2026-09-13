@@ -277,6 +277,23 @@ async function api(method, p, { token, body, headers = {}, raw } = {}) {
     /randomUUID\(\)/.test(docSrc) && /path\.basename/.test(docSrc));
   ok('indirme yolu yükleme klasörüyle sınırlı', /startsWith\(uploadDir\)/.test(docSrc));
 
+  // Yukarıdakiler statik (kaynak kodu regex ile taranıyor) — burada gerçek
+  // bir HTTP isteğiyle davranışı kanıtlıyoruz: istemci ".php" gibi tehlikeli
+  // bir uzantı gönderse bile, diskteki dosya doğrulanmış MIME tipinden
+  // türetilen uzantıyı taşımalı, istemcinin uzantısını değil.
+  const fdUpload = new FormData();
+  fdUpload.append('file', new Blob([Buffer.from('sahte-icerik')], { type: 'image/png' }), 'zararli.php');
+  fdUpload.append('docType', 'other');
+  const uploadRes = await fetch(BASE + '/api/documents', {
+    method: 'POST', headers: { Authorization: `Bearer ${admin}` }, body: fdUpload
+  });
+  const uploaded = await uploadRes.json();
+  ok('tehlikeli uzantılı ama geçerli MIME\'li dosya kabul ediliyor', uploadRes.status === 201, JSON.stringify(uploaded));
+  const uploadDirPath = path.join(__dirname, '..', 'data', 'uploads');
+  const onDisk = fs.readdirSync(uploadDirPath).find(f => fs.statSync(path.join(uploadDirPath, f)).mtimeMs > Date.now() - 10000);
+  ok('diskteki dosya MIME\'den türetilen uzantıyı taşıyor (.png), istemcinin ".php" uzantısını DEĞİL',
+    !!onDisk && onDisk.endsWith('.png') && !onDisk.endsWith('.php'), String(onDisk));
+
   console.log('\n=== ŞİFRE SAKLAMA / PASSWORD STORAGE ===');
   const seedSrc = fs.readFileSync(path.join(__dirname, '..', 'server', 'seed.js'), 'utf8');
   ok('şifreler bcrypt ile saklanıyor', /bcrypt/.test(seedSrc));

@@ -27,11 +27,26 @@ const ALLOWED_MIME = new Set([
   'application/msword', 'application/vnd.ms-excel', 'text/plain', 'text/csv'
 ]);
 
+// Diskteki uzantı istemcinin gönderdiği dosya adından DEĞİL, doğrulanmış
+// (ALLOWED_MIME'den geçmiş) MIME tipinden türetilir. İstemcinin ham
+// "originalname"ine güvenmek, MIME'yi taklit edip uzantıyı .php/.exe gibi
+// bir şeye ayarlamaya çalışan bir isteğe karşı savunma derinliğini kırar —
+// bugün başka bir kontrol (indirme MIME'si DB'den okunuyor) bunu engelliyor
+// olsa da, dosya adı hiçbir zaman güvenilmeyen bir girdiden üretilmemeli.
+const MIME_EXT = {
+  'application/pdf': '.pdf', 'image/png': '.png', 'image/jpeg': '.jpg',
+  'image/webp': '.webp', 'image/gif': '.gif',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/msword': '.doc', 'application/vnd.ms-excel': '.xls',
+  'text/plain': '.txt', 'text/csv': '.csv'
+};
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
     // Never trust the client filename on disk; keep the original only as metadata.
-    const ext = path.extname(file.originalname).slice(0, 10).replace(/[^A-Za-z0-9.]/g, '');
+    const ext = MIME_EXT[file.mimetype] || '';
     cb(null, `${Date.now()}-${require('crypto').randomUUID()}${ext}`);
   }
 });

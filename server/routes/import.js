@@ -18,12 +18,11 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024, files: 1 },
   fileFilter: (req, file, cb) => {
-    const okMime = [
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-excel', 'application/octet-stream'
-    ].includes(file.mimetype);
-    const okExt = /\.(xlsx|xlsm)$/i.test(file.originalname || '');
-    if (!okMime && !okExt) {
+    // MIME tarayıcıdan tarayıcıya güvenilmez şekilde değişir (bazıları .xlsx
+    // için application/octet-stream gönderir) — bu yüzden MIME bir bilgi
+    // notu, gerçek kapı değil. Uzantı ZORUNLU; asıl içerik doğrulaması
+    // ExcelJS'in dosyayı gerçekten açabilmesiyle yapılır (services/import.js).
+    if (!/\.(xlsx|xlsm)$/i.test(file.originalname || '')) {
       return cb(new AppError('Yalnızca .xlsx dosyası yükleyebilirsiniz / Only .xlsx files are accepted', 415));
     }
     cb(null, true);

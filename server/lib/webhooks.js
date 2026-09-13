@@ -137,7 +137,14 @@ function processRetryQueue() {
 let retryTimer = null;
 function startWebhookRetryScheduler() {
   if (retryTimer) return; // testler arka arkaya server başlatıp durdurabiliyor — çift zamanlayıcı kurulmasın
-  retryTimer = setInterval(processRetryQueue, 60000);
+  const tick = () => {
+    // Zamanlayıcı sunucuyu asla çökertmemeli (bkz. services/notifications.js
+    // startScheduler — aynı desen): setInterval içindeki senkron bir hata
+    // (ör. DB kilitliyken atılan bir istisna) yakalanmazsa süreç geneli
+    // uncaughtException ile sonlanırdı.
+    try { processRetryQueue(); } catch (e) { console.error('[webhook-retry] tarama başarısız / scan failed:', e.message); }
+  };
+  retryTimer = setInterval(tick, 60000);
   retryTimer.unref?.(); // açık bir zamanlayıcı process'in kapanmasını engellemesin (testlerde graceful shutdown)
 }
 

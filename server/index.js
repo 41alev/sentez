@@ -16,6 +16,25 @@ const logger = pino({
   transport: process.env.NODE_ENV !== 'production' ? { target: 'pino-pretty', options: { colorize: true } } : undefined
 });
 
+/**
+ * Son çare güvenlik ağı. Express içindeki hatalar zaten merkezi hata
+ * yakalayıcıdan (aşağıda) geçer; bunlar bunun DIŞINDaki hatalardır — bir
+ * arka plan zamanlayıcısında yakalanmamış bir istisna, beklenmeyen bir
+ * reddedilen promise. Node'un kendi tavsiyesi: böyle bir hatadan sonra
+ * süreç tanımsız bir durumda kalır, "devam etmeye çalışmak" yerine açıkça
+ * loglayıp kapanmak ve orkestratörün (Docker'daki `restart: unless-stopped`)
+ * temiz bir şekilde yeniden başlatmasına izin vermek daha güvenlidir.
+ */
+process.on('uncaughtException', (err) => {
+  logger.fatal({ err: err.message, stack: err.stack }, 'yakalanmamış istisna, kapatılıyor / uncaught exception, shutting down');
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  logger.fatal({ err: err.message, stack: err.stack }, 'işlenmemiş promise reddi, kapatılıyor / unhandled rejection, shutting down');
+  process.exit(1);
+});
+
 // Schema is brought up to date before anything serves traffic.
 runMigrations({ silent: false });
 

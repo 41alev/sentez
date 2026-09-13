@@ -375,6 +375,14 @@ async function preview({ buffer, fileName, importType, duplicateMode = 'skip', u
 
   const ws = wb.worksheets[0];
   if (!ws || ws.rowCount < 2) throw new AppError('Sayfa boş veya yalnızca başlık içeriyor / Sheet is empty', 400);
+  // Üst sınır yoksa çok satırlı/yoğun bir dosya belleği ve işlem süresini
+  // makul olmayan şekilde tüketebilir (bkz. dosya boyutu sınırı .xlsx'in
+  // sıkıştırılmış hâli için, bu ise açılmış içerik için bir güvenlik ağı).
+  const MAX_IMPORT_ROWS = 50000;
+  if (ws.rowCount - 1 > MAX_IMPORT_ROWS) {
+    throw new AppError(
+      `Dosya çok fazla satır içeriyor (${ws.rowCount - 1}) / Too many rows — üst sınır ${MAX_IMPORT_ROWS}. Dosyayı bölüp ayrı ayrı yükleyin.`, 413);
+  }
 
   const headerRow = ws.getRow(1);
   const { map, unmatched, missingRequired, headers } = mapColumns(headerRow, schema);
