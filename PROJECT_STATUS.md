@@ -1,5 +1,40 @@
 # PROJECT_STATUS.md
 
+## 2026-09-13 (devam 10) — Müşteri Destek + Saha Ziyaret modülleri (`1361fce`)
+
+"ERP+CRM'i tam kapsıyor mu" sorusuna verdiğim değerlendirmede eksik
+bulunan 5 alandan (muhasebe, İK/bordro, pazarlama, destek/ticket, saha
+ziyaret) kullanıcı yalnızca son ikisini istedi — "bu programda devamlı
+mevzuat takibi ve hukuki/mali sorumluluk istemiyorum" diyerek muhasebe/
+İK/pazarlamayı **kesin olarak reddetti**. İki modül eklendi:
+
+**Müşteri Destek (ticket)** — Kalite modülündeki NCR akışından KASITLI
+olarak ayrı (NCR ürün kusurunun kök nedenini takip eder, ticket müşteri
+iletişimini/çözüm süresini takip eder). Durum makinesi: open →
+in_progress/waiting_customer → resolved (çözüm açıklaması zorunlu) →
+closed (yeniden açılamaz). Şikayet kategorisindeki ve kayıtlı müşterisi
+olan talepler "Uygunsuzluğa Dönüştür" ile tek adımda gerçek bir NCR
+kaydına dönüşür (`ncrs.source='customer'` — şemada zaten vardı).
+
+**Saha Ziyaret Takibi** — CRM/Fırsatlar ekranına üçüncü sekme olarak
+eklendi (ayrı bir üst menü yerine — fırsatlarla doğal ilişkisi
+nedeniyle). Tarayıcı Geolocation API'siyle isteğe bağlı konum yakalama;
+izin reddedilirse ziyaret yine de kaydedilir.
+
+Her iki modül de mevcut CRM (`server/routes/crm.js`) ve Kalite
+(`server/routes/quality.js`) ile AYNI kod desenlerini kullanıyor — yeni
+bir mimari icat edilmedi. OpenAPI şeması da güncellendi (bu oturumun
+başında tam bu tür bir tutarsızlığı — CRM/pivot eklenip OpenAPI'nin
+güncellenmemesi — düzeltmiştim, aynı hatayı tekrarlamamak için).
+
+**Doğrulama:** `test/support.js` (29 test) ve `test/visits.js` (19 test)
+gerçek sunucuya karşı yazıldı; `node test/run-all.js` 27/27 paket geçti.
+Browser panelinde GERÇEK bir talep oluşturuldu → yorum eklendi →
+uygunsuzluğa dönüştürüldü VE Kalite modülünde gerçekten `UYG-2026-002`
+olarak göründüğü doğrulandı; bir saha ziyareti oluşturulup GPS reddi
+senaryosunun ("Konum alınamadı, izin verilmedi") doğru göründüğü de
+tarayıcıda elle doğrulandı — yalnızca API testleriyle değil.
+
 ## 2026-09-13 (devam 9) — "Sadece kod olarak eksik var mı" denetimi (`9ca0101`)
 
 5 maddelik satışa hazırlık turundan sonra kullanıcı "sadece yazılım ve kod
