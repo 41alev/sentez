@@ -22,6 +22,66 @@ function ok(name, cond, extra = '') {
   else { fail++; failures.push(name + (extra ? ` — ${extra}` : '')); console.log(`  ✗ ${name} ${extra}`); }
 }
 
+/**
+ * jsdom, IndexedDB'yi hiçbir zaman uygulamadı (belgelenmiş, bilinen bir
+ * sınırlama) — bu, public/js/mobile-db.js'in gerçek kodunu (mock'lamadan)
+ * jsdom içinde çalıştırabilmek için IndexedDB'nin async sözleşmesinin
+ * (open→onupgradeneeded/onsuccess, transaction→oncomplete, request→onsuccess,
+ * hepsi bir sonraki tick'te) yalnızca mobile-db.js'in kullandığı alt kümesini
+ * taklit eden, bellek-içi minimal bir sahte sürüm.
+ */
+function makeFakeIndexedDB() {
+  const databases = new Map();
+  const soon = (fn) => setTimeout(fn, 0);
+
+  class FakeRequest {
+    constructor() { this.onsuccess = null; this.onerror = null; this.result = undefined; }
+    _succeed(result) { this.result = result; soon(() => this.onsuccess && this.onsuccess({ target: this })); }
+  }
+  class FakeStore {
+    constructor(def) { this.def = def; }
+    add(value) {
+      const req = new FakeRequest();
+      const key = value[this.def.keyPath] ?? (this.def.autoIncrement ? this.def.nextKey++ : undefined);
+      this.def.rows.push({ ...value, [this.def.keyPath]: key });
+      req._succeed(key);
+      return req;
+    }
+    getAll() { const req = new FakeRequest(); req._succeed(this.def.rows.slice()); return req; }
+    clear() { const req = new FakeRequest(); this.def.rows.length = 0; req._succeed(undefined); return req; }
+  }
+  class FakeDB {
+    constructor() {
+      this.stores = new Map();
+      this.objectStoreNames = { contains: (n) => this.stores.has(n) };
+    }
+    createObjectStore(name, opts) {
+      this.stores.set(name, { keyPath: opts.keyPath, autoIncrement: !!opts.autoIncrement, rows: [], nextKey: 1 });
+      return new FakeStore(this.stores.get(name));
+    }
+    transaction(storeName) {
+      const db = this;
+      const tx = { oncomplete: null, onerror: null, objectStore: (n) => new FakeStore(db.stores.get(n)) };
+      soon(() => tx.oncomplete && tx.oncomplete({ target: tx }));
+      return tx;
+    }
+  }
+  return {
+    open(name) {
+      const req = new FakeRequest();
+      soon(() => {
+        const isNew = !databases.has(name);
+        const db = databases.get(name) || new FakeDB();
+        databases.set(name, db);
+        req.result = db;
+        if (isNew && req.onupgradeneeded) req.onupgradeneeded({ target: req });
+        req.onsuccess && req.onsuccess({ target: req });
+      });
+      return req;
+    }
+  };
+}
+
 async function api(method, p, { token, body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -191,17 +251,46 @@ async function api(method, p, { token, body } = {}) {
         w.fetch = (url, opts) => fetch(
           typeof url === 'string' && url.startsWith('/') ? BASE + url : url, opts);
         w.navigator.vibrate = () => true;
+        // Bilerek "çevrimdışı": aşağıdaki senaryo tam da bunu test ediyor —
+        // eski sürümden kalan bekleyen bir işlemle yükseltilip HÂLÂ
+        // bağlantısızken açılan bir terminal. Gerçek olsaydı (onLine=true)
+        // start()'taki arka plan flushQueue(true) bu sahte/geçersiz test
+        // verisini gerçek sunucuya göndermeye çalışıp kuyruğu boşaltırdı —
+        // test o zaman kendi ölçtüğü şeyi bozardı.
+        Object.defineProperty(w.navigator, 'onLine', { value: false, configurable: true });
         w.addEventListener('error', e => errors.push(String(e.error || e.message)));
+        // jsdom IndexedDB'yi hiç uygulamıyor (bilinen, belgelenmiş sınırlama) —
+        // mobile-db.js'in gerçek kodunu (mock'lamadan) çalıştırabilmek için
+        // gerçek IndexedDB'nin async sözleşmesini (open→onupgradeneeded/
+        // onsuccess, transaction→oncomplete, request→onsuccess) taklit eden
+        // minimal, bellek-içi bir sahte sürüm veriyoruz.
+        w.indexedDB = makeFakeIndexedDB();
       }
     });
     const w = dom.window;
-    const script = w.document.createElement('script');
-    script.textContent = fs.readFileSync(path.join(ROOT, 'public', 'js', 'mobile.js'), 'utf8');
-    w.document.body.appendChild(script);
-    w.document.dispatchEvent(new w.Event('DOMContentLoaded'));
+    // Sayfadaki gerçek yükleme sırası: mobile-db.js ÖNCE, mobile.js SONRA.
+    for (const rel of ['js/mobile-db.js', 'js/mobile.js']) {
+      const script = w.document.createElement('script');
+      script.textContent = fs.readFileSync(path.join(ROOT, 'public', rel), 'utf8');
+      w.document.body.appendChild(script);
+    }
+    // Yükseltme senaryosu: eski sürümün localStorage kuyruğunda bekleyen bir
+    // işlem var — DOMContentLoaded'daki migrateLegacyQueue() bunu IndexedDB'ye
+    // taşımalı, kaybetmemeli.
+    w.localStorage.setItem('depoTerminalQueue', JSON.stringify([
+      { clientId: 'q1', type: 'move', itemId: 'x', qty: 2, queuedAt: Date.now() }
+    ]));
+    // jsdom, başlangıç ayrıştırması bittiğinde DOMContentLoaded'ı KENDİSİ de
+    // (asenkron olarak) ateşliyor — burada AYRICA elle dispatchEvent çağırmak
+    // aynı dinleyiciyi iki kez tetikleyip migrateLegacyQueue()'yu iki kez
+    // çalıştırırdı (kuyrukta aynı kaydın iki kopyası — gerçek tarayıcıda asla
+    // olmayan, saf test kurulumu artefaktı). O yüzden yalnızca doğal ateşlemeyi
+    // bekliyoruz.
     await new Promise(r => setTimeout(r, 120));
 
     ok('terminal betiği hatasız yükleniyor', errors.length === 0, errors.slice(0, 2).join(' | '));
+    ok('eski kuyruk IndexedDB\'ye taşındı (localStorage temizlendi)',
+      w.localStorage.getItem('depoTerminalQueue') === null);
     ok('giriş ekranı açılıyor', !!w.document.getElementById('mLogin'));
     ok('tarama çubuğu her ekranda mevcut', !!w.document.getElementById('mScanInput'));
     ok('tarama alanı barkod hedefi olarak işaretli',
@@ -221,11 +310,10 @@ async function api(method, p, { token, body } = {}) {
       /Mal Kabul|Toplama/.test(w.document.getElementById('mMain').textContent),
       w.document.getElementById('mMain').textContent.slice(0, 80));
     ok('giriş sonrası JS hatası yok', errors.length === 0, errors.slice(0, 2).join(' | '));
+    ok('taşınan işlem kuyruk rozetinde görünüyor (kaybolmadı)',
+      w.document.getElementById('mQueue').textContent === '1',
+      w.document.getElementById('mQueue').textContent);
 
-    // Kuyruk: çevrimdışıyken işlem kaybolmamalı
-    w.localStorage.setItem('depoTerminalQueue', JSON.stringify([
-      { clientId: 'q1', type: 'move', itemId: 'x', qty: 2, queuedAt: Date.now() }
-    ]));
     const tiles = [...w.document.querySelectorAll('[data-go]')];
     ok('ana ekranda beş akış var', tiles.length >= 5, `${tiles.length} kutucuk`);
     ok('akışlar doğru isimlendirilmiş',

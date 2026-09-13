@@ -168,6 +168,14 @@ app.get('/health', (req, res) => {
 });
 
 // ---------- Static frontend ----------
+// Service worker script: bazı tarayıcılar `navigator.serviceWorker.register()`
+// sırasında kesin bir JavaScript MIME tipi bekler; express.static'in
+// varsayılan çözümlemesi yerine burada AÇIKÇA belirtiyoruz.
+app.get('/sw.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache'); // yeni sürüm hemen fark edilsin
+  res.sendFile(path.join(__dirname, '..', 'public', 'sw.js'));
+});
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) return next();

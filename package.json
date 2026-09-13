@@ -38,6 +38,7 @@
     "test:labels": "node test/labels.js",
     "test:webhooks": "node test/webhooks.js",
     "test:openapi": "node test/openapi.js",
+    "test:pwa": "node test/pwa.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },

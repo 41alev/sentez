@@ -23,7 +23,7 @@ const PUBLIC_GLOBALS = {
   ViewCounts: 'writable', ViewProduction: 'writable', ViewPurchasing: 'writable',
   ViewSales: 'writable', ViewPlanning: 'writable', ViewQuality: 'writable',
   ViewReports: 'writable', ViewAdmin: 'writable',
-  Chart: 'readonly', SwaggerUIBundle: 'readonly'
+  Chart: 'readonly', SwaggerUIBundle: 'readonly', MobileDB: 'readonly'
 };
 
 module.exports = [
@@ -69,6 +69,21 @@ module.exports = [
       sourceType: 'module',
       parserOptions: { ecmaFeatures: { jsx: true } },
       globals: { ...globals.browser, ...PUBLIC_GLOBALS }
+    },
+    rules: {
+      'no-unused-vars': ['warn', { args: 'none', caughtErrors: 'none' }],
+      'no-empty': ['error', { allowEmptyCatch: true }]
+    }
+  },
+  {
+    // public/sw.js: service worker kendi global kapsamında çalışır
+    // (`self`, `caches`, `clients`) — sayfa DOM'una erişimi yok, bu yüzden
+    // ayrı bir dil ortamı gerekiyor (globals.browser'dan farklı).
+    files: ['public/sw.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'script',
+      globals: { ...globals.serviceworker }
     },
     rules: {
       'no-unused-vars': ['warn', { args: 'none', caughtErrors: 'none' }],

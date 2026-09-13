@@ -29,6 +29,15 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+/* `hidden` özniteliği, aynı öğe için `display` tanımlayan HERHANGİ bir
+   author kuralı karşısında kaybeder (author stylesheet'ler tarayıcının
+   varsayılan [hidden]{display:none} kuralını her zaman ezer — spesifiklik
+   fark etmez). Bu dosyada .m-app/.m-cam/.m-sheet-host gibi birçok öğe hem
+   `hidden` ile açılıp kapanıyor HEM DE kendi display'ini tanımlıyor; bu
+   kural olmadan `hidden=true` olsa bile öğe görünür kalır (ör. kamera
+   kapatıldıktan sonra ekranda takılı kalırdı). */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0; padding: 0; height: 100%;
   background: var(--m-bg); color: var(--m-text);

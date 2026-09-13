@@ -9,7 +9,11 @@
 
    Çevrimdışı kuyruk: depoların kablosuz kapsaması genelde kötüdür. İşlem
    kaybetmek yerine kuyruğa alıp bağlantı gelince göndeririz. Kuyruk
-   localStorage'da durur; uygulama kapansa bile kaybolmaz.
+   IndexedDB'de durur (bkz. mobile-db.js — bu dosyadan ÖNCE yüklenmeli);
+   uygulama kapansa, sekme kapansa hatta cihaz yeniden başlasa bile kaybolmaz.
+   Sayfanın kendisi de bir service worker (sw.js) ile önbelleklenir — açılış
+   anında hiç bağlantı olmasa bile terminal arayüzü yüklenir; yalnızca API
+   verisi gerçek zamanlı kalır (asla önbellekten servis edilmez).
    ============================================================ */
 (() => {
   'use strict';
@@ -50,13 +54,24 @@
     return data;
   }
 
-  /* ============ ÇEVRİMDIŞI KUYRUK ============ */
+  /* ============ ÇEVRİMDIŞI KUYRUK (IndexedDB — bkz. mobile-db.js) ============ */
 
-  const readQueue = () => { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); } catch { return []; } };
-  const writeQueue = (q) => { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); paintQueue(); };
+  /**
+   * Eski sürümün localStorage kuyruğunda bekleyen işlem varsa (yükseltme
+   * anında), bir kerelik olarak IndexedDB'ye taşır. Aksi halde bu işlemler
+   * sessizce kaybolurdu — kullanıcının o an sahada beklettiği gerçek bir
+   * stok/sayım işlemi olabilir.
+   */
+  async function migrateLegacyQueue() {
+    let legacy;
+    try { legacy = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); } catch { legacy = []; }
+    if (!Array.isArray(legacy) || !legacy.length) return;
+    for (const op of legacy) { try { await MobileDB.add(op); } catch { /* bozuk kayıt atlanır */ } }
+    localStorage.removeItem(QUEUE_KEY);
+  }
 
-  function paintQueue() {
-    const q = readQueue();
+  async function paintQueue() {
+    const q = await MobileDB.getAll();
     const el = $('mQueue');
     if (!el) return;
     el.hidden = q.length === 0;
@@ -71,9 +86,8 @@
    */
   async function submit(op) {
     if (!navigator.onLine) {
-      const q = readQueue();
-      q.push({ ...op, clientId: 'c' + Date.now() + Math.random().toString(36).slice(2, 7), queuedAt: Date.now() });
-      writeQueue(q);
+      await MobileDB.add({ ...op, clientId: 'c' + Date.now() + Math.random().toString(36).slice(2, 7), queuedAt: Date.now() });
+      await paintQueue();
       toast('Çevrimdışı — kuyruğa alındı', 'info');
       return { queued: true };
     }
@@ -85,24 +99,23 @@
     } catch (e) {
       // Ağ hatası kuyruğa gider; iş kuralı hatası gitmez — o tekrar denense de geçmez.
       if (e.status && e.status < 500) throw e;
-      const q = readQueue();
-      q.push({ ...op, clientId: 'c' + Date.now(), queuedAt: Date.now() });
-      writeQueue(q);
+      await MobileDB.add({ ...op, clientId: 'c' + Date.now(), queuedAt: Date.now() });
+      await paintQueue();
       toast('Bağlantı yok — kuyruğa alındı', 'info');
       return { queued: true };
     }
   }
 
   async function flushQueue(silent) {
-    const q = readQueue();
+    const q = await MobileDB.getAll();
     if (!q.length || !navigator.onLine || !token) return;
     try {
       const r = await api('POST', '/mobile/sync', { operations: q });
-      const okIds = new Set(r.results.filter(x => x.ok).map(x => x.clientId));
       const failed = r.results.filter(x => !x.ok);
       // Başarısızlar kuyrukta kalmaz: tekrar denense de aynı hatayı verecekler.
       // Kullanıcıya bildirilir ve elle düzeltilir; sessizce birikmeleri daha kötüdür.
-      writeQueue([]);
+      await MobileDB.clear();
+      await paintQueue();
       if (!silent || failed.length) {
         if (failed.length) {
           toast(`${r.succeeded} gönderildi, ${failed.length} başarısız`, 'err');
@@ -120,8 +133,8 @@
     } catch { /* bağlantı yine yok; kuyruk duruyor */ }
   }
 
-  window.addEventListener('online', () => { paintQueue(); flushQueue(true); });
-  window.addEventListener('offline', paintQueue);
+  window.addEventListener('online', async () => { await paintQueue(); flushQueue(true); });
+  window.addEventListener('offline', () => { paintQueue(); });
 
   /* ============ BİLDİRİM VE ALT SAYFA ============ */
 
@@ -289,7 +302,7 @@
     $('mBack').hidden = screen === 'home';
     const main = $('mMain');
     main.innerHTML = '<div class="m-loading"><span class="m-spin"></span></div>';
-    paintQueue();
+    await paintQueue();
     try {
       await SCREENS[screen](main);
     } catch (e) {
@@ -322,7 +335,7 @@
       const t = await api('GET', '/mobile/tasks');
       screenState.tasks = t;
       const c = t.counts_summary;
-      const q = readQueue();
+      const q = await MobileDB.getAll();
 
       main.innerHTML = `
         <div class="m-note">Okuyucuyu her an kullanabilirsiniz — ürün, parti, belge veya raf
@@ -738,7 +751,7 @@
 
     /* ---------- Kuyruk ---------- */
     async queue(main) {
-      const q = readQueue();
+      const q = await MobileDB.getAll();
       main.innerHTML = q.length ? `
         <div class="m-note warn">Bu işlemler henüz sunucuya gönderilmedi.
           Bağlantı geldiğinde otomatik gönderilir.</div>
@@ -758,7 +771,7 @@
           sub: 'Gönderilmemiş işlemler kalıcı olarak kaybolur. Bu geri alınamaz.',
           actions: [
             { label: 'Vazgeç', onClick: closeSheet },
-            { label: 'SİL', kind: 'danger', onClick: () => { writeQueue([]); closeSheet(); render(); } }
+            { label: 'SİL', kind: 'danger', onClick: async () => { await MobileDB.clear(); await paintQueue(); closeSheet(); render(); } }
           ]
         });
       });
@@ -846,7 +859,7 @@
     } catch { logout(); return; }
     $('mLogin').style.display = 'none';
     $('mApp').hidden = false;
-    paintQueue();
+    await paintQueue();
     flushQueue(true);
     go('home', {}, false);
     $('mScanInput').focus();
@@ -854,22 +867,33 @@
 
   /* ============ BAŞLANGIÇ ============ */
 
-  document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('DOMContentLoaded', async () => {
+    if ('serviceWorker' in navigator) {
+      // Terminal sayfasının kendisini önbellekler (bkz. sw.js); kayıt
+      // başarısız olsa bile (ör. eski tarayıcı) uygulama çevrimiçiyken
+      // normal çalışmaya devam eder — çevrimdışı açılış desteklenmez, o kadar.
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+    await migrateLegacyQueue();
+
     initScanner();
     $('mLoginBtn').onclick = login;
     $('mPass').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
     $('mBack').onclick = back;
     $('mCamBtn').onclick = openCamera;
     $('mCamClose').onclick = closeCamera;
-    $('mMenu').onclick = () => sheet({
-      title: user ? user.username : 'Menü',
-      sub: user ? `${user.role} · ${readQueue().length} bekleyen işlem` : '',
-      actions: [
-        { label: 'Bekleyen işlemler', onClick: () => { closeSheet(); go('queue'); } },
-        { label: 'Masaüstü arayüz', onClick: () => { location.href = '/'; } },
-        { label: 'Çıkış', kind: 'danger', onClick: () => { closeSheet(); logout(); } }
-      ]
-    });
+    $('mMenu').onclick = async () => {
+      const qCount = (await MobileDB.getAll()).length;
+      sheet({
+        title: user ? user.username : 'Menü',
+        sub: user ? `${user.role} · ${qCount} bekleyen işlem` : '',
+        actions: [
+          { label: 'Bekleyen işlemler', onClick: () => { closeSheet(); go('queue'); } },
+          { label: 'Masaüstü arayüz', onClick: () => { location.href = '/'; } },
+          { label: 'Çıkış', kind: 'danger', onClick: () => { closeSheet(); logout(); } }
+        ]
+      });
+    };
 
     if (token) start(); else $('mApp').hidden = true;
   });
