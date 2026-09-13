@@ -1075,6 +1075,7 @@ export default function AdminView() {
   async function healthTab(body, actions) {
     actions.innerHTML = `<button class="btn btn-ghost btn-sm" id="dhRun">${UI.icon(UI.ICONS.check)}${t('runCheck')}</button>`;
     const rep = await Api.healthReport();
+    const sys = can('approve') ? await Api.systemInfo().catch(() => null) : null;
 
     const sevBadge = (s2) => {
       const m = { critical: ['crit', t('sevCritical')], warning: ['warn', t('sevWarning')], info: ['info', t('sevInfo')] };
@@ -1095,6 +1096,24 @@ export default function AdminView() {
         ${UI.stat(t('sevWarning'), rep.totals.warningTypes, { kind: rep.totals.warningTypes ? 'warn' : 'ok' })}
         ${UI.stat(UI.getLang() === 'tr' ? 'Toplam bulgu' : 'Total findings', num(rep.totals.totalFindings))}
       </div>
+
+      ${sys ? `<div class="card"><div class="card-head"><h3>${t('sysInfo')}</h3></div><div class="card-body">
+        <div class="stat-row">
+          ${UI.stat(t('sysVersion'), esc(sys.version))}
+          ${UI.stat(t('sysDbSize'), `${(sys.database.sizeBytes / 1024 / 1024).toFixed(1)} MB`)}
+          ${UI.stat(t('sysMigrations'), sys.migrations.pending > 0 ? `${sys.migrations.pending} ${t('sysMigrationsPending')}` : '✓',
+            { kind: sys.migrations.pending > 0 ? 'crit' : 'ok' })}
+          ${UI.stat(t('sysBackupAge'), sys.backups.daysSinceLast == null ? t('sysBackupNever') : `${sys.backups.daysSinceLast} ${t('sysBackupDaysAgo')}`,
+            { kind: sys.backups.daysSinceLast == null || sys.backups.daysSinceLast > 7 ? 'crit' : 'ok' })}
+          ${UI.stat(t('sysLicense'), !sys.license.enforced
+            ? t('sysLicensePerpetual')
+            : sys.license.valid
+              ? (sys.license.daysRemaining == null ? t('sysLicenseUnlimited') : `${sys.license.daysRemaining} ${t('sysLicenseDaysLeft')}`)
+              : t('sysLicenseInvalid'),
+            { kind: sys.license.enforced && !sys.license.valid ? 'crit'
+              : (sys.license.enforced && sys.license.daysRemaining != null && sys.license.daysRemaining < 30 ? 'warn' : 'ok') })}
+        </div>
+      </div></div>` : ''}
 
       ${withFindings.length ? withFindings.map(c => `
         <div class="card">

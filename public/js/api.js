@@ -187,6 +187,7 @@ const Api = (() => {
 
     // data health
     healthReport: (p) => req('GET', '/data-health/report' + qs(p)),
+    systemInfo: () => req('GET', '/data-health/system'),
     healthCheck: (id, p) => req('GET', `/data-health/check/${id}` + qs(p)),
     healthFix: (id) => req('POST', `/data-health/check/${id}/fix`),
     mergePreview: (type, p) => req('GET', `/data-health/merge/${type}/preview` + qs(p)),

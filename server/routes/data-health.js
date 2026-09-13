@@ -5,6 +5,7 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 const { validate, z } = require('../middleware/validate');
 const { AppError, logAudit } = require('../lib/core');
 const health = require('../services/data-health');
+const license = require('../lib/license');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -267,11 +268,16 @@ router.get('/system', MANAGER, (req, res) => {
     return r ? r.value : null;
   };
 
+  const lic = license.currentStatus();
   res.json({
     version: pkg.version,
     nodeVersion: process.version,
     uptimeSec: Math.round(process.uptime()),
     setupCompletedAt: Number(setting('setupCompletedAt')) || null,
+    license: lic.enforced
+      ? { enforced: true, valid: !!lic.valid, licensee: lic.license?.licensee || null,
+          daysRemaining: lic.daysRemaining ?? null, reason: lic.valid ? null : lic.reason }
+      : { enforced: false },
     database: {
       sizeBytes: dbSize,
       tables: db.prepare("SELECT COUNT(*) c FROM sqlite_master WHERE type='table'").get().c,

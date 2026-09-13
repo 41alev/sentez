@@ -41,14 +41,16 @@
     "test:pwa": "node test/pwa.js",
     "test:crm": "node test/crm.js",
     "test:pivot": "node test/pivot.js",
+    "test:license": "node test/license.js",
     "test:e2e-browser": "playwright test",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "license:generate": "node server/scripts/license-generate.js"
   },
   "engines": {
     "node": ">=22"
   },
-  "license": "MIT",
+  "license": "UNLICENSED",
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^13.0.3",

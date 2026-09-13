@@ -14,3 +14,8 @@ test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
+
+# Lisans imzalama ozel anahtari - ASLA commit edilmemeli. Bu dosyayla
+# musteri lisans dosyalari uretilir (bkz. server/scripts/license-generate.js);
+# sizip repoya girerse herkes gecerli lisans uretebilir hale gelir.
+license-signing-key.pem

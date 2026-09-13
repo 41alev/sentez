@@ -32,7 +32,7 @@ const SERVER_SUITES = [
 const STANDALONE_SUITES = ['visual-audit', 'backup-restore', 'email', 'barcode', 'dates'];
 // Kendi izole geçici dizinlerini kullanır (execFileSync ile alt süreç açar),
 // ana data/ klasörüne hiç dokunmaz.
-const CHILD_ISOLATED_SUITES = ['setup-upgrade'];
+const CHILD_ISOLATED_SUITES = ['setup-upgrade', 'license'];
 
 function wipeData() {
   // Windows: az önce durdurulan sunucunun dosya tanıtıcısı bazen bir iki

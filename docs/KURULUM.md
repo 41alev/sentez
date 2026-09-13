@@ -198,6 +198,35 @@ npm run restore -- data/backups/depo-takip-...-pre-upgrade.sqlite
 
 ---
 
+## Lisanslama
+
+Varsayılan satış modeli **ömür boyu lisans**tır — `.env` dosyasında `LICENSE_FILE`
+tanımlanmadığı sürece hiçbir kısıtlama uygulanmaz, sunucu her zamanki gibi açılır.
+Bu, bugün için yapmanız gereken hiçbir şey olmadığı anlamına gelir.
+
+**İleride aylık/yıllık lisansa geçerseniz** (kod değişikliği gerekmez):
+
+```bash
+# 1. Müşteri için imzalı bir lisans dosyası üretin (satıcı makinesinde çalıştırılır)
+npm run license:generate -- --licensee "Örnek Metal Sanayi A.Ş." --expires 2027-12-31
+
+# --expires verilmezse süresiz (ömür boyu) lisans üretilir.
+```
+
+İlk çalıştırmada `license-signing-key.pem` adında bir imzalama anahtarı üretilip
+depo kökünde saklanır (**`.gitignore`'dadır, asla paylaşmayın veya commit etmeyin
+— kaybederseniz o zamana kadar üretilmiş tüm lisansları yeniden üretemezsiniz,
+bu dosyayı ayrıca güvenli bir yere yedekleyin**).
+
+Üretilen `.json` dosyasını müşterinin sunucusuna kopyalayın (ör. `data/license.json`),
+`.env` dosyasına `LICENSE_FILE=data/license.json` satırını ekleyin ve sunucuyu
+yeniden başlatın. Lisans geçersiz veya süresi dolmuşsa sunucu **kasıtlı olarak
+açılmaz** ve nedenini açıkça yazar — tıpkı kurulum yapılmamış boş bir veritabanıyla
+karşılaşıldığında olduğu gibi. Lisans durumu (kalan gün dahil) Yönetim > Veri
+Sağlığı ekranında da görünür.
+
+---
+
 ## Docker ile çalıştırma
 
 ```bash

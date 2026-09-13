@@ -30,6 +30,14 @@ runMigrations({ silent: false });
  * bulunursa sunucu başlamaz ve kurulum scriptine yönlendirir — sessizce
  * çalışmaya başlayıp kimsenin giremediği bir sistem bırakmaktansa açıkça durur.
  */
+/**
+ * Lisans kontrolü — bkz. server/lib/license.js. LICENSE_FILE tanımlı değilse
+ * (bugünkü ömür boyu lisans modeli) hiçbir şey yapmaz. Tanımlıysa ve
+ * geçersiz/süresi dolmuşsa sunucu bilinçli olarak açılmaz — hemen aşağıdaki
+ * "boş veritabanı" kontrolüyle aynı desen.
+ */
+require('./lib/license').checkOnStartup();
+
 const userCount = require('./db').prepare('SELECT COUNT(*) c FROM users').get().c;
 if (userCount === 0) {
   if (process.env.DEMO_DATA === '1') {
