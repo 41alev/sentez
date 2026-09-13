@@ -6,7 +6,7 @@ tr: {
   loginFailed:"Kullanıcı adı veya şifre hatalı.", logout:"Çıkış",
   navDashboard:"Panel", navGroupStock:"Stok", navItems:"Ürünler", navLots:"Partiler / Lotlar",
   navCounts:"Sayım", navGroupOps:"Operasyon", navProduction:"Üretim", navPurchasing:"Satın Alma",
-  navSales:"Satış", navQuality:"Kalite", navGroupAnalysis:"Analiz", navReports:"Raporlar", navAdmin:"Yönetim",
+  navCrm:"Fırsatlar", navSales:"Satış", navQuality:"Kalite", navGroupAnalysis:"Analiz", navReports:"Raporlar", navAdmin:"Yönetim",
   roleAdmin:"Yönetici", roleManager:"Müdür", roleOperator:"Operatör", roleQuality:"Kalite", roleViewer:"Görüntüleyici",
 
   // common
@@ -94,6 +94,18 @@ tr: {
   approvalRequired:"Onay gerekli", approvedBy:"Onaylayan", rejectReason:"Red gerekçesi",
   threeWayMatch:"3'lü eşleştirme", matchOk:"Eşleşti", matchDiscrepancy:"Fark var", matchUnmatched:"Eşleşmedi",
   newInvoice:"Fatura Gir", invoiceNo:"Fatura no", invoiceAmount:"Fatura tutarı", supplierReturn:"Tedarikçiye iade",
+
+  // crm
+  crmTitle:"Fırsatlar", crmSub:"Satış hunisi — fırsattan siparişe",
+  tabPipeline:"Huni", tabOpportunities:"Fırsatlar",
+  newOpportunity:"Yeni Fırsat", oppNo:"Fırsat no", estimatedValue:"Tahmini değer",
+  estimatedCloseDate:"Tahmini kapanış", probability:"Olasılık", assignedTo:"Sorumlu", oppSource:"Kaynak",
+  stageNew:"Yeni", stageContacted:"İletişimde", stageQuoted:"Teklif Verildi", stageWon:"Kazanıldı", stageLost:"Kaybedildi",
+  sourceReferans:"Referans", sourceWeb:"Web", sourceFuar:"Fuar", sourceSogukArama:"Soğuk Arama", sourceDiger:"Diğer",
+  lostReason:"Kaybedilme sebebi", markWon:"Kazanıldı Olarak İşaretle", markLost:"Kaybedildi Olarak İşaretle",
+  advanceStage:"Sonraki Aşamaya İlerlet", convertToSO:"Satış Siparişine Dönüştür",
+  convertedToSO:"Siparişe dönüştürüldü", noOpportunities:"Bu aşamada fırsat yok",
+  oppConvertNeedsCustomer:"Dönüştürmek için önce bir müşteri seçilmeli.",
 
   // sales
   salesTitle:"Satış", salesSub:"Müşteri, sipariş, sevkiyat ve kârlılık",
@@ -338,7 +350,7 @@ en: {
   loginFailed:"Incorrect username or password.", logout:"Sign out",
   navDashboard:"Dashboard", navGroupStock:"Stock", navItems:"Items", navLots:"Lots / Batches",
   navCounts:"Stock Count", navGroupOps:"Operations", navProduction:"Production", navPurchasing:"Purchasing",
-  navSales:"Sales", navQuality:"Quality", navGroupAnalysis:"Analysis", navReports:"Reports", navAdmin:"Admin",
+  navCrm:"Opportunities", navSales:"Sales", navQuality:"Quality", navGroupAnalysis:"Analysis", navReports:"Reports", navAdmin:"Admin",
   roleAdmin:"Admin", roleManager:"Manager", roleOperator:"Operator", roleQuality:"Quality", roleViewer:"Viewer",
 
   save:"Save", cancel:"Cancel", close:"Close", edit:"Edit", del:"Delete", add:"Add", confirm:"Confirm",
@@ -419,6 +431,17 @@ en: {
   approvalRequired:"Approval required", approvedBy:"Approved by", rejectReason:"Rejection reason",
   threeWayMatch:"3-way match", matchOk:"Matched", matchDiscrepancy:"Discrepancy", matchUnmatched:"Unmatched",
   newInvoice:"Enter Invoice", invoiceNo:"Invoice no", invoiceAmount:"Invoice amount", supplierReturn:"Return to supplier",
+
+  crmTitle:"Opportunities", crmSub:"Sales funnel — from lead to order",
+  tabPipeline:"Pipeline", tabOpportunities:"Opportunities",
+  newOpportunity:"New Opportunity", oppNo:"Opportunity no", estimatedValue:"Estimated value",
+  estimatedCloseDate:"Estimated close", probability:"Probability", assignedTo:"Assigned to", oppSource:"Source",
+  stageNew:"New", stageContacted:"Contacted", stageQuoted:"Quoted", stageWon:"Won", stageLost:"Lost",
+  sourceReferans:"Referral", sourceWeb:"Web", sourceFuar:"Trade Show", sourceSogukArama:"Cold Call", sourceDiger:"Other",
+  lostReason:"Lost reason", markWon:"Mark as Won", markLost:"Mark as Lost",
+  advanceStage:"Advance to Next Stage", convertToSO:"Convert to Sales Order",
+  convertedToSO:"Converted to order", noOpportunities:"No opportunities in this stage",
+  oppConvertNeedsCustomer:"Select a customer before converting.",
 
   salesTitle:"Sales", salesSub:"Customers, orders, shipments and profitability",
   tabCustomers:"Customers", tabSalesOrders:"Sales Orders", tabShipments:"Shipments",

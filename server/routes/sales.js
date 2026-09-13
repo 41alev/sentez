@@ -7,6 +7,7 @@ const { AppError, uuid, nextNumber, logAudit, diff, toBase, paginate } = require
 const { companyIdOf } = require('../lib/tenant');
 const stock = require('../services/stock');
 const { dispatchEvent } = require('../lib/webhooks');
+const { createSalesOrder } = require('../services/sales-orders');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -124,40 +125,7 @@ const soSchema = z.object({
 
 router.post('/orders', WRITE, validate(soSchema), (req, res) => {
   const b = req.valid;
-  const result = db.txImmediate(() => {
-    const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(b.customerId);
-    if (!customer) throw new AppError('Müşteri bulunamadı / Customer not found', 404);
-    const date = b.date || new Date().toISOString().slice(0, 10);
-    const rate = require('../lib/core').fxRate(b.currency, date);
-
-    // Credit limit check — a real business will not let an over-limit customer order freely
-    if (customer.credit_limit > 0) {
-      const outstanding = db.prepare(`SELECT COALESCE(SUM(amount * fx_rate),0) t FROM customer_invoices
-        WHERE customer_id = ? AND status = 'issued'`).get(customer.id).t;
-      const orderTotal = b.lines.reduce((s, l) => s + l.qty * l.price, 0) * rate;
-      if (outstanding + orderTotal > customer.credit_limit) {
-        throw new AppError('Müşteri kredi limiti aşılıyor / Customer credit limit exceeded', 400, {
-          creditLimit: customer.credit_limit, outstanding, orderTotal
-        });
-      }
-    }
-
-    const id = uuid();
-    const soNo = nextNumber('sales_order', 'SAT');
-    const totalBase = b.lines.reduce((s, l) => s + l.qty * l.price, 0) * rate;
-    db.prepare(`INSERT INTO sales_orders (id,so_no,customer_id,customer_name,date,promised_date,currency,fx_rate,incoterm,status,total_base,notes,created_by,created_at)
-      VALUES (?,?,?,?,?,?,?,?,?,'open',?,?,?,?)`)
-      .run(id, soNo, customer.id, customer.name, date, b.promisedDate || null, b.currency, rate,
-           b.incoterm || customer.incoterm || null, totalBase, b.notes || null, req.user.id, Date.now());
-
-    const ins = db.prepare('INSERT INTO sales_order_lines (so_id,item_id,item_name,qty,price,currency) VALUES (?,?,?,?,?,?)');
-    b.lines.forEach(l => {
-      const item = db.prepare('SELECT name FROM items WHERE id = ?').get(l.itemId);
-      ins.run(id, l.itemId, item ? item.name : '—', l.qty, l.price, b.currency);
-    });
-    logAudit(req, 'auditSalesOrderAdd', { entityType: 'sales_order', entityId: id, newValue: { soNo, customer: customer.name, totalBase }, detail: soNo });
-    return db.prepare('SELECT * FROM sales_orders WHERE id = ?').get(id);
-  });
+  const result = createSalesOrder(req, b);
   const serialized = serializeSO(result);
   dispatchEvent('sales_order.created', serialized, companyIdOf(req));
   res.status(201).json(serialized);

@@ -20,6 +20,7 @@ import PlanningView from './PlanningView.jsx';
 import PurchasingView from './PurchasingView.jsx';
 import QualityView from './QualityView.jsx';
 import SalesView from './SalesView.jsx';
+import CrmView from './CrmView.jsx';
 import AdminView from './AdminView.jsx';
 
 window.ViewDashboard = mountView(DashboardView);
@@ -35,4 +36,5 @@ window.ViewPlanning = mountView(PlanningView);
 window.ViewPurchasing = mountView(PurchasingView);
 window.ViewQuality = mountView(QualityView);
 window.ViewSales = mountView(SalesView);
+window.ViewCrm = mountView(CrmView);
 window.ViewAdmin = mountView(AdminView);

@@ -23,7 +23,7 @@ const SEND_TIMEOUT_MS = 8000;
 const EVENT_CATALOG = [
   'purchase_order.created', 'purchase_order.approved', 'purchase_order.received',
   'sales_order.created', 'shipment.created', 'shipment.status_changed',
-  'production_order.completed', 'ncr.opened'
+  'production_order.completed', 'ncr.opened', 'opportunity.won'
 ];
 
 function activeSubscribersFor(event, companyId = 1) {

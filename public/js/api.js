@@ -104,6 +104,15 @@ const Api = (() => {
     createSupplierInvoice: (d) => req('POST', '/purchasing/invoices', d),
     createSupplierReturn: (d) => req('POST', '/purchasing/returns', d),
 
+    // crm
+    opportunities: (p) => req('GET', '/crm/opportunities' + qs(p)),
+    opportunity: (id) => req('GET', '/crm/opportunities/' + id),
+    pipeline: () => req('GET', '/crm/opportunities/pipeline'),
+    createOpportunity: (d) => req('POST', '/crm/opportunities', d),
+    updateOpportunity: (id, d) => req('PUT', '/crm/opportunities/' + id, d),
+    setOpportunityStage: (id, d) => req('POST', `/crm/opportunities/${id}/stage`, d),
+    convertOpportunity: (id, d) => req('POST', `/crm/opportunities/${id}/convert`, d || {}),
+
     // sales
     customers: (p) => req('GET', '/sales/customers' + qs(p)),
     customer: (id) => req('GET', '/sales/customers/' + id),
