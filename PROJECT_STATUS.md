@@ -1,5 +1,39 @@
 # PROJECT_STATUS.md
 
+## 2026-09-14 (devam 16) — SRI eklendi + kırık Chart.js sürümü bulundu ve düzeltildi (`99526d8`)
+
+Kullanıcı ısrarla "başka yapabileceğin güvenlik testi kaldı mı" diye
+sormaya devam etti. Bu turda **iki farklı, gerçek sorun** bulundu:
+
+**1. CDN kaynaklarında Subresource Integrity (SRI) yoktu.** `index.html`
+(Chart.js) ve `api-docs.html` (Swagger UI CSS+JS) — CDN'den yüklenen 3
+dosyanın hiçbirinde `integrity` özniteliği yoktu. CDN bir gün tehlikeye
+girerse tarayıcı hiçbir kontrol yapmadan enjekte edilen kodu çalıştırırdı.
+Her üç dosya için gerçek içerik indirilip SHA-384 hash'i hesaplandı,
+`integrity`+`crossorigin` eklendi. Google Fonts linkine bilinçli olarak
+eklenmedi — Google'ın fontlar API'si tarayıcıya göre farklı CSS döndürüyor,
+SRI ile yapısal olarak uyumsuz (Google'ın kendi önerisi).
+
+**2. Bu kontrol sırasında GERÇEK, güvenlikle ilgisiz ama ciddi bir
+fonksiyonel hata ortaya çıktı:** `index.html`'deki Chart.js sürümü
+(**4.4.4**) cdnjs'te **hiç var olmayan bir sürümdü** — gerçek bir istekle
+404 döndüğü doğrulandı (cdnjs'in kendi API'si de bu sürümün hiç
+yayınlanmadığını teyit etti). Bu, panodaki/raporlardaki grafiklerin
+**gerçek tarayıcılarda hiç yüklenmediği** anlamına geliyordu — sessiz bir
+kırılma, hiçbir test bunu yakalamıyordu çünkü mevcut testler CDN
+URL'lerinin gerçekten erişilebilir olduğunu hiç doğrulamıyordu. En yakın
+var olan sürüm olan **4.4.1**'e düzeltildi.
+
+`test/security.js`'e yeni bir "DIŞ KAYNAK BÜTÜNLÜĞÜ" bölümü eklendi:
+her cdnjs referansı için (1) integrity taşıdığı statik olarak, (2) URL'in
+GERÇEKTEN 200 döndüğü CANLI bir istekle doğrulanıyor — tam da bu turda
+bulunan "yanlış sürüm numarası → sessiz 404" sınıfındaki hatayı bir daha
+otomatik yakalayacak şekilde.
+
+**Doğrulama:** `npm run typecheck`/`lint`/`build` temiz. `node
+test/run-all.js` → 28/28 suite geçti (`security.js` kendi içinde 66/66,
+yeni 6 SRI testi dahil).
+
 ## 2026-09-14 (devam 15) — Güvenlik denetiminin son turu: git geçmişi + JWT algoritma sınırlaması (`0174fb4`)
 
 Kullanıcı üçüncü kez "başka yapabileceğin güvenlik testi kaldı mı" diye
