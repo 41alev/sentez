@@ -1,5 +1,97 @@
 # PROJECT_STATUS.md
 
+## 2026-09-13 — Aşama 3 TAMAMLANDI: React'e kademeli geçiş — 10/10 ekran
+
+Kullanıcı, Dashboard + Items pilotunu tarayıcıda gördükten sonra "bence
+herşey yolunda diğer kısımlarıda geçirip tüm proje geçsin" dedi — kalan 8
+ekranın tamamının React'e taşınması için açık onay. Bu oturumda Counts,
+Lots, Production, Reports, Planning, Purchasing, Quality, Sales, Admin
+sırasıyla taşındı. **Artık `public/js/views/` klasörü tamamen kalktı;
+`public/index.html` tek bir script (`/dist/react-views.js`) yüklüyor ve
+bu bundle 10 ekranın tamamını (`window.ViewX`) tanımlıyor.**
+
+**Değişmeyen disiplin (Dashboard/Items'tan devralındı):** iş mantığı
+YENİDEN YAZILMADI — her ekran, `UI.table()/card()/tabs()/modal()` gibi
+mevcut yardımcı fonksiyonları aynen çağıran, aynı HTML'i üreten bir React
+bileşenine dönüştürüldü. Değişen yalnızca dış kabuk: modül-seviyesi
+`let state/tab/...` → `useState`/`useRef`; `render(el)/load(el)` →
+veri-çekme `useEffect`'i + `dangerouslySetInnerHTML` + DOM-bağlama
+`useEffect`'i. Diyaloglar (`UI.modal()`) global bir overlay sistemi
+olduğu için hiçbir ekranda değişmedi.
+
+**Kullanıcıyla netleştirilen mimari karar (Items'ta soruldu, tüm ekranlara
+uygulandı):** filtre/sekme/sayfa durumu artık ekrandan ayrılıp geri
+dönüldüğünde KORUNMUYOR — Dashboard'daki gibi her navigasyonda bileşen
+sıfırdan mount ediliyor (`mountView.jsx`). Bilinçli, kabul edilmiş küçük
+bir davranış değişikliği; ek "yenile sinyali" altyapısı kurmaktan kaçınmak
+için.
+
+**Sekmeli ekranlar için ek desen (Reports'ta ilk kez, sonra tekrarlandı —
+Planning/Purchasing/Quality/Sales/Admin):** dış kabuk (topbar + `UI.tabs()`
++ body/actions konteynerleri) sabit, her sekme kendi verisini çekip bu
+konteynerleri DOĞRUDAN dolduran ayrı bir fonksiyon. `UI.tabs()` kendi
+tıklama bağlamasını kendisi yapıyor (`setTimeout(0)`) ve her çağrıda
+rastgele id ürettiği için React bunu her render'da tazeliyor — vanilla
+sürümün "her `load()` tam yeniden kurar" davranışıyla zaten örtüşüyor.
+Bazı ekranlarda iki tür yenileme var: `reload()` (yalnızca aktif sekmeyi
+yeniden çeker) ve `fullReload()` (paylaşılan ön-koşul veriyi de yeniden
+çeker — Planning'de iş merkezi/vardiya ekle-düzenle-sil sonrası).
+
+**Gerçek bulunan/düzeltilen sorunlar (bu turda):**
+1. **Kamera/zamanlayıcı referans hatası (Items):** `scanStream`/
+   `scanTimer`/`stopWedge` ilk portta düz `let` idi — React bir bileşeni
+   her yeniden render ettiğinde fonksiyon gövdesi baştan çalışır, bu da
+   tarama sırasında bir render olursa kamera referansının sessizce
+   sıfırlanabileceği anlamına gelirdi. `useRef`'e taşınarak düzeltildi.
+2. **`test/barcode.js` regresyonu:** kamera mantığının kaynağını STATİK
+   olarak `public/js/views/items.js`'den okuyordu; dosya silinince ENOENT
+   ile patlıyordu. `run-all.js` özetinde "barcode" satırının sessizce
+   kaybolmasıyla yakalandı; `frontend-react/ItemsView.jsx`'i okuyacak
+   şekilde güncellendi.
+3. **`ViewLots.traceDialog` çapraz-modül bağımlılığı (Lots):** hâlâ
+   vanilla olan sales.js/production.js/quality.js tarafından
+   `ViewLots.traceDialog(lotId)` olarak dışarıdan çağrılıyordu — bu yüzden
+   `LotsView.jsx`'te React bileşeninden bağımsız, modül seviyesinde bir
+   fonksiyon olarak dışa aktarıldı (`main.jsx`: `window.ViewLots = {
+   ...mountView(LotsView), traceDialog }`).
+4. **`test/security.js`'te ölü kod:** artık var olmayan
+   `public/js/views/` dizinini okuyan, zaten hiç kullanılmayan bir satır
+   (eslint'in aylardır işaretlediği) temizlendi.
+
+**Build zinciri:** her ekran eklendiğinde `public/index.html`'den ilgili
+`<script src="/js/views/X.js">` satırı kaldırıldı, `frontend-react/main.jsx`
+`window.ViewX = mountView(XView)` eklendi, `test/ui-smoke.js`'nin
+script-yükleme listesi ve global kontrolü güncellendi, eski dosya silindi.
+Son ekran (Admin) sonrası artık boş kalan `public/js/views/` klasörü de
+kaldırıldı. `README.md`'nin proje yapısı bölümü güncellendi.
+
+**Doğrulama (HER ekran için ayrı ayrı yapıldı, hepsi geçti):**
+`npx tsc --noEmit` temiz, `npx eslint .` 0 hata, `node test/run-all.js`
+19/19 paket (ui-smoke'taki ekrana özel render/diyalog kontrolleri dahil).
+Admin dahil birkaç ekran tarayıcıda elle de doğrulandı (gerçek veri,
+diyalog açılışı).
+
+**Bilinen, İLGİSİZ bir kırılganlık bu turda tekrar tekrar gözlendi ve
+ayrı bir arka plan görevi olarak işaretlendi (task_0a67ef75):**
+`test/planning.js`'deki "planlanan süre vardiya tanımından alındı" testi
+`dstr(-1)` ("dün") kullanıyor; sistem tarihi hafta sonuna denk geldiğinde
+(bu oturumda tarih 2026-09-13'e/Pazar'a döndü) vardiya tanımı o günü
+kapsamadığından `plannedMinutes=0` çıkıyor — bu doğru iş mantığı, testin
+kendisi hafta sonuna dayanıklı yazılmamış. React geçişiyle ilgisi yok.
+
+**Bilinen ortam sınırlaması (koddan değil sandboxtan kaynaklanıyor):**
+grafikler bu tarayıcı korumalı ortamında boş kalıyor çünkü Chart.js dış
+CDN'den (`cdnjs.cloudflare.com`) yükleniyor ve bu ortam dış CDN erişimini
+engelliyor. `UI.chart()`'ın önceden var olan `typeof Chart === 'undefined'`
+koruması devreye giriyor; gerçek bir tarayıcıda sorun yaşanmaz.
+
+**Sırada:** Kullanıcıyla anlaşılan kontrol noktası — React geçişi artık
+tamamlandığına göre, plan dosyasındaki (`C:\Users\ilker\.claude\plans\
+peppy-puzzling-plum.md`) Aşama 4-8 (barkod ZPL, OpenAPI/webhook, PWA,
+CRM, BI) için kullanıcıyla yön teyidi alınacak.
+
+---
+
 ## 2026-09-12 (devam 6) — Rekabet eksiklerini kapatma turu: Aşama 3 (React — Ürünler/Items)
 
 Dashboard pilotu onayının ardından kullanıcı devam kararı verdi. Plan
