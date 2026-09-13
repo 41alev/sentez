@@ -1,5 +1,83 @@
 # PROJECT_STATUS.md
 
+## 2026-09-13 (devam 11) — e-Fatura sıfır-eksik: GİB resmi şema doğrulaması + iade izlenebilirliği (`212aabb`)
+
+Destek/Saha Ziyaret modüllerinden sonra kullanıcı sordu: "e-Fatura ve KVKK
+alanlarını nasıl sıfır eksik olacak şekilde toplayabiliriz". Yaptığım
+ayrımda 7 madde "kapatılabilir" (kod ile tamamen kapatılabilir, entegratör
+hesabı/avukat gerektirmez) olarak işaretlendi; kullanıcı **"kapatılabilir
+olanların tümünü kapatalım eksik kalmasın"** dedi. Bu commit e-Fatura'nın
+3 maddesini kapatıyor (KVKK'nın 4 maddesi henüz YAPILMADI — bkz. Pending).
+
+**Kullanıcıdan açık indirme onayı alındı** ("evet indir") — GİB'in resmi
+e-Belge portalından UBL-TR 1.2.1 şema paketi (`UBL-TR1.2.1_Paketi.zip`)
+indirildi, `xsdrt/` altındaki maindoc+common XSD'leri (19 dosya)
+`server/lib/ubl-schema/`'ya kopyalandı.
+
+**1. Gerçek GİB XSD şemasına karşı doğrulama.** Şimdiye kadar üretilen
+e-Fatura/e-Arşiv/e-İrsaliye XML'i HİÇBİR ZAMAN gerçek devlet şemasına karşı
+doğrulanmamıştı — yalnızca kendi iç alan-bazlı kontrolümüz (`validateInvoiceInput`)
+vardı. `server/lib/ubl-validate.js` (yeni, `libxmljs2` sarmalayıcı) her
+üretilen belgeyi gerçek şemaya karşı doğruluyor; `server/services/einvoice.js`
+artık `assertSchemaValid()` çağırıyor — şemaya uymayan belge ASLA
+üretilmiyor (422 ile net hata). Doğrulama sessizce atlanmıyor: ikili
+kurulu değilse 500 + açık neden döner.
+
+Gerçek şemaya karşı doğrulama, `server/lib/ubl.js`'de daha önce fark
+edilmemiş **7 gerçek yapısal hata** ortaya çıkardı (GİB'in resmi
+`TicariFaturaOrnegi.xml`/`IadeFaturasiOrnegi.xml`/`Irsaliye-Ornek1.xml`
+örnekleriyle karşılaştırılarak, XSD `xsd:sequence` tanımları okunarak
+düzeltildi): eksik `ext:UBLExtensions`, eksik `cac:Signature`, yanlış
+sırada `PricingExchangeRate`, ters `Country` (IdentificationCode/Name)
+sırası, eksik `CitySubdivisionName` (DeliveryAddress), ters
+`ShipmentStage`/`Delivery` sırası, eksik `FamilyName` (DriverPerson).
+Bunlar gerçek dünyada bir entegratör/GİB tarafından reddedilmeye yol
+açabilecek kusurlardı.
+
+**2. İade faturası (İADE) ↔ orijinal fatura izlenebilirliği.** GİB'in
+resmi `IadeFaturasiOrnegi.xml`'i, iade faturasının `cac:BillingReference`
+ile orijinal faturaya (belge no + tarih) referans vermesi gerektiğini
+gösterdi. Migration 015: `customer_invoices.original_invoice_id`.
+`server/routes/sales.js`: `invoiceType==='iade'` iken `originalInvoiceId`
+zorunlu, aynı müşteriye ait olması doğrulanıyor (422/404). `einvoice.js`:
+orijinal faturanın kendi e-Belge kaydından belge no/tarih çekiliyor
+(henüz e-Belge yoksa BillingReference sessizce atlanıyor, hata değil).
+**Bilinçli kapsam kararı:** `frontend-react/SalesView.jsx`'e iade
+faturası oluşturmak için özel bir UI eklenmedi — backend tam kapalı ve
+test edilmiş durumda, UI kapsam dışı bırakıldı (istenirse ayrı bir adımda
+eklenebilir).
+
+**3. 10 yıllık saklama.** Kod incelemesiyle kapatıldı (yeni kod değil):
+e-Belge XML'i `e_documents.xml` sütununda satır içi saklanıyor, hiçbir
+temizleme/silme rotası yok — saklama yapısal olarak zaten sağlanıyor.
+`docs/KURULUM.md`'ye gelecekteki bakımcılar için açık bir uyarı eklendi:
+bu tabloyu etkileyen bir temizleme işi ASLA eklenmemeli.
+
+**Yan konu — `.npmrc` `ignore-scripts=true` çakışması:** bu ayar (önceki
+oturumda better-sqlite3/node-gyp CI hatası için eklenmişti) libxmljs2'nin
+KENDİ native kurulum script'ini de engelliyor. Otomatik lifecycle hook
+yerine `package.json`'a açık `"native:rebuild"` script'i eklendi, CI/
+Dockerfile/docs/KURULUM.md'ye açık bir kurulum adımı olarak eklendi
+(`ignore-scripts`, elle çağrılan `npm run <ad>` script'lerini engellemiyor,
+yalnızca otomatik lifecycle hook'ları).
+
+**Doğrulama:** `npm run typecheck`/`lint`/`build` temiz. `node
+test/run-all.js` → **27/27 paket geçti**. `test/einvoice.js` özelinde
+93/93 (GİB şemasına karşı doğrulama testleri + iade faturası için 7 yeni
+test: eksik orijinal reddi, farklı müşteri reddi, başarılı oluşturma,
+BillingReference doğruluğu, şema geçerliliği). Commit `212aabb`, push
+edildi (`origin/main`).
+
+**Sırada:** KVKK'nın 4 kapatılabilir maddesi henüz YAPILMADI: (1) müşteri/
+kullanıcı için veri anonimleştirme özelliği, (2) "bu kişi hakkında hangi
+veriyi tutuyoruz" dışa aktarım raporu (KVKK m.11), (3) saklama süresi
+arka plan işi, (4) hassas alanlar (TCKN, banka bilgisi) için alan bazlı
+şifreleme.
+
+**Standing constraint (kalıcı, unutulmamalı):** kullanıcı muhasebe/İK-
+bordro/pazarlama modüllerini KESİN OLARAK reddetti — sürekli mevzuat
+takibi ve hukuki/mali sorumluluk istemiyor. Bu proje ömrü boyunca geçerli.
+
 ## 2026-09-13 (devam 10) — Müşteri Destek + Saha Ziyaret modülleri (`1361fce`)
 
 "ERP+CRM'i tam kapsıyor mu" sorusuna verdiğim değerlendirmede eksik
