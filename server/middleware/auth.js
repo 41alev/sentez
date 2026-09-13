@@ -42,7 +42,13 @@ function requireAuth(req, res, next) {
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'Yetkilendirme gerekli / Authentication required' });
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
+    // algorithms: yalnızca imzalarken kullanılanı kabul et. jwt.verify()
+    // bu liste verilmezse gizli anahtarın TÜM HMAC ailesini (HS256/384/512)
+    // token'ın kendi header'ına göre kabul eder — burada gerçek bir istismar
+    // yolu yok (RS256/HS256 "alg confusion" saldırısı bir açık anahtar
+    // gerektirir, bu sistemde hiç yok) ama savunma derinliği için ucuz ve
+    // risksiz bir sertleştirme.
+    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
     // Server-side revocation: signing out or disabling a user kills the token immediately,
     // instead of leaving a stolen token valid until it expires.
     const session = db.prepare('SELECT * FROM sessions WHERE jti = ?').get(payload.jti);
