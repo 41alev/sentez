@@ -22,7 +22,11 @@ export async function traceDialog(lotId) {
   catch (e) { UI.err(e); closeModal(); return; }
 
   const box = document.getElementById('modalBox');
-  const lot = back?.lot || fwd?.lot || {};
+  // server/services/traceability.js DÜZ (flat) bir nesne döner — lotId/itemName/lotNo
+  // hep KÖKTE, hiçbir zaman ".lot" altında değil. `back?.lot` her zaman undefined
+  // olduğu için bu başlık GERÇEKTE HİÇ VERİ GÖSTERMİYORDU (gerçek tarayıcı testinde
+  // bulunan hata) — düzeltme: nesnenin kendisini kullan.
+  const lot = back || fwd || {};
   box.querySelector('.modal-body').innerHTML = `
     <div class="kv-grid">
       <div class="kv"><div class="k">${t('itemName')}</div><div class="v">${esc(lot.itemName || lot.item_name || '—')}</div></div>
@@ -53,50 +57,60 @@ function renderBackward(b) {
       <div class="trace-title">${esc(c.componentName || c.component_name || c.itemName || '—')}
         <span class="mono" style="font-size:11.5px;color:var(--text-faint)"> · ${esc(c.lotNo || c.lot_no || '—')}</span></div>
       <div class="trace-meta">${num(c.qty || c.qty_used || 0)} ${esc(c.unit || '')}${c.supplierName ? ' · ' + esc(c.supplierName) : ''}</div>
-      ${c.children && c.children.length ? c.children.map(ch => `
+      ${c.child ? `
         <div class="trace-node comp" style="margin-top:8px">
-          <div class="trace-title">${esc(ch.componentName || ch.itemName || '—')}
-            <span class="mono" style="font-size:11.5px;color:var(--text-faint)"> · ${esc(ch.lotNo || '—')}</span></div>
-          <div class="trace-meta">${num(ch.qty || 0)}</div>
-        </div>`).join('') : ''}
+          <div class="trace-title">${esc(c.child.itemName || '—')}
+            <span class="mono" style="font-size:11.5px;color:var(--text-faint)"> · ${esc(c.child.lotNo || '—')}</span></div>
+          <div class="trace-meta">${num(c.child.qty || 0)} ${esc(c.child.unit || '')}</div>
+        </div>` : ''}
     </div>`).join('');
 }
 
 function renderForward(f) {
-  const used = f?.usedInProduction || [];
-  const shipped = f?.shipments || f?.shippedIn || [];
+  // server/services/traceability.js traceForward() alan adları: usedIn/shippedTo
+  // (usedInProduction/shipments/shippedIn DEĞİL) — bu ekran hep "kayıt yok"
+  // gösteriyordu, gerçek ileri izlenebilirlik verisi olsa bile.
+  const used = f?.usedIn || [];
+  const shipped = f?.shippedTo || [];
   if (!used.length && !shipped.length) return `<div class="empty" style="padding:18px">${t('noTrace')}</div>`;
   return `
     ${used.map(u => `
       <div class="trace-node">
-        <div class="trace-title">${esc(u.orderNo || u.order_no || '—')} → ${esc(u.producedItem || u.produced_item || '—')}</div>
-        <div class="trace-meta">${num(u.qty || 0)} ${UI.getLang() === 'tr' ? 'tüketildi' : 'consumed'}</div>
+        <div class="trace-title">${esc(u.productionOrderNo || '—')} → ${esc(u.outputItem || '—')}</div>
+        <div class="trace-meta">${num(u.qtyUsed || 0)} ${UI.getLang() === 'tr' ? 'tüketildi' : 'consumed'}</div>
       </div>`).join('')}
     ${shipped.map(s => `
       <div class="trace-node cust">
-        <div class="trace-title">${esc(s.shipmentNo || s.shipment_no || '—')} → ${esc(s.customerName || s.customer_name || s.destination || '—')}</div>
+        <div class="trace-title">${esc(s.shipmentNo || '—')} → ${esc(s.customer || s.destination || '—')}</div>
         <div class="trace-meta">${num(s.qty || 0)} · ${dt(s.date)}</div>
       </div>`).join('')}`;
 }
 
 function renderRecall(r) {
-  const cust = r?.affectedCustomers || [];
-  if (!cust.length) return `<div class="alert ok">${UI.getLang() === 'tr' ? 'Bu parti henüz hiçbir müşteriye sevk edilmemiş.' : 'This lot has not shipped to any customer yet.'}</div>`;
+  // server recallReport() `affectedCustomers`'ı müşteri bazında TOPLAR
+  // ({customer, qty, shipments: [sevkiyatNo,...]}) — tarih/varış noktası
+  // yalnızca DÜZ `r.shipments` listesinde var. Bu tablo eskiden
+  // `affectedCustomers` üzerinden customerName/shipmentNo/date/destination
+  // okumaya çalışıyordu — bunların HİÇBİRİ o nesnede yok, bir gerçek geri
+  // çağırma senaryosunda etkilenen müşteri bilgisi tamamen "—" görünürdü.
+  const shipments = r?.shipments || [];
+  const custCount = (r?.affectedCustomers || []).length;
+  if (!shipments.length) return `<div class="alert ok">${UI.getLang() === 'tr' ? 'Bu parti henüz hiçbir müşteriye sevk edilmemiş.' : 'This lot has not shipped to any customer yet.'}</div>`;
   return `<div class="alert crit">${UI.getLang() === 'tr'
-    ? `Bu parti ${cust.length} sevkiyatta müşteriye ulaşmış. Geri çağırma gerekirse aşağıdaki müşterilerle iletişime geçin.`
-    : `This lot reached customers in ${cust.length} shipment(s). Contact them if a recall is required.`}</div>
+    ? `Bu parti ${custCount} müşteriye, ${shipments.length} sevkiyatla ulaşmış. Geri çağırma gerekirse aşağıdaki müşterilerle iletişime geçin.`
+    : `This lot reached ${custCount} customer(s) in ${shipments.length} shipment(s). Contact them if a recall is required.`}</div>
     ${table([
-      { key: 'customerName', label: UI.getLang() === 'tr' ? 'Müşteri' : 'Customer', render: c => esc(c.customerName || '—') },
+      { key: 'customer', label: UI.getLang() === 'tr' ? 'Müşteri' : 'Customer', render: c => esc(c.customer || c.destination || '—') },
       { key: 'shipmentNo', label: t('shipmentNo'), render: c => `<span class="mono">${esc(c.shipmentNo || '—')}</span>` },
       { key: 'qty', label: t('qty'), num: true, render: c => num(c.qty) },
       { key: 'date', label: t('date'), render: c => dt(c.date) },
       { key: 'destination', label: t('destination'), render: c => esc(c.destination || '—') }
-    ], cust)}`;
+    ], shipments)}`;
 }
 
 function printTrace(lot, back, fwd, recall) {
   const comps = back?.components || back?.consumedLots || [];
-  const cust = recall?.affectedCustomers || [];
+  const shipments = recall?.shipments || [];
   UI.printDoc('traceability', UI.getLang() === 'tr' ? 'İZLENEBİLİRLİK RAPORU' : 'TRACEABILITY REPORT', `
     <div class="g">
       <div><b>${t('itemName')}:</b> ${esc(lot.itemName || lot.item_name || '')}</div>
@@ -106,10 +120,10 @@ function printTrace(lot, back, fwd, recall) {
     </div>
     <h4>${t('traceBackward')}</h4>
     <table><tr><th>${t('bomComponent')}</th><th>${t('lotNo')}</th><th class="r">${t('qty')}</th></tr>
-    ${comps.map(c => `<tr><td>${esc(c.componentName || c.component_name || '')}</td><td>${esc(c.lotNo || c.lot_no || '')}</td><td class="r">${num(c.qty || c.qty_used || 0)}</td></tr>`).join('') || '<tr><td colspan="3">—</td></tr>'}</table>
+    ${comps.map(c => `<tr><td>${esc(c.componentName || c.component_name || c.itemName || '')}</td><td>${esc(c.lotNo || c.lot_no || '')}</td><td class="r">${num(c.qty || c.qty_used || 0)}</td></tr>`).join('') || '<tr><td colspan="3">—</td></tr>'}</table>
     <h4>${t('affectedCustomers')}</h4>
     <table><tr><th>${UI.getLang() === 'tr' ? 'Müşteri' : 'Customer'}</th><th>${t('shipmentNo')}</th><th>${t('date')}</th><th class="r">${t('qty')}</th></tr>
-    ${cust.map(c => `<tr><td>${esc(c.customerName || '')}</td><td>${esc(c.shipmentNo || '')}</td><td>${dt(c.date)}</td><td class="r">${num(c.qty)}</td></tr>`).join('') || '<tr><td colspan="4">—</td></tr>'}</table>`);
+    ${shipments.map(c => `<tr><td>${esc(c.customer || '')}</td><td>${esc(c.shipmentNo || '')}</td><td>${dt(c.date)}</td><td class="r">${num(c.qty)}</td></tr>`).join('') || '<tr><td colspan="4">—</td></tr>'}</table>`);
 }
 
 /* ---------- liste ekranı ---------- */
