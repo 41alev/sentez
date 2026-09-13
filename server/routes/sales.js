@@ -289,6 +289,9 @@ const invoiceSchema = z.object({
   amount: z.coerce.number().min(0).optional(),
   currency: z.enum(['TRY', 'USD', 'EUR']).default('TRY'),
   invoiceType: z.enum(['satis', 'iade', 'tevkifat', 'istisna', 'ihrackayitli']).default('satis'),
+  // GİB'in iade faturası için beklediği BillingReference bağlantısı için —
+  // 'iade' seçildiğinde zorunludur (bkz. aşağıdaki kontrol).
+  originalInvoiceId: z.string().max(1000).optional(),
   // Kalemler e-Belge için zorunludur; verilmezse siparişin sevk edilen satırlarından türetilir.
   lines: z.array(z.object({
     itemId: z.string().max(1000).optional(),
@@ -307,6 +310,16 @@ router.post('/invoices', WRITE, validate(invoiceSchema), (req, res) => {
   const result = db.tx(() => {
     const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(b.customerId);
     if (!customer) throw new AppError('Müşteri bulunamadı / Customer not found', 404);
+
+    // İade faturası GİB'in BillingReference'ı için hangi faturanın iade
+    // edildiğini bilmek zorunda — bkz. server/migrations/015_invoice_return_reference.js.
+    if (b.invoiceType === 'iade') {
+      if (!b.originalInvoiceId) throw new AppError('İade faturası için orijinal fatura seçilmeli / An original invoice is required for a return invoice', 422, { hint: 'originalInvoiceId' });
+      const original = db.prepare('SELECT id, customer_id FROM customer_invoices WHERE id = ?').get(b.originalInvoiceId);
+      if (!original) throw new AppError('Orijinal fatura bulunamadı / Original invoice not found', 404);
+      if (original.customer_id !== b.customerId) throw new AppError('Orijinal fatura başka bir müşteriye ait / Original invoice belongs to a different customer', 422);
+    }
+
     const date = b.invoiceDate || new Date().toISOString().slice(0, 10);
     const rate = require('../lib/core').fxRate(b.currency, date);
     const due = new Date(date); due.setDate(due.getDate() + (customer.payment_terms_days || 0));
@@ -345,10 +358,10 @@ router.post('/invoices', WRITE, validate(invoiceSchema), (req, res) => {
     const id = uuid();
     const invoiceNo = nextNumber('customer_invoice', 'FAT');
     db.prepare(`INSERT INTO customer_invoices (id,invoice_no,customer_id,so_id,shipment_id,invoice_date,due_date,
-        amount,currency,fx_rate,status,invoice_type,subtotal,vat_total,discount_total,created_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,'issued',?,?,?,?,?)`)
+        amount,currency,fx_rate,status,invoice_type,original_invoice_id,subtotal,vat_total,discount_total,created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,'issued',?,?,?,?,?,?)`)
       .run(id, invoiceNo, customer.id, b.soId || null, b.shipmentId || null, date, due.toISOString().slice(0, 10),
-           amount, b.currency, rate, b.invoiceType || 'satis',
+           amount, b.currency, rate, b.invoiceType || 'satis', b.originalInvoiceId || null,
            Number(subtotal.toFixed(2)), Number(vatTotal.toFixed(2)), Number(discountTotal.toFixed(2)), Date.now());
 
     const insLine = db.prepare(`INSERT INTO customer_invoice_lines
@@ -377,7 +390,7 @@ router.get('/invoices/:id', (req, res) => {
   res.json({
     id: inv.id, invoiceNo: inv.invoice_no, customerId: inv.customer_id, customerName: inv.customer_name,
     invoiceDate: inv.invoice_date, dueDate: inv.due_date, amount: inv.amount, currency: inv.currency,
-    fxRate: inv.fx_rate, status: inv.status, invoiceType: inv.invoice_type,
+    fxRate: inv.fx_rate, status: inv.status, invoiceType: inv.invoice_type, originalInvoiceId: inv.original_invoice_id,
     subtotal: inv.subtotal, vatTotal: inv.vat_total, discountTotal: inv.discount_total,
     soId: inv.so_id, shipmentId: inv.shipment_id,
     lines: lines.map(l => ({

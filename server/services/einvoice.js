@@ -14,6 +14,26 @@ const fs = require('fs');
 const path = require('path');
 const db = require('../db');
 const ubl = require('../lib/ubl');
+const ublValidate = require('../lib/ubl-validate');
+
+/**
+ * Üretilen XML'i GİB'in resmi XSD şemasına karşı doğrular. `validateInvoiceInput`
+ * (ubl.js) yalnızca ALAN bazlı iş kurallarını kontrol eder — bu, XML'in
+ * gerçekten GİB'in beklediği YAPIYA uyduğunu kanıtlar (eleman sırası, zorunlu
+ * alanlar). Şema doğrulaması ATLANDIYSA (libxmljs2 ikili dosyası kurulu değil)
+ * sessizce devam ETMEZ — "doğrulanmadı" ile "doğrulandı ve geçti" birbirine
+ * karıştırılmamalı, ikisi de canlıda çok farklı risk taşır.
+ */
+function assertSchemaValid(xml) {
+  const result = ublValidate.validateXml(xml);
+  if (result.skipped) {
+    throw new AppError(`e-Belge şema doğrulaması yapılamadı / Schema validation unavailable: ${result.reason}`, 500);
+  }
+  if (!result.valid) {
+    throw new AppError('e-Belge GİB şemasına uymuyor / Document does not conform to the official GİB schema', 422,
+      { details: result.errors.map(e => ({ field: 'schema', message: e })) });
+  }
+}
 const { AppError, uuid, getSetting } = require('../lib/core');
 const { toLocalDateStr } = require('../lib/dates');
 
@@ -267,6 +287,21 @@ function buildFromInvoice(invoiceId, { userId } = {}) {
 
   const docType = cust.is_einvoice_user ? 'einvoice' : 'earchive';
   const now = new Date();
+
+  // İade faturası (IADE) GİB'in BillingReference'ı için orijinal faturanın
+  // KENDİ e-Belgesinin belge no + tarihini ister (bkz. migration
+  // 015_invoice_return_reference.js, ubl.js buildInvoice). Orijinal fatura
+  // için e-Belge hiç üretilmemişse (ör. yerel/kağıt süreçten geleneksel
+  // faturaysa) sessizce atlanır — BillingReference eklenemez, ama iade
+  // faturasının kendisi yine de üretilir.
+  let originalInvoiceNo = null, originalInvoiceDate = null;
+  if (inv.invoice_type === 'iade' && inv.original_invoice_id) {
+    const originalDoc = db.prepare(`SELECT document_no, issue_date FROM e_documents
+      WHERE source_type = 'customer_invoice' AND source_id = ? AND status NOT IN ('cancelled','error')
+      ORDER BY created_at DESC LIMIT 1`).get(inv.original_invoice_id);
+    if (originalDoc) { originalInvoiceNo = originalDoc.document_no; originalInvoiceDate = originalDoc.issue_date; }
+  }
+
   const payload = {
     docType,
     ettn: ubl.newEttn(),
@@ -280,13 +315,15 @@ function buildFromInvoice(invoiceId, { userId } = {}) {
     currency: inv.currency || 'TRY',
     exchangeRate: inv.fx_rate || 1,
     orderReference: inv.so_id ? (db.prepare('SELECT so_no FROM sales_orders WHERE id = ?').get(inv.so_id) || {}).so_no : null,
-    despatchReference: inv.shipment_id ? (db.prepare('SELECT shipment_no FROM shipments WHERE id = ?').get(inv.shipment_id) || {}).shipment_no : null
+    despatchReference: inv.shipment_id ? (db.prepare('SELECT shipment_no FROM shipments WHERE id = ?').get(inv.shipment_id) || {}).shipment_no : null,
+    originalInvoiceNo, originalInvoiceDate
   };
 
   const errors = ubl.validateInvoiceInput(payload);
   if (errors.length) throw new AppError('e-Belge doğrulama hatası / Validation failed', 422, { details: errors.map(e => ({ field: 'einvoice', message: e })) });
 
   const xml = ubl.buildInvoice(payload);
+  assertSchemaValid(xml);
   const subtotal = lines.reduce((s, l) => s + Number(l.lineTotal), 0);
   const vatTotal = lines.reduce((s, l) => s + Number(l.vatAmount), 0);
 
@@ -347,6 +384,7 @@ function buildFromShipment(shipmentId, { userId, plateNo, driverName } = {}) {
   };
 
   const xml = ubl.buildDespatchAdvice(payload);
+  assertSchemaValid(xml);
   const id = uuid();
   db.prepare(`INSERT INTO e_documents (id,doc_type,ettn,document_no,issue_date,issue_time,source_type,source_id,
       customer_id,receiver_alias,profile_id,currency,xml,xml_hash,status,created_by,created_at)

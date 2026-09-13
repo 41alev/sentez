@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server/index.js",
     "demo": "node server/scripts/demo.js",
+    "native:rebuild": "npm run install --prefix node_modules/libxmljs2",
     "build": "vite build",
     "build:watch": "vite build --watch",
     "migrate": "node server/migrate.js",
@@ -62,6 +63,7 @@
     "express": "^5.1.0",
     "express-rate-limit": "^7.4.1",
     "jsonwebtoken": "^9.0.2",
+    "libxmljs2": "^0.37.0",
     "multer": "^2.3.0",
     "nodemailer": "^10.0.3",
     "pino": "^9.5.0",

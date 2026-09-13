@@ -17,6 +17,7 @@
  *   node test/einvoice.js
  */
 const http = require('http');
+const ublValidate = require('../server/lib/ubl-validate');
 const BASE = process.env.BASE || 'http://localhost:3000';
 let pass = 0, fail = 0;
 const failures = [];
@@ -128,6 +129,18 @@ async function api(method, path, { token, body } = {}) {
   ok('satır indirimi işaretlenmiş', xml.includes('<cbc:ChargeIndicator>false</cbc:ChargeIndicator>'));
   ok('XML kaçışı yapılmış (& < > yok)', !/&(?!amp;|lt;|gt;|quot;|apos;|#)/.test(xml));
 
+  console.log('\n=== GİB RESMİ ŞEMASINA KARŞI DOĞRULAMA ===');
+  // Bu, ubl.js'in KENDİ iç tutarlılık kontrolünden TAMAMEN farklı bir şey
+  // kanıtlıyor: üretilen XML'in GİB'in GERÇEK, resmi XSD şemasına (ekbelge.
+  // gib.gov.tr'den indirilen UBL-TR1.2.1 paketi) uyduğunu — eleman sırası
+  // dahil. Bu test yazılırken ubl.js'te 6 gerçek yapısal hata bulunup
+  // düzeltildi (eksik zorunlu Signature/UBLExtensions, yanlış sıralı
+  // PricingExchangeRate/Country/ShipmentStage, eksik DriverPerson.FamilyName)
+  // — bkz. PROJECT_STATUS.md.
+  const invoiceValidation = ublValidate.validateXml(xml);
+  ok('üretilen e-Fatura GİB\'in resmi UBL-Invoice-2.1.xsd şemasına uyuyor',
+    invoiceValidation.valid, JSON.stringify(invoiceValidation.errors || invoiceValidation.reason));
+
   console.log('\n=== e-ARŞİV AYRIMI ===');
   const inv2 = await api('POST', '/api/sales/invoices', {
     token: operator,
@@ -141,6 +154,61 @@ async function api(method, path, { token, body } = {}) {
   ok('e-Fatura ve e-Arşiv farklı seri kullanıyor',
     doc.documentNo.slice(0, 3) !== gen2.data.documentNo.slice(0, 3),
     `${doc.documentNo.slice(0, 3)} / ${gen2.data.documentNo.slice(0, 3)}`);
+
+  console.log('\n=== İADE FATURASI / RETURN INVOICE ===');
+  // GİB'in resmi örnek paketindeki IadeFaturasiOrnegi.xml, bir iade
+  // faturasının orijinal faturaya cac:BillingReference ile bağlandığını
+  // gösteriyor — bu özellik bu oturumda eklendi (bkz. migration
+  // 015_invoice_return_reference.js).
+  const originalInv = await api('POST', '/api/sales/invoices', {
+    token: operator, body: { customerId: anadolu.id, currency: 'TRY', lines: [{ itemName: 'İade Edilecek Ürün', qty: 1, unitPrice: 500, vatRate: 20 }] }
+  });
+  const missingOriginal = await api('POST', '/api/sales/invoices', {
+    token: operator, body: { customerId: anadolu.id, currency: 'TRY', invoiceType: 'iade', lines: [{ itemName: 'X', qty: 1, unitPrice: 10, vatRate: 20 }] }
+  });
+  ok('iade faturası orijinal fatura olmadan reddediliyor (422)', missingOriginal.status === 422, `got ${missingOriginal.status}`);
+
+  const wrongCustomerReturn = await api('POST', '/api/sales/invoices', {
+    token: operator, body: {
+      customerId: ege.id, currency: 'TRY', invoiceType: 'iade', originalInvoiceId: originalInv.data.id,
+      lines: [{ itemName: 'X', qty: 1, unitPrice: 10, vatRate: 20 }]
+    }
+  });
+  ok('başka müşterinin faturası orijinal olarak gösterilemiyor (422)', wrongCustomerReturn.status === 422, `got ${wrongCustomerReturn.status}`);
+
+  const returnInv = await api('POST', '/api/sales/invoices', {
+    token: operator, body: {
+      customerId: anadolu.id, currency: 'TRY', invoiceType: 'iade', originalInvoiceId: originalInv.data.id,
+      lines: [{ itemName: 'İade Edilecek Ürün', qty: 1, unitPrice: 500, vatRate: 20 }]
+    }
+  });
+  ok('iade faturası oluşturuldu', returnInv.status === 201 && returnInv.data.original_invoice_id === originalInv.data.id,
+    JSON.stringify(returnInv.data).slice(0, 200));
+
+  // Orijinal faturanın e-Belgesi henüz üretilmedi — BillingReference bu
+  // durumda sessizce atlanır (bkz. einvoice.js yorumu), ama iade e-Belgesi
+  // yine de üretilebilmeli.
+  const returnDocNoOriginal = await api('POST', `/api/edocs/from-invoice/${returnInv.data.id}`, { token: operator });
+  ok('orijinalin e-Belgesi yokken de iade e-Belgesi üretiliyor', returnDocNoOriginal.status === 201, `got ${returnDocNoOriginal.status}`);
+  const returnXmlNoOriginal = (await api('GET', `/api/edocs/${returnDocNoOriginal.data.id}/xml`, { token: admin })).data;
+  ok('bu durumda BillingReference eklenmiyor', !returnXmlNoOriginal.includes('BillingReference'));
+  ok('İnvoiceTypeCode IADE', returnXmlNoOriginal.includes('<cbc:InvoiceTypeCode>IADE</cbc:InvoiceTypeCode>'));
+
+  // Şimdi orijinal faturanın GERÇEK bir e-Belgesi olsun ve BillingReference'ın
+  // gerçekten onun belge no + tarihini taşıdığını kanıtlayalım.
+  const originalDoc = await api('POST', `/api/edocs/from-invoice/${originalInv.data.id}`, { token: operator });
+  const returnInv2 = await api('POST', '/api/sales/invoices', {
+    token: operator, body: {
+      customerId: anadolu.id, currency: 'TRY', invoiceType: 'iade', originalInvoiceId: originalInv.data.id,
+      lines: [{ itemName: 'İade Edilecek Ürün 2', qty: 1, unitPrice: 250, vatRate: 20 }]
+    }
+  });
+  const returnDoc = await api('POST', `/api/edocs/from-invoice/${returnInv2.data.id}`, { token: operator });
+  const returnXml = (await api('GET', `/api/edocs/${returnDoc.data.id}/xml`, { token: admin })).data;
+  ok('BillingReference orijinal belge numarasını taşıyor', returnXml.includes(`<cbc:ID>${originalDoc.data.documentNo}</cbc:ID>`), originalDoc.data.documentNo);
+  ok('BillingReference DocumentType FATURA', returnXml.includes('<cbc:DocumentType>FATURA</cbc:DocumentType>'));
+  const returnValidation = ublValidate.validateXml(returnXml);
+  ok('iade faturası da GİB şemasına uyuyor', returnValidation.valid, JSON.stringify(returnValidation.errors));
 
   console.log('\n=== DOĞRULAMA / VALIDATION ===');
   // VKN'si olmayan müşteriye e-Belge düzenlenememeli
@@ -170,6 +238,9 @@ async function api(method, path, { token, body } = {}) {
   ok('plaka belgede', dxml.includes('34 ABC 123'));
   ok('parti (lot) numarası belgede izlenebilir', dxml.includes('<cbc:LotNumberID>'), '');
   ok('irsaliyede tutar yok (sadece miktar)', !dxml.includes('PayableAmount'));
+  const despatchValidation = ublValidate.validateXml(dxml);
+  ok('üretilen e-İrsaliye GİB\'in resmi UBL-DespatchAdvice-2.1.xsd şemasına uyuyor',
+    despatchValidation.valid, JSON.stringify(despatchValidation.errors || despatchValidation.reason));
 
   console.log('\n=== GÖNDERİM / SEND ===');
   const opSend = await api('POST', `/api/edocs/${doc.id}/send`, { token: operator });

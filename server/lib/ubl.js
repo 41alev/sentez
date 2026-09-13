@@ -80,8 +80,8 @@ function partyBlock(p, tag) {
           <cbc:CityName>${esc(p.city || '')}</cbc:CityName>
           ${p.postalCode ? `<cbc:PostalZone>${esc(p.postalCode)}</cbc:PostalZone>` : ''}
           <cac:Country>
-            <cbc:Name>${esc(p.country || 'Türkiye')}</cbc:Name>
             ${countryCode(p.country) ? `<cbc:IdentificationCode>${countryCode(p.country)}</cbc:IdentificationCode>` : ''}
+            <cbc:Name>${esc(p.country || 'Türkiye')}</cbc:Name>
           </cac:Country>
         </cac:PostalAddress>
         ${schemeId === 'VKN' ? `<cac:PartyTaxScheme>
@@ -93,6 +93,62 @@ function partyBlock(p, tag) {
         </cac:Contact>
       </cac:Party>
     </cac:${tag}>`;
+}
+
+/**
+ * İmza bildirim bloğu (cac:Signature).
+ *
+ * Bu, belgenin GERÇEK kriptografik e-imzası/mali mührü DEĞİLDİR — o,
+ * entegratör tarafından zarfa uygulanır (bkz. server/services/einvoice.js
+ * dosya başı yorumu, bilinçli kapsam sınırı). Bu yalnızca "bu belgenin
+ * imzalayıcısı şu VKN'dir" diyen, UBL-Invoice-2.1.xsd ve
+ * UBL-DespatchAdvice-2.1.xsd'de `minOccurs` belirtilmediği için ZORUNLU
+ * olan bir beyan elemanı — GİB'in resmi örnek paketindeki
+ * IadeFaturasiOrnegi.xml'den doğrulanmıştır. Eskiden hiç üretilmiyordu;
+ * bu, gerçek şemaya karşı doğrulama eklenirken bulundu (bkz. PROJECT_STATUS.md).
+ */
+function signatureBlock(supplier) {
+  const id = String(supplier.identityNo || supplier.taxNo || '').replace(/\D/g, '');
+  const schemeId = id.length === 11 ? 'TCKN' : 'VKN';
+  return `  <cac:Signature>
+    <cbc:ID schemeID="${schemeId}">${esc(id)}</cbc:ID>
+    <cac:SignatoryParty>
+      <cac:PartyIdentification>
+        <cbc:ID schemeID="${schemeId}">${esc(id)}</cbc:ID>
+      </cac:PartyIdentification>
+      <cac:PostalAddress>
+        <cbc:StreetName>${esc(supplier.address || '')}</cbc:StreetName>
+        <cbc:CitySubdivisionName>${esc(supplier.district || '')}</cbc:CitySubdivisionName>
+        <cbc:CityName>${esc(supplier.city || '')}</cbc:CityName>
+        <cac:Country>
+          <cbc:Name>${esc(supplier.country || 'Türkiye')}</cbc:Name>
+        </cac:Country>
+      </cac:PostalAddress>
+    </cac:SignatoryParty>
+    <cac:DigitalSignatureAttachment>
+      <cac:ExternalReference>
+        <cbc:URI>#Signature</cbc:URI>
+      </cac:ExternalReference>
+    </cac:DigitalSignatureAttachment>
+  </cac:Signature>`;
+}
+
+/**
+ * ext:UBLExtensions sarmalayıcısı — UBL-Invoice-2.1.xsd/UBL-DespatchAdvice-2.1.xsd
+ * bunu (minOccurs belirtilmediği için) zorunlu kılar, ama içeriği UBL'in kendi
+ * ad alanı DIŞINDA herhangi bir eleman olabilen genel bir "wildcard" (xsd:any)
+ * noktasıdır. Gerçek dünyada burası genellikle entegratörün uyguladığı
+ * XAdES-BES imzasının (mali mühür) eklendiği yerdir — biz imzalamıyoruz
+ * (bkz. server/services/einvoice.js), bu yüzden GİB'in kendi resmi örnek
+ * paketindeki (IadeFaturasiOrnegi.xml) gibi yalnızca yapıyı sağlayan boş bir
+ * yer tutucu üretiyoruz.
+ */
+function extensionsPlaceholder() {
+  return `<ext:UBLExtensions>
+    <ext:UBLExtension>
+      <ext:ExtensionContent><placeholder:Empty xmlns:placeholder="urn:sentez:ubl:extension-placeholder"/></ext:ExtensionContent>
+    </ext:UBLExtension>
+  </ext:UBLExtensions>`;
 }
 
 /** KDV oranına göre vergi alt toplamı. Oran 0 ise istisna kodu gerekir. */
@@ -174,11 +230,18 @@ function buildInvoice(d) {
 
   const profileId = d.profileId || (d.docType === 'earchive' ? 'EARSIVFATURA' : 'TICARIFATURA');
 
+  // Eleman sırası UBL-Invoice-2.1.xsd'deki xsd:sequence ile BİREBİR aynı
+  // olmalı (XSD sıra-duyarlıdır) — bkz. server/lib/ubl-schema/maindoc/.
+  // Önceki sürümde PricingExchangeRate yanlış konumdaydı ve UBLExtensions/
+  // Signature hiç üretilmiyordu; ikisi de şemada zorunlu (bkz. ubl.js
+  // signatureBlock yorumu) — gerçek şemaya karşı doğrulama eklenirken
+  // bulundu.
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
          xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
          xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
          xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">
+  ${extensionsPlaceholder()}
   <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
   <cbc:CustomizationID>TR1.2</cbc:CustomizationID>
   <cbc:ProfileID>${esc(profileId)}</cbc:ProfileID>
@@ -195,17 +258,25 @@ ${d.orderReference ? `  <cac:OrderReference>
     <cbc:ID>${esc(d.orderReference)}</cbc:ID>
     <cbc:IssueDate>${esc(d.orderDate || d.issueDate)}</cbc:IssueDate>
   </cac:OrderReference>` : ''}
+${d.originalInvoiceNo ? `  <cac:BillingReference>
+    <cac:InvoiceDocumentReference>
+      <cbc:ID>${esc(d.originalInvoiceNo)}</cbc:ID>
+      <cbc:IssueDate>${esc(d.originalInvoiceDate || d.issueDate)}</cbc:IssueDate>
+      <cbc:DocumentType>FATURA</cbc:DocumentType>
+    </cac:InvoiceDocumentReference>
+  </cac:BillingReference>` : ''}
 ${d.despatchReference ? `  <cac:DespatchDocumentReference>
     <cbc:ID>${esc(d.despatchReference)}</cbc:ID>
     <cbc:IssueDate>${esc(d.despatchDate || d.issueDate)}</cbc:IssueDate>
   </cac:DespatchDocumentReference>` : ''}
+${signatureBlock(d.supplier)}
+${partyBlock(d.supplier, 'AccountingSupplierParty')}
+${partyBlock(d.customer, 'AccountingCustomerParty')}
 ${cur !== 'TRY' ? `  <cac:PricingExchangeRate>
     <cbc:SourceCurrencyCode>${cur}</cbc:SourceCurrencyCode>
     <cbc:TargetCurrencyCode>TRY</cbc:TargetCurrencyCode>
     <cbc:CalculationRate>${money(d.exchangeRate || 1, 4)}</cbc:CalculationRate>
   </cac:PricingExchangeRate>` : ''}
-${partyBlock(d.supplier, 'AccountingSupplierParty')}
-${partyBlock(d.customer, 'AccountingCustomerParty')}
     <cac:TaxTotal>
       <cbc:TaxAmount currencyID="${cur}">${money(vatTotal)}</cbc:TaxAmount>
 ${Object.entries(byRate).map(([r, v]) => taxSubtotal(r, v.base, v.amount)).join('\n')}
@@ -232,7 +303,9 @@ function buildDespatchAdvice(d) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <DespatchAdvice xmlns="urn:oasis:names:specification:ubl:schema:xsd:DespatchAdvice-2"
                 xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
-                xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+                xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
+                xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">
+  ${extensionsPlaceholder()}
   <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
   <cbc:CustomizationID>TR1.2</cbc:CustomizationID>
   <cbc:ProfileID>${esc(d.profileId || 'TEMELIRSALIYE')}</cbc:ProfileID>
@@ -248,15 +321,30 @@ ${d.orderReference ? `  <cac:OrderReference>
     <cbc:ID>${esc(d.orderReference)}</cbc:ID>
     <cbc:IssueDate>${esc(d.orderDate || d.issueDate)}</cbc:IssueDate>
   </cac:OrderReference>` : ''}
+${signatureBlock(d.supplier)}
 ${partyBlock(d.supplier, 'DespatchSupplierParty')}
 ${partyBlock(d.customer, 'DeliveryCustomerParty')}
     <cac:Shipment>
       <cbc:ID>${esc(d.shipmentNo || d.documentNo)}</cbc:ID>
       ${d.grossWeight ? `<cbc:GrossWeightMeasure unitCode="KGM">${money(d.grossWeight, 3)}</cbc:GrossWeightMeasure>` : ''}
       ${d.crateCount ? `<cbc:TotalTransportHandlingUnitQuantity>${d.crateCount}</cbc:TotalTransportHandlingUnitQuantity>` : ''}
+      ${d.carrier || d.plateNo ? `<cac:ShipmentStage>
+        ${d.plateNo ? `<cac:TransportMeans><cac:RoadTransport><cbc:LicensePlateID>${esc(d.plateNo)}</cbc:LicensePlateID></cac:RoadTransport></cac:TransportMeans>` : ''}
+        ${d.driverName ? (() => {
+          // PersonType FirstName VE FamilyName'i zorunlu kılıyor; işletmede
+          // sürücü adı tek bir metin alanı olarak tutuluyor (bkz. shipments
+          // tablosu) — son kelimeyi soyadı, gerisini ad sayıyoruz. Tek
+          // kelimelik bir isim girilirse FamilyName aynı değeri tekrarlar
+          // (boş bırakmak şemayı ihlal eder, tamamen icat etmekten iyidir).
+          const parts = String(d.driverName).trim().split(/\s+/);
+          const familyName = parts.length > 1 ? parts.pop() : parts[0];
+          return `<cac:DriverPerson><cbc:FirstName>${esc(parts.join(' ') || familyName)}</cbc:FirstName><cbc:FamilyName>${esc(familyName)}</cbc:FamilyName></cac:DriverPerson>`;
+        })() : ''}
+      </cac:ShipmentStage>` : ''}
       <cac:Delivery>
         <cac:DeliveryAddress>
           <cbc:StreetName>${esc(d.deliveryAddress || '')}</cbc:StreetName>
+          <cbc:CitySubdivisionName>${esc(d.deliveryDistrict || '')}</cbc:CitySubdivisionName>
           <cbc:CityName>${esc(d.deliveryCity || '')}</cbc:CityName>
           <cac:Country><cbc:Name>${esc(d.deliveryCountry || 'Türkiye')}</cbc:Name></cac:Country>
         </cac:DeliveryAddress>
@@ -265,10 +353,6 @@ ${partyBlock(d.customer, 'DeliveryCustomerParty')}
           <cbc:ActualDespatchTime>${esc(d.despatchTime || d.issueTime || '00:00:00')}</cbc:ActualDespatchTime>
         </cac:Despatch>
       </cac:Delivery>
-      ${d.carrier || d.plateNo ? `<cac:ShipmentStage>
-        ${d.plateNo ? `<cac:TransportMeans><cac:RoadTransport><cbc:LicensePlateID>${esc(d.plateNo)}</cbc:LicensePlateID></cac:RoadTransport></cac:TransportMeans>` : ''}
-        ${d.driverName ? `<cac:DriverPerson><cbc:FirstName>${esc(d.driverName)}</cbc:FirstName></cac:DriverPerson>` : ''}
-      </cac:ShipmentStage>` : ''}
     </cac:Shipment>
 ${lines.map((l, i) => `    <cac:DespatchLine>
       <cbc:ID>${i + 1}</cbc:ID>
