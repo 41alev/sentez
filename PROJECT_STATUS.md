@@ -1,5 +1,66 @@
 # PROJECT_STATUS.md
 
+## 2026-09-14 (devam 13) — Kapsamlı güvenlik denetimi (`9333dcf`)
+
+Kullanıcı "sistemi tüm güvenlik testleriyle test et, güvenli olduğuna emin
+olmak istiyorum" dedi. Mevcut `test/security.js` (59 test) ve
+`test/multitenancy.js` (148 test) baseline olarak çalıştırıldı (ikisi de
+tam geçti), `npm audit` temiz (0 zafiyet). Ardından otomatik testlerin
+kapsamadığı alanlar elle tarandı: route bazında yetki kontrolü kapsamı
+(24 route dosyasının 22'si `requireAuth` kullanıyor — eksik 2'si kasıtlı
+olarak herkese açık: `auth.js` giriş, `docs.js` OpenAPI şeması), tüm SQL
+string enterpolasyonları (data-health.js birleştirme/import-commit.js
+toplu silme — hepsi sabit sunucu tanımlı tablo/sütun haritalarından
+geliyor, gerçek enjeksiyon yolu yok), komut enjeksiyonu (tek
+`child_process.exec` çağrısı yalnızca operatörün kendi ortam
+değişkeninden), XXE (libxmljs2 yalnızca kendi ürettiğimiz XML'i
+ayrıştırıyor), CORS/güvenlik başlıkları/rate limiting yapılandırması.
+
+**Bulunan ve düzeltilen 2 gerçek açık:**
+
+1. **JWT_SECRET üretimde zorunlu değildi (YÜKSEK).** `middleware/auth.js`
+   `JWT_SECRET` tanımlı değilse herkesçe bilinen sabit bir değere
+   (`depo-takip-dev-secret-change-me`) sessizce düşüyordu.
+   `docker-compose.yml` bunu kendi `${JWT_SECRET:?...}` sözdizimiyle
+   zorunlu kılıyordu ama `docs/KURULUM.md`'deki elle kurulum yolunda
+   hiçbir kod denetimi yoktu — biri `.env` oluşturmayı unutursa sunucu
+   sessizce açılır ve bu GitHub deposunda görülebilir varsayılan
+   anahtarla imzalanmış GEÇERLİ admin token'ları üretilebilir hale
+   gelirdi. `server/index.js`'e "boş veritabanı"/lisans kontrolüyle AYNI
+   desende bir kontrol eklendi: `NODE_ENV=production` VE `JWT_SECRET`
+   tanımsızsa sunucu açılmayı reddediyor. `test/security.js`'e gerçek
+   davranışsal test eklendi (ayrı bir sunucu süreci gerçekten bu
+   koşullarla başlatılıp çıkış kodu 1 ile reddedildiği kanıtlanıyor —
+   eskiden yalnızca zayıf bir statik regex kontrolü vardı).
+
+2. **nginx referans yapılandırması X-Forwarded-For'u EKLİYORDU,
+   DEĞİŞTİRMİYORDU (ORTA).** `docker-compose.yml`'de nginx internete açık
+   TEK kenar. `nginx.conf`'taki `$proxy_add_x_forwarded_for` istemcinin
+   gönderdiği sahte bir X-Forwarded-For değerini koruyup sonuna kendi
+   gördüğü IP'yi ekliyordu; `server/index.js`'teki `trust proxy: 1` ile
+   birleşince Express bu sahte değeri `req.ip` olarak güvenilir kabul
+   ediyordu — bir saldırgan bu başlığı her istekte değiştirerek giriş
+   kaba-kuvvet kilidini VE genel API hız sınırlayıcısını (300/dk)
+   tamamen atlatabilirdi. Düzeltme: `X-Forwarded-For $remote_addr` —
+   istemcinin gönderdiği değer tamamen atılıyor.
+
+Ayrıca küçük bir tutarsızlık: `auth.js`'teki kendi-kendine şifre
+değiştirme bcrypt maliyeti 10 kullanıyordu, admin tarafı 12 — eşitlendi.
+
+**İncelenip gerçek bir açığa yol açmadığı doğrulanan, kod değişikliği
+gerektirmeyen alanlar (dokümante edildi, sessizce atlanmadı):** SSRF
+(webhook URL'leri/etiket yazıcısı IP'si admin tarafından yapılandırılıyor,
+iç ağ/bulut metadata uç noktalarına karşı denylist yok — ciddiyeti düşük
+çünkü zaten yalnızca admin rolüne açık, ayrı bir mühendislik kararı
+gerektiriyor); e-Fatura entegratör API anahtarının düz metin saklanması —
+bu, kullanıcıyla bu oturumda ayrıca tartışılıp ERTELENMESİ onaylanan
+TCKN/banka bilgisi alan-bazlı şifreleme kararıyla aynı kapsamda, yeni bir
+bulgu değil.
+
+**Doğrulama:** `npm run typecheck`/`lint`/`build` temiz. `node
+test/run-all.js` → **28/28 suite geçti** (güncellenen `security.js` kendi
+içinde 59/59). `npm audit` → 0 zafiyet.
+
 ## 2026-09-13 (devam 12) — KVKK sıfır-eksik: anonimleştirme, veri raporu, saklama süresi taraması (`b1d82bb`)
 
 "kapatılabilir olanların tümünü kapatalım eksik kalmasın" talimatının KVKK
