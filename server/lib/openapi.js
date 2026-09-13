@@ -4,15 +4,21 @@
  * ÜRETİCİ. server/routes/docs.js bunu JSON olarak servis eder.
  *
  * BİLİNÇLİ KAPSAM SINIRI: bu, sistemdeki 140+ endpoint'in TAMAMINI değil,
- * bir dış sistemin (e-ticaret, B2B portal, muhasebe, başka bir ERP) gerçekten
- * entegre olmak isteyeceği ANA kaynakları belgeliyor — ürünler, stok/lot,
- * satın alma, satış, üretim, kalite, bildirimler, webhook'lar, etiketler.
- * İç yönetim/ayar/rapor endpoint'leri (ör. /api/settings, /api/audit,
- * /api/reports/*) kasıtlı olarak dışarıda bırakıldı — bunlar arayüzün
- * kendi kullandığı, dışa açık bir entegrasyon sözleşmesi olması
- * beklenmeyen iç uçlar. Alan adları ICI HİÇBİR ŞEY İCAT EDİLMEDİ —
- * test/contract.js'in doğruladığı gerçek alan adlarından ve ilgili route
- * dosyalarındaki zod şemalarından birebir alındı.
+ * bir dış sistemin (e-ticaret, B2B portal, muhasebe, başka bir ERP, bir CRM/
+ * pazarlama aracı) gerçekten entegre olmak isteyeceği ANA kaynakları
+ * belgeliyor — ürünler, stok/lot, satın alma, satış, üretim, kalite,
+ * bildirimler, webhook'lar, etiketler, CRM fırsatları ve özel rapor (pivot)
+ * motoru. İç yönetim/ayar endpoint'leri (ör. /api/settings, /api/audit)
+ * kasıtlı olarak dışarıda bırakıldı — bunlar arayüzün kendi kullandığı,
+ * dışa açık bir entegrasyon sözleşmesi olması beklenmeyen iç uçlar. Alan
+ * adları ICI HİÇBİR ŞEY İCAT EDİLMEDİ — test/contract.js'in ve ilgili
+ * route dosyalarındaki zod şemalarının doğruladığı gerçek alan adlarından
+ * birebir alındı.
+ *
+ * BAKIM NOTU: bu dosya yeni bir modül eklendiğinde (Aşama 7 CRM, Aşama 8
+ * BI/pivot gibi) ELLE güncellenmesi gereken, otomatik türetilmeyen statik
+ * bir belge. Yeni route'lar eklerken burayı da güncellemeyi unutmayın —
+ * aksi halde /api/docs/openapi.json sessizce eksik/bayat kalır.
  */
 
 const bearerAuth = [{ bearerAuth: [] }];
@@ -47,9 +53,10 @@ function buildOpenApiSpec() {
       version: '2.0.0',
       description:
         'Bu, sistemin TÜM iç uçlarının değil, dış sistemlerin (e-ticaret, ' +
-        'B2B portal, muhasebe, başka bir ERP) entegre olmak isteyeceği ana ' +
-        'kaynakların (ürün, stok, satın alma, satış, üretim, kalite, ' +
-        'bildirim, webhook, etiket) sözleşmesidir. Kimlik doğrulama: ' +
+        'B2B portal, muhasebe, başka bir ERP, bir CRM/pazarlama aracı) ' +
+        'entegre olmak isteyeceği ana kaynakların (ürün, stok, satın alma, ' +
+        'satış, üretim, kalite, CRM fırsatları, özel rapor/pivot, bildirim, ' +
+        'webhook, etiket) sözleşmesidir. Kimlik doğrulama: ' +
         '`POST /api/auth/login` ile alınan JWT, `Authorization: Bearer <token>` ' +
         'başlığıyla gönderilir. Olay tabanlı bildirimler için bkz. Webhooks.'
     },
@@ -57,7 +64,8 @@ function buildOpenApiSpec() {
     tags: [
       { name: 'Auth' }, { name: 'Items' }, { name: 'Stock' },
       { name: 'Purchasing' }, { name: 'Sales' }, { name: 'Production' },
-      { name: 'Quality' }, { name: 'Notifications' }, { name: 'Webhooks' }, { name: 'Labels' }
+      { name: 'Quality' }, { name: 'CRM' }, { name: 'Reports' },
+      { name: 'Notifications' }, { name: 'Webhooks' }, { name: 'Labels' }
     ],
     components: {
       securitySchemes: {
@@ -343,7 +351,114 @@ function buildOpenApiSpec() {
           type: 'object',
           properties: {
             id: { type: 'string' }, event: { type: 'string' }, statusCode: { type: 'integer', nullable: true },
-            success: { type: 'boolean' }, error: { type: 'string', nullable: true }, durationMs: { type: 'integer' }, attemptedAt: { type: 'integer' }
+            success: { type: 'boolean' }, error: { type: 'string', nullable: true }, durationMs: { type: 'integer' }, attemptedAt: { type: 'integer' },
+            retryCount: { type: 'integer', description: 'Bu denemenin kaçıncı otomatik deneme olduğu (0 = ilk deneme veya elle yeniden deneme)' },
+            nextRetryAt: { type: 'integer', nullable: true, description: 'Dolu ise bu kayıt otomatik kuyrukta bekliyor demektir; NULL ise başarılı veya deneme hakkı tükenmiş (dead-letter)' }
+          }
+        },
+        OpportunityLine: {
+          type: 'object',
+          properties: { id: { type: 'integer' }, itemId: { type: 'string', nullable: true }, itemName: { type: 'string' }, qty: { type: 'number' }, unitPrice: { type: 'number' } }
+        },
+        Opportunity: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' }, oppNo: { type: 'string' }, customerId: { type: 'integer', nullable: true }, customerName: { type: 'string' },
+            contactPerson: { type: 'string', nullable: true }, phone: { type: 'string', nullable: true }, email: { type: 'string', nullable: true },
+            source: { type: 'string', enum: ['referans', 'web', 'fuar', 'soguk_arama', 'diger'] },
+            stage: { type: 'string', enum: ['new', 'contacted', 'quoted', 'won', 'lost'] },
+            estimatedValue: { type: 'number' }, estimatedCloseDate: { type: 'string', format: 'date', nullable: true },
+            probability: { type: 'integer', minimum: 0, maximum: 100 }, lostReason: { type: 'string', nullable: true },
+            assignedTo: { type: 'integer', nullable: true }, notes: { type: 'string', nullable: true },
+            convertedSoId: { type: 'string', nullable: true, description: 'Dolu ise fırsat zaten bir satış siparişine dönüştürülmüştür' },
+            createdAt: { type: 'integer' }, closedAt: { type: 'integer', nullable: true },
+            lines: { type: 'array', items: ref('OpportunityLine') }
+          }
+        },
+        OpportunityCreate: {
+          type: 'object', required: ['customerName'],
+          properties: {
+            customerId: { type: 'integer', description: 'Boş bırakılırsa fırsat henüz müşteri olmayan bir "aday" için açılır' },
+            customerName: { type: 'string' }, contactPerson: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' },
+            source: { type: 'string', enum: ['referans', 'web', 'fuar', 'soguk_arama', 'diger'], default: 'diger' },
+            estimatedValue: { type: 'number', default: 0 }, estimatedCloseDate: { type: 'string', format: 'date' },
+            probability: { type: 'integer', minimum: 0, maximum: 100, default: 20 }, assignedTo: { type: 'integer' }, notes: { type: 'string' },
+            lines: {
+              type: 'array', default: [], items: {
+                type: 'object', required: ['itemId', 'itemName', 'qty'],
+                properties: { itemId: { type: 'string' }, itemName: { type: 'string' }, qty: { type: 'number' }, unitPrice: { type: 'number', default: 0 } }
+              }
+            }
+          }
+        },
+        OpportunityStageUpdate: {
+          type: 'object', required: ['stage'],
+          properties: {
+            stage: { type: 'string', enum: ['new', 'contacted', 'quoted', 'won', 'lost'] },
+            lostReason: { type: 'string', description: "stage='lost' iken zorunlu" }
+          }
+        },
+        OpportunityConvertResult: {
+          type: 'object',
+          properties: { opportunity: ref('Opportunity'), salesOrder: { type: 'object', properties: { id: { type: 'string' }, soNo: { type: 'string' } } } }
+        },
+        PivotMeta: {
+          type: 'object',
+          description: "GET /reports/pivot-meta çağrısı, mevcut veri kaynağı BAŞINA kendi boyut/ölçü whitelist'ini döner — 'movements' (stok hareketleri), 'sales' (satış kalemleri), 'purchasing' (satın alma kalemleri), 'quality' (muayeneler).",
+          properties: {
+            dataSources: {
+              type: 'array', items: {
+                type: 'object', properties: {
+                  key: { type: 'string', enum: ['movements', 'sales', 'purchasing', 'quality'] }, label: { type: 'string' },
+                  dimensions: { type: 'array', items: { type: 'object', properties: { key: { type: 'string' }, label: { type: 'string' } } } },
+                  metrics: { type: 'array', items: { type: 'object', properties: { key: { type: 'string' }, label: { type: 'string' } } } },
+                  extraFilterKeys: { type: 'array', items: { type: 'string' } }
+                }
+              }
+            },
+            movementTypes: { type: 'array', items: { type: 'string' } }
+          }
+        },
+        PivotRequest: {
+          type: 'object', required: ['dimension', 'metric'],
+          description: "dataSource/dimension/metric YALNIZCA GET /reports/pivot-meta'nın döndürdüğü anahtarlardan biri olabilir — whitelist dışı bir değer 400 ile reddedilir.",
+          properties: {
+            dataSource: { type: 'string', enum: ['movements', 'sales', 'purchasing', 'quality'], default: 'movements' },
+            dimension: { type: 'string', description: "ör. movements için 'day' | 'month' | 'item' | 'warehouse' | 'type' | 'refType'" },
+            metric: { type: 'string', description: "ör. movements için 'qty' | 'value' | 'count'" },
+            filters: {
+              type: 'object',
+              properties: {
+                from: { type: 'string', format: 'date' }, to: { type: 'string', format: 'date' },
+                type: { type: 'string', enum: ['in', 'out', 'transfer', 'adjust', 'status_change'], description: "yalnızca dataSource='movements'" },
+                warehouseId: { type: 'integer' }, itemId: { type: 'string' },
+                customerId: { type: 'integer', description: "yalnızca dataSource='sales'" },
+                supplierId: { type: 'integer', description: "dataSource='purchasing' veya 'quality'" }
+              }
+            }
+          }
+        },
+        PivotResult: {
+          type: 'object',
+          properties: {
+            dataSource: { type: 'string' }, dimension: { type: 'string' }, metric: { type: 'string' },
+            data: { type: 'array', items: { type: 'object', properties: { dim: { type: 'string' }, val: { type: 'number' } } } }
+          }
+        },
+        SavedReport: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' }, name: { type: 'string' }, dataSource: { type: 'string' }, dimension: { type: 'string' }, metric: { type: 'string' },
+            chartType: { type: 'string', enum: ['bar', 'line'] }, filters: { type: 'object' },
+            createdBy: { type: 'integer', nullable: true }, createdAt: { type: 'integer' }
+          }
+        },
+        SavedReportCreate: {
+          type: 'object', required: ['name', 'dimension', 'metric'],
+          properties: {
+            name: { type: 'string' }, dataSource: { type: 'string', enum: ['movements', 'sales', 'purchasing', 'quality'], default: 'movements' },
+            dimension: { type: 'string' }, metric: { type: 'string' },
+            chartType: { type: 'string', enum: ['bar', 'line'], default: 'bar' }, filters: { type: 'object' }
           }
         }
       }
@@ -489,6 +604,13 @@ function buildOpenApiSpec() {
           responses: { 201: jsonResponse('Oluşturuldu — secret YALNIZCA burada döner', ref('WebhookCreated')), 403: errorResponse, 422: errorResponse }
         }
       },
+      '/webhooks/process-retry-queue': {
+        post: {
+          tags: ['Webhooks'], summary: "Otomatik yeniden deneme kuyruğunu şimdi işle (admin) / Process the auto-retry queue now (admin)", security: bearerAuth,
+          description: 'Kuyruk normalde 60 saniyede bir kendiliğinden işlenir; bu, beklemeden tetiklemek içindir.',
+          responses: { 200: jsonResponse('Tetiklendi', { type: 'object', properties: { ok: { type: 'boolean' } } }), 403: errorResponse }
+        }
+      },
       '/webhooks/events': {
         get: { tags: ['Webhooks'], summary: 'Abone olunabilecek olay kataloğu / Subscribable event catalog', security: bearerAuth, responses: { 200: jsonResponse('Olay adları', { type: 'array', items: { type: 'string' } }) } }
       },
@@ -516,6 +638,79 @@ function buildOpenApiSpec() {
           tags: ['Labels'], summary: 'Ağdaki Zebra yazıcıya gönder / Send to a networked Zebra printer', security: bearerAuth,
           requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['type', 'id'], properties: { type: { type: 'string', enum: ['item', 'lot'] }, id: { type: 'string' }, copies: { type: 'integer', default: 1, maximum: 50 } } } } } },
           responses: { 200: jsonResponse('Gönderildi', { type: 'object', properties: { ok: { type: 'boolean' } } }), 400: jsonResponse('Yazıcı ayarlanmamış / Printer not configured', ref('Error')), 502: jsonResponse('Yazıcıya ulaşılamadı / Printer unreachable', ref('Error')) }
+        }
+      },
+      '/crm/opportunities': {
+        get: {
+          tags: ['CRM'], summary: 'Fırsatları listele / List opportunities', security: bearerAuth,
+          parameters: [
+            { name: 'stage', in: 'query', schema: { type: 'string', enum: ['new', 'contacted', 'quoted', 'won', 'lost'] } },
+            { name: 'assignedTo', in: 'query', schema: { type: 'integer' } }, { name: 'q', in: 'query', schema: { type: 'string' } },
+            { name: 'page', in: 'query', schema: { type: 'integer' } }, { name: 'pageSize', in: 'query', schema: { type: 'integer' } }
+          ],
+          responses: { 200: jsonResponse('Sayfalanmış liste', envelope('Opportunity')) }
+        },
+        post: {
+          tags: ['CRM'], summary: 'Yeni fırsat / Create opportunity', security: bearerAuth,
+          requestBody: { required: true, content: { 'application/json': { schema: ref('OpportunityCreate') } } },
+          responses: { 201: jsonResponse('Oluşturuldu', ref('Opportunity')), 403: errorResponse, 422: errorResponse }
+        }
+      },
+      '/crm/opportunities/pipeline': {
+        get: {
+          tags: ['CRM'], summary: 'Huni görünümü — aşama başına gruplanmış fırsatlar / Pipeline grouped by stage', security: bearerAuth,
+          description: "'lost' hariç 4 aktif aşamayı ve her aşamanın toplam tahmini değerini döner.",
+          responses: { 200: jsonResponse('Aşama grupları', { type: 'object', properties: { stages: { type: 'array', items: { type: 'object', properties: { stage: { type: 'string' }, totalValue: { type: 'number' }, opportunities: { type: 'array', items: ref('Opportunity') } } } } } }) }
+        }
+      },
+      '/crm/opportunities/{id}': {
+        get: { tags: ['CRM'], summary: 'Fırsat detayı / Opportunity detail', security: bearerAuth, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: jsonResponse('Fırsat', ref('Opportunity')), 404: errorResponse } },
+        put: {
+          tags: ['CRM'], summary: 'Fırsatı güncelle (yalnızca açık aşamalarda) / Update opportunity (open stages only)', security: bearerAuth,
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: { content: { 'application/json': { schema: ref('OpportunityCreate') } } },
+          responses: { 200: jsonResponse('Güncellendi', ref('Opportunity')), 404: errorResponse, 409: jsonResponse('Kapanmış (won/lost) fırsat düzenlenemez', ref('Error')) }
+        }
+      },
+      '/crm/opportunities/{id}/stage': {
+        post: {
+          tags: ['CRM'], summary: 'Aşama geçişi / Change stage', security: bearerAuth,
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: { required: true, content: { 'application/json': { schema: ref('OpportunityStageUpdate') } } },
+          responses: { 200: jsonResponse("Güncellendi — 'won' olunca webhook: opportunity.won", ref('Opportunity')), 404: errorResponse, 409: jsonResponse('Kapanmış fırsat yeniden açılamaz', ref('Error')), 422: jsonResponse('lostReason eksik', ref('Error')) }
+        }
+      },
+      '/crm/opportunities/{id}/convert': {
+        post: {
+          tags: ['CRM'], summary: 'Kazanılan fırsatı satış siparişine dönüştür / Convert a won opportunity to a sales order', security: bearerAuth,
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { customerId: { type: 'integer', description: 'Fırsatın kendi müşterisi yoksa (yeni aday) zorunlu' } } } } } },
+          responses: { 201: jsonResponse('Dönüştürüldü — gerçek bir satış siparişi oluşur', ref('OpportunityConvertResult')), 404: errorResponse, 409: jsonResponse('Yalnızca won VE henüz dönüştürülmemiş fırsatlar dönüştürülebilir', ref('Error')), 422: jsonResponse('Müşteri veya kalem eksik', ref('Error')) }
+        }
+      },
+      '/reports/pivot-meta': {
+        get: { tags: ['Reports'], summary: 'Özel rapor seçenekleri / Custom report options', security: bearerAuth, responses: { 200: jsonResponse('Boyut/ölçü/hareket tipi whitelist\'i', ref('PivotMeta')) } }
+      },
+      '/reports/pivot': {
+        post: {
+          tags: ['Reports'], summary: 'Özel rapor çalıştır / Run a custom (pivot) report', security: bearerAuth,
+          requestBody: { required: true, content: { 'application/json': { schema: ref('PivotRequest') } } },
+          responses: { 200: jsonResponse('Sonuç', ref('PivotResult')), 400: jsonResponse('Whitelist dışı boyut/ölçü/filtre', ref('Error')) }
+        }
+      },
+      '/reports/saved': {
+        get: { tags: ['Reports'], summary: 'Kayıtlı raporları listele / List saved reports', security: bearerAuth, responses: { 200: jsonResponse('Liste', { type: 'array', items: ref('SavedReport') }) } },
+        post: {
+          tags: ['Reports'], summary: 'Rapor konfigürasyonunu kaydet / Save a report configuration', security: bearerAuth,
+          requestBody: { required: true, content: { 'application/json': { schema: ref('SavedReportCreate') } } },
+          responses: { 201: jsonResponse('Oluşturuldu', ref('SavedReport')), 400: errorResponse }
+        }
+      },
+      '/reports/saved/{id}': {
+        delete: {
+          tags: ['Reports'], summary: 'Kayıtlı raporu sil (sahibi veya yönetici) / Delete a saved report (owner or manager)', security: bearerAuth,
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: { 204: { description: 'Silindi / Deleted' }, 403: jsonResponse('Yalnızca sahibi veya yönetici/müdür silebilir', ref('Error')), 404: errorResponse }
         }
       }
     }

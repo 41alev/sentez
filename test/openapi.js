@@ -51,7 +51,10 @@ function collectRefs(node, out = []) {
     '/production', '/production/{id}/complete',
     '/quality/inspections', '/quality/ncrs',
     '/notifications', '/webhooks', '/webhooks/events', '/webhooks/{id}/deliveries',
-    '/labels/item/{id}/zpl', '/labels/print'
+    '/labels/item/{id}/zpl', '/labels/print',
+    '/crm/opportunities', '/crm/opportunities/pipeline', '/crm/opportunities/{id}',
+    '/crm/opportunities/{id}/stage', '/crm/opportunities/{id}/convert',
+    '/reports/pivot-meta', '/reports/pivot', '/reports/saved', '/reports/saved/{id}'
   ];
   const missing = expectedPaths.filter(p => !spec.paths[p]);
   ok('beklenen tüm uçlar mevcut', missing.length === 0, missing.length ? 'eksik: ' + missing.join(', ') : '');
