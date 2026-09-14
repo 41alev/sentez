@@ -206,7 +206,10 @@ const UI = (() => {
     ? `<span class="badge info">${t('originIntl')}</span>`
     : `<span class="badge ok">${t('originDomestic')}</span>`;
 
-  const roleLabel = (r) => ({ admin: t('roleAdmin'), manager: t('roleManager'), operator: t('roleOperator'), quality: t('roleQuality'), viewer: t('roleViewer') }[r] || r);
+  // r null/undefined olabilir (ör. denetim kaydında "system" aktörünün başarısız
+  // giriş denemesi satırı) - `|| r` o durumda ham null/undefined'ı şablona
+  // sızdırıp literal "null" metni bastırıyordu.
+  const roleLabel = (r) => r ? ({ admin: t('roleAdmin'), manager: t('roleManager'), operator: t('roleOperator'), quality: t('roleQuality'), viewer: t('roleViewer') }[r] || r) : '—';
 
   /* ---------- charts ---------- */
   const charts = {};

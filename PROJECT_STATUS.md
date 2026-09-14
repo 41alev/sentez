@@ -1,5 +1,51 @@
 # PROJECT_STATUS.md
 
+## 2026-09-14 (devam 22) — Satış, Kalite, CRM, Destek, Planlama, Raporlar, Yönetim (kısmi) tam test edildi — 1 küçük bulgu daha
+
+Sevkiyat çökmesi düzeltildikten sonra tur devam etti: Satış modülünün kalan
+5 sekmesi (Sevkiyatlar — durum ilerletme/yazdırma, Müşteriler CRUD,
+Faturalar — Fatura Gir/Tahsil Et, e-Belgeler — oluştur/gönder/durum sorgula,
+Kârlılık — 3 gruplama + CSV), Kalite'nin kalan 5 sekmesi (Uygunsuzluklar
+elle+otomatik NCR, DÖF/CAPA aç/kapat, Cihaz/Kalibrasyon, Muayene Planları,
+İzlenebilirlik — Lots'taki paylaşılan bileşen sayesinde zaten düzeltilmiş),
+Fırsatlar/CRM (Huni zaten Playwright'ta kapsanıyor; Fırsatlar liste view +
+Ziyaretler yeni test edildi), Destek (talep oluştur/yorum/uygunsuzluğa
+dönüştür), Planlama'nın 5 sekmesi (MRP çalıştır+belgeye dönüştür, Kapasite
+detay, İş Merkezleri/Vardiya/Tatil CRUD, Rotalar, Vardiya&OEE kaydı) ve
+Raporlar'ın 10 sekmesinin TÜMÜ (Özel Rapor'un kaydet/çalıştır/sil dahil)
+tek tek gerçek verilerle denendi.
+
+**Dördüncü bulgu** (küçük, kozmetik — önceki turdaki "ham enum sızması"
+sınıfıyla aynı): Yönetim > Denetim Kaydı ekranında başarısız bir giriş
+denemesi satırının KULLANICI sütununda literal **"null"** metni
+görünüyordu. Kök neden: `public/js/ui.js`'teki `roleLabel(r)` fonksiyonu
+`({...}[r] || r)` deseniyle yazılmıştı — denetim kaydında "system" aktörünün
+(başarısız giriş denemesi gibi kimliksiz olaylar) rolü gerçekten `null`
+olduğunda, `undefined || null` ifadesi `null`'ı olduğu gibi döndürüyor,
+şablon string'i JS'in `null`'ı `"null"` metnine çevirmesiyle ekrana o
+şekilde basıyordu. `roleLabel` artık `r` boşsa `'—'` döndürüyor.
+`test/e2e-browser/admin-audit-log.spec.js` (yeni): kasıtlı yanlış şifreyle
+giriş denenip Denetim Kaydı'ndaki ilgili satırın "null" içermediğini
+kanıtlıyor.
+
+Ayrıca test sırasında birkaç kez KENDİ otomasyon hatam bulundu (uygulama
+hatası DEĞİL, ileride benzer testler için not): (1) Destek talebi formunda
+müşteri seçilince gizlenen "Müşteri adı (kayıtlı değilse)" alanına
+yazdığım için "Konu" alanına açıklama metni gitmiş göründü — doğru
+alanlarla tekrarlanınca doğru çalıştığı kanıtlandı; (2) Depolar formunda
+ilk alanın "Depo Adı", ikincisinin "Kod" olduğunu (tablo sütun sırasının
+TERSİ) fark etmeden doldurdum — düzenle ile düzeltildi, uygulama girileni
+doğru kaydetmişti.
+
+**Doğrulama:** `npm run typecheck`/`lint` temiz. `npx playwright test` →
+16/16 geçti (yeni test dahil). `node test/run-all.js` → 29/29 suite geçti.
+
+**Bu turun geri kalanı devam ediyor** — Yönetim'in kalan sekmeleri (Ayarlar,
+Veri Aktarımı, Belge Şablonları — logo yükleme dahil, Veri Sağlığı —
+kayıt birleştirme dahil, Muhasebe Aktarımı, Webhook'lar — tam CRUD+test+
+yeniden deneme dahil) ve Depo Terminali (gerçek barkod tabanlı mobil
+akışlar) test edilecek.
+
 ## 2026-09-14 (devam 21) — EN CİDDİ BULGU: "Yeni Sevkiyat" TAMAMEN ÇÖKÜYORDU (500), hiçbir sevkiyat asla kaydedilemiyordu
 
 Satın Alma modülü tamamen test edildikten sonra Satış modülüne geçildi.
