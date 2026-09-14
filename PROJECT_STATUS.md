@@ -1,5 +1,66 @@
 # PROJECT_STATUS.md
 
+## 2026-09-14 (devam 26) — Tam yetki matrisi taraması: 2 gerçek bulgu daha (toplam 10)
+
+Kullanıcının "tara" talimatıyla, `frontend-react/*.jsx`'teki TÜM `can(...)`
+çağrıları (ItemsView, LotsView, CountsView, ProductionView, PurchasingView,
+SalesView, QualityView, CrmView, SupportView, PlanningView, AdminView,
+ReportsView) tek tek `server/middleware/auth.js`'teki granüler
+`PERMISSIONS` matrisi ve ilgili route'ların gerçek
+`requirePermission`/`requireRole` gereksinimleriyle karşılaştırıldı.
+
+**Dokuzuncu bulgu** (gerçek, canlıda doğrulanmış — "görünür ama kırık"
+sınıfı): `SalesView.jsx`'teki sevkiyat silme ikonu `can('delete')` ile
+kapılıydı (frontend `can()` matrisinde admin+manager). Ama
+`server/routes/sales.js:279`'daki `DELETE /shipments/:id`
+`requireRole('admin')` ile GERÇEK admin dışında herkesi (manager dahil)
+reddediyor. Aynı dosyada, 230 satır aşağıda, müşteri silme butonu zaten
+doğru şekilde `can('admin')` kullanıyordu — sevkiyat silme bu deseni
+takip etmemişti. Müdür bu butona tıklayınca doğrudan `fetch()` ile canlı
+kanıtlanan 403 alıyordu. Düzeltme: buton da `can('admin')`'e geçirildi
+(aynı dosyadaki kendi tutarlı deseniyle hizalandı).
+
+**Onuncu bulgu** (gerçek, canlıda doğrulanmış — "gizli ama izinli"
+sınıfı, `count.write` bulgusuyla AYNI KÖK NEDEN): `server/routes/
+documents.js:15`'teki belge/eki yükleme `WRITE`si
+`requireRole('admin','manager','operator','quality')` içeriyor — yani
+Kalite bir ürüne sertifika/test raporu ekleyebilmeli. Ama
+`ItemsView.jsx`'teki "Doküman Yükle" butonu genel `can('write')` ile
+kapılıydı (frontend matrisinde quality hiç yok). Kalite kullanıcısı bu
+özelliği masaüstünden hiç kullanamıyordu. Düzeltme: `can()`'e backend'in
+bu spesifik `WRITE` listesini yansıtan ayrı bir `'docs'` yetkisi eklendi
+(admin/manager/operator/quality'de var) — `count`'ta izlenen desenin
+aynısı.
+
+Diğer tüm karşılaştırmalar TEMİZ çıktı: `PlanningView.jsx`'in
+`can('approve')`/`can('write')` ayrımı `planning.js`'in `MANAGER`/`WRITE`
+sabitleriyle birebir; `PurchasingView.jsx`'in RFQ/fatura/onay/kalem
+butonları `purchase.write`/`purchase.approve`'la birebir; `CrmView.jsx`'in
+ziyaret silme butonu `visits.js`'in `MANAGER`'ıyla birebir;
+`SalesView.jsx`'in e-Belge gönder/sorgula butonları `edocs.js`'in
+`MANAGER`/`WRITE` ayrımıyla birebir; `AdminView.jsx`'teki Webhook'lar ve
+Muhasebe Aktarımı butonlarının `can()` koruması eksik görünüyor ama
+pratikte zararsız — Yönetim sekmesinin kendisi zaten yalnızca admin/
+manager'a açık ve her iki route da tam o ikisine izin veriyor
+(`ADMIN`-only webhook listesi zaten manager'ı da GET aşamasında
+engelliyor, muhasebe eşlemesi `MANAGER`).
+
+`test/e2e-browser/permission-matrix.spec.js` (yeni): Müdür'ün sevkiyat
+silme butonunu GÖRMEDİĞİNİ ve Kalite'nin "Doküman Yükle" butonunu
+GÖRDÜĞÜNÜ (ama "Düzenle"yi görmediğini) kanıtlıyor.
+
+**Doğrulama:** `npm run typecheck`/`lint` temiz. `npx playwright test` →
+22/22 geçti (2 yeni test dahil). `node test/run-all.js` → 29/29 suite
+geçti.
+
+**Bu oturumdaki toplam bulgu sayısı: 10** — 6'sı ana işlevsel tur
+(izlenebilirlik, teklif karşılaştırma, fatura eşleştirme, satış sevkiyatı
+tam çökmesi, denetim kaydı "null" sızıntısı, mobil mal kabul+sayım tam
+çökmesi), 4'ü rol bazlı yetki matrisi taraması (Yönetim sekmesi
+görünürlüğü, Kalite sayım erişimi, Müdür sevkiyat silme, Kalite belge
+yükleme). Hepsi gerçek verilerle canlı doğrulandı, kalıcı regresyon
+testleriyle korunuyor.
+
 ## 2026-09-14 (devam 25) — Rol bazlı tur: kullanıcı "sadece admin ile mi test ettin?" diye sordu — haklıydı, 2 bulgu daha
 
 Kullanıcı önceki turun tamamının (neredeyse) yalnızca `admin` (ve Depo

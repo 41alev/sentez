@@ -247,7 +247,7 @@ export default function SalesView() {
       { key: 'act', label: t('actions'), render: r => `<div class="row-actions">
           ${r.status !== 'Teslim Edildi' && can('write') ? `<button class="icon-btn ok" data-adv="${esc(r.id)}" title="${t('advanceStatus')}">${UI.icon(UI.ICONS.check)}</button>` : ''}
           <button class="icon-btn" data-print="${esc(r.id)}" title="${t('print')}">${UI.icon(UI.ICONS.print)}</button>
-          ${can('delete') && r.status !== 'Teslim Edildi' ? `<button class="icon-btn danger" data-del="${esc(r.id)}">${UI.icon(UI.ICONS.trash)}</button>` : ''}
+          ${can('admin') && r.status !== 'Teslim Edildi' ? `<button class="icon-btn danger" data-del="${esc(r.id)}">${UI.icon(UI.ICONS.trash)}</button>` : ''}
         </div>` }
     ], rows)}${res.totalPages ? pager(res, () => reload()) : ''}</div>`;
 

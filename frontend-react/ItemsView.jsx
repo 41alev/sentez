@@ -389,7 +389,7 @@ export default function ItemsView() {
           { key: 'docType', label: t('itemType'), render: d => `<span class="badge plain">${esc(d.docType)}</span>` },
           { key: 'uploadedAt', label: t('date'), render: d => UI.ts(d.uploadedAt) }
         ], docs.data) : `<div class="empty" style="padding:18px">${t('noData')}</div>`}
-        ${can('write') ? `<div style="margin-top:10px"><input type="file" id="docFile" style="font-size:12px">
+        ${can('docs') ? `<div style="margin-top:10px"><input type="file" id="docFile" style="font-size:12px">
           <button class="btn btn-ghost btn-sm" id="docUp" style="margin-left:6px">${t('uploadDoc')}</button></div>` : ''}`,
       footer: `<button class="btn btn-ghost" data-close>${t('close')}</button>
                ${can('write') ? `<button class="btn btn-primary" id="cardEdit">${t('edit')}</button>` : ''}`,

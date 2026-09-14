@@ -468,11 +468,15 @@ const UI = (() => {
     // ayrı tutulması, quality'ye yanlışlıkla stok/satış/üretim yazma erişimi
     // sızdırmadan sayım özelliğini doğru şekilde açıyor (bkz. PROJECT_STATUS.md:
     // Sayım oluşturma/kaydetme butonları quality için hiç görünmüyordu).
+    // 'docs' de aynı sebeple ayrı: server/routes/documents.js'teki WRITE
+    // (belge/eki yükleme) admin/manager/operator/quality içeriyor — quality'nin
+    // ürüne kalite sertifikası/test raporu ekleyebilmesi gerekiyor, ama genel
+    // 'write' bayrağı ona verilirse stok/satış/üretim yazma erişimi de sızardı.
     const P = {
-      admin: ['write', 'delete', 'approve', 'quality', 'admin', 'count'],
-      manager: ['write', 'delete', 'approve', 'quality', 'count'],
-      operator: ['write', 'count'],
-      quality: ['quality', 'count'],
+      admin: ['write', 'delete', 'approve', 'quality', 'admin', 'count', 'docs'],
+      manager: ['write', 'delete', 'approve', 'quality', 'count', 'docs'],
+      operator: ['write', 'count', 'docs'],
+      quality: ['quality', 'count', 'docs'],
       viewer: []
     };
     return (P[u.role] || []).includes(perm);
