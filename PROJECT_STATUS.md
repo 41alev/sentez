@@ -1,5 +1,78 @@
 # PROJECT_STATUS.md
 
+## 2026-09-14 (devam 28) — Kullanıcının 7 kalemlik listesi kapatıldı: mobil çevrimdışı kuyruk, eşzamanlı kullanıcı, tarayıcı uyumluluğu, yazdırma içeriği
+
+"devam 27"de ele alınan onay limiti + içe aktarım "hata ver" modu dışında
+kalan 4 kalem de bu oturumda kapatıldı — hepsi gerçek testlerle kanıtlandı,
+hiçbiri varsayımla "yeterli" ilan edilmedi:
+
+- **Mobil çevrimdışı kuyruk** (GERÇEK GAP'Tİ): `test/mobile.js`'deki jsdom
+  testi yalnızca "eski sürümden kalan bir kaydın IndexedDB'ye taşınması"
+  yükseltme senaryosunu kapsıyordu — canlı bir çevrimdışı işlem (bağlantı
+  yokken yeni bir sayım, sonra otomatik gönderim) hiç test edilmemişti.
+  `test/e2e-browser/mobile-offline-queue.spec.js` (yeni),
+  `context.setOffline()` ile GERÇEK ağ kesintisi uygulayarak public/js/
+  mobile.js'teki submit()/flushQueue() akışını uçtan uca kanıtlıyor:
+  çevrimdışıyken /mobile/sync'e hiç istek gitmiyor (doğrudan IndexedDB
+  kuyruğuna yazılıyor), bağlantı gelince 'online' olayı flushQueue()'yu
+  tetikleyip işlemi GERÇEKTEN sunucuya ulaştırıyor.
+- **Eşzamanlı kullanıcı senaryoları** (GERÇEK GAP'Tİ): `test/load.js` zaten
+  hacim/tekillik odaklı eşzamanlılığı (kayıp güncelleme yok, sipariş numarası
+  çakışmıyor) kapsıyordu ama iki FARKLI KULLANICININ aynı kaydı aynı anda
+  etkileyen bir durum geçişini (onay, kısmi teslim alma) tetiklediği senaryo
+  eksikti. `test/concurrency-races.js` (yeni) iki gerçek yarışı kanıtlıyor:
+  (1) admin+Müdür aynı ₺150.000 siparişi TAM AYNI ANDA onaylarsa tam olarak
+  biri kazanıyor, diğeri temiz reddediliyor; (2) iki kullanıcı aynı sipariş
+  kalemine aynı anda fazla teslim yaparsa (tolerans %0) tam olarak biri kabul
+  ediliyor, miktar bozulmuyor (12'ye zıplamıyor). Bu güvenlik server/routes/
+  purchasing.js'teki handler'ların `async` OLMAMASINDAN (better-sqlite3
+  senkron, Node tek iş parçacıklı) kaynaklanan yapısal bir garanti — testler
+  bunu varsaymak yerine gerçek eşzamanlı HTTP istekleriyle kanıtlıyor.
+- **Tarayıcı uyumluluğu** (kod taraması TEMİZ çıktı + gerçek WebKit
+  doğrulaması yapıldı): public/js ve public/css'te Chromium'a özel API
+  kullanımı yok (BarcodeDetector zaten feature-detect ediliyor ve
+  test/barcode.js'te doğrulanmış durumda; navigator.vibrate/serviceWorker
+  de guard'lı). `npx playwright install firefox webkit` ile gerçek Firefox
+  ve WebKit motorları bu makineye kuruldu (Playwright platform-bağımsız
+  dağıtıyor, gerçek macOS gerekmiyor) ve TÜM `test/e2e-browser` paketi
+  (24 test) bu motorlara karşı çalıştırıldı: **WebKit 24/24 GERÇEKTEN
+  geçti**; **Firefox bu ortamda hiç başlatılamadı** ("spawn UNKNOWN" —
+  uygulama koduyla ilgisiz, ortam/bağımlılık düzeyinde bir kısıt, dürüstçe
+  raporlandı). `playwright.cross-browser.config.js` (yeni) bu doğrulamayı
+  gelecekte tekrarlanabilir kılıyor.
+- **Yazdırma çıktılarının gerçek içeriği** (GERÇEK GAP'Tİ): public/js/
+  ui.js:277-374'teki `printDoc()` bir `window.open('')` açıp
+  `document.write()` ile tam belge yazıyor — bu popup'ın GERÇEKTEN doğru
+  veriyle dolup dolmadığı hiç test edilmemişti (bir alan yanlışlıkla boş
+  kalırsa yanlış irsaliye sevk edilir). Önceki not "mcp tarayıcı aracının
+  sandbox'ı popup'ları engelliyor" diye doğruydu ama YALNIZCA o interaktif
+  araca özeldi — Playwright'ın `context.waitForEvent('page')` API'si
+  popup'ı doğrudan yakalayabiliyor. `test/e2e-browser/
+  print-output-content.spec.js` (yeni): sevkiyat irsaliyesi popup'ının
+  `document.body.innerText`'i, TEK doğruluk kaynağı olan ham `GET /api/
+  sales/shipments/:id` yanıtıyla (sevkiyat no, kalem adı, varış yeri)
+  karşılaştırılıyor.
+
+**Düzeltilen önceki değerlendirme hataları** ("devam 27"de not edildi,
+burada tekrar): "Webhook otomatik yeniden deneme" ve büyük ölçüde "Veri
+Aktarımı çakışan kayıt" zaten test ediliyordu — bunlar YANLIŞ eksik
+iddialarıydı, düzeltildi.
+
+**Sonuç: kullanıcının listelediği 7 kalemin TAMAMI artık ya gerçek bir
+regresyon testiyle kapatıldı ya da (webhook/import çoğu) zaten kapalı
+olduğu doğru şekilde teyit edildi.**
+
+**Hâlâ devam eden:** kullanıcının aynı talimattaki son maddesi — "Rol
+taraması derinlikli ama tüketici olsun, her modülün her satır-aksiyonunu
+her rolle dene" — mevcut yetki taraması (bulgu 1-10) yüksek riskli yazma/
+silme/onay butonlarını kapsıyordu ama LİTERAL OLARAK her satır-aksiyonu
+kapsamıyordu. Bu, ayrı ve en büyük kalan iş kalemi — devam ediyor.
+
+**Doğrulama (bu oturumun tamamı için):** `npm run typecheck` temiz,
+`node test/run-all.js` → 31/31 paket geçti, `npx playwright test` (varsayılan
+chromium) → 24/24 geçti, `npx playwright test --config=playwright.
+cross-browser.config.js --project=webkit` → 24/24 geçti (gerçek WebKit).
+
 ## 2026-09-14 (devam 27) — Onay limiti + içe aktarım "hata ver" modu testleri; webhook/import "eksik" iddiası düzeltmesi
 
 Kullanıcı, kendi listelediği 7 kalemi ("Yazdırma çıktılarının gerçek
