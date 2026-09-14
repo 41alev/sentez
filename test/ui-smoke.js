@@ -46,7 +46,7 @@ async function until(fn, timeout = 6000, step = 60) {
     process.exit(2);
   }
 
-  const REACT_BUNDLE = path.join(ROOT, 'public', 'dist', 'react-views.js');
+  const REACT_BUNDLE = path.join(ROOT, 'public', 'dist', 'vendor-react.js');
   if (!fs.existsSync(REACT_BUNDLE)) {
     console.error('React derlemesi bulunamadı / React bundle not found:\n  npm run build');
     process.exit(2);
@@ -85,14 +85,25 @@ async function until(fn, timeout = 6000, step = 60) {
   window.URL.revokeObjectURL = () => {};
 
   // Load application scripts in the same order index.html does. Dashboard is now
-  // React (frontend-react/*.jsx) — the built bundle is loaded here, same as
-  // the browser loads it, so this test exercises the actual production
-  // artifact rather than superseded source. All 10 views now live in this
-  // one bundle (see the react-views list below); public/js/views/ no
-  // longer exists.
+  // React (frontend-react/*.jsx), built as a code-split bundle: one shared
+  // vendor-react.js + one small IIFE per screen (see scripts/build-frontend.js),
+  // loaded on demand by App.go() via a real injected <script src>. jsdom is
+  // configured with `resources: undefined` (no network fetch of external
+  // resources, including dynamically-injected <script src> elements) — so
+  // App's real lazy-loading path would just hang here waiting for a fetch
+  // that jsdom never performs. That's fine: this test's job is to catch
+  // runtime errors in the view CODE, not to re-prove the lazy-loading
+  // mechanism itself (a real browser does that — see
+  // test/e2e-browser/*.spec.js). So every screen's bundle is loaded
+  // upfront, by content, exactly like the three core scripts always were;
+  // App.go() below then finds each view's global already defined and
+  // renders immediately instead of injecting a script tag.
+  const VIEWS_LIST = ['dashboard', 'items', 'counts', 'lots', 'production', 'reports',
+    'planning', 'purchasing', 'quality', 'sales', 'crm', 'support', 'admin'];
   const files = [
     'js/i18n.js', 'js/api.js', 'js/ui.js',
-    'dist/react-views.js',
+    'dist/vendor-react.js',
+    ...VIEWS_LIST.map(v => `dist/view-${v}.js`),
     'js/app.js'
   ];
   console.log('\n=== BETİK YÜKLEME / SCRIPT LOADING ===');
@@ -104,9 +115,15 @@ async function until(fn, timeout = 6000, step = 60) {
     el.textContent = fs.readFileSync(path.join(ROOT, 'public', f), 'utf8');
     window.document.body.appendChild(el);
     const name = f.split('/').pop().replace('.js', '');
+    const VIEW_GLOBALS = {
+      dashboard: 'ViewDashboard', items: 'ViewItems', lots: 'ViewLots', counts: 'ViewCounts',
+      production: 'ViewProduction', purchasing: 'ViewPurchasing', crm: 'ViewCrm', support: 'ViewSupport',
+      sales: 'ViewSales', planning: 'ViewPlanning', quality: 'ViewQuality', reports: 'ViewReports', admin: 'ViewAdmin'
+    };
     const globalNames = {
       'i18n': ['I18N'], 'api': ['Api'], 'ui': ['UI'], 'app': ['App'],
-      'react-views': ['ViewDashboard', 'ViewItems', 'ViewCounts', 'ViewLots', 'ViewProduction', 'ViewReports', 'ViewPlanning', 'ViewPurchasing', 'ViewQuality', 'ViewSales', 'ViewAdmin'] // frontend-react/main.jsx defines these globals
+      'vendor-react': ['React', 'ReactDOM'],
+      ...Object.fromEntries(VIEWS_LIST.map(v => [`view-${v}`, [VIEW_GLOBALS[v]]]))
     }[name];
     const loaded = globalNames.every(g => window.eval(`typeof ${g} !== 'undefined'`));
     check(f, loaded && jsErrors.length === before, jsErrors.slice(before).join(' | '));

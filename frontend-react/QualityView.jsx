@@ -725,7 +725,7 @@ export default function QualityView() {
       } catch (err) { UI.err(err); }
     };
     lotSel.onchange = () => { goBtn.disabled = !lotSel.value; };
-    goBtn.onclick = () => { if (lotSel.value) ViewLots.traceDialog(lotSel.value); };
+    goBtn.onclick = () => { if (lotSel.value) App.traceLot(lotSel.value); };
   }
 
   if (!ready) {

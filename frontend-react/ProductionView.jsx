@@ -158,7 +158,7 @@ export default function ProductionView() {
                ${p.outputLotId ? `<button class="btn btn-ghost" id="pTrace">${t('traceability')}</button>` : ''}`,
       onOpen: (box) => {
         box.querySelector('#pComp')?.addEventListener('click', () => { closeModal(); completeDialog(p.id); });
-        box.querySelector('#pTrace')?.addEventListener('click', () => { closeModal(); ViewLots.traceDialog(p.outputLotId); });
+        box.querySelector('#pTrace')?.addEventListener('click', () => { closeModal(); App.traceLot(p.outputLotId); });
       }
     });
   }

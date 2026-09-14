@@ -1,13 +1,16 @@
-# React pilotu (frontend-react/) Vite ile derlenir; bu, devDependencies
-# (vite, @vitejs/plugin-react) gerektirir. Üretim imajına dev araçlarını
-# taşımamak için ayrı bir derleme (builder) aşaması kullanılıyor — yalnızca
-# derlemenin ÇIKTISI (public/dist/) son imaja kopyalanır.
+# Arayüzün TAMAMI (frontend-react/, 13 ekran) Vite ile derlenir; bu,
+# devDependencies (vite, @vitejs/plugin-react) gerektirir. Üretim imajına dev
+# araçlarını taşımamak için ayrı bir derleme (builder) aşaması kullanılıyor —
+# yalnızca derlemenin ÇIKTISI (public/dist/) son imaja kopyalanır.
+# `npm run build`, ekran bazlı kod bölme için tek bir `vite build` yerine
+# scripts/build-frontend.js'i çağırıyor (bkz. o dosyadaki ve
+# docs/YOL-HARITASI.md §8'deki not) — vite.config.js artık YOK.
 FROM node:22-slim AS builder
 
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
-COPY vite.config.js ./
+COPY scripts/build-frontend.js ./scripts/build-frontend.js
 COPY frontend-react/ ./frontend-react/
 RUN npm run build
 

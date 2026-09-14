@@ -1,10 +1,53 @@
 // @ts-nocheck
 const App = (() => {
-  const VIEWS = {
-    dashboard: ViewDashboard, items: ViewItems, lots: ViewLots, counts: ViewCounts,
-    production: ViewProduction, purchasing: ViewPurchasing, crm: ViewCrm, support: ViewSupport, sales: ViewSales, planning: ViewPlanning,
-    quality: ViewQuality, reports: ViewReports, admin: ViewAdmin
+  // Ekran paketleri artık ayrı ayrı, isteğe bağlı (lazy) yükleniyor — bkz.
+  // scripts/build-frontend.js'teki kod bölme notu. `dashboard` tek istisna:
+  // index.html'de vendor-react.js'ten hemen sonra HER ZAMAN eager yüklenir
+  // (varsayılan/ilk ekran olduğu için gecikme eklemesin diye), bu yüzden
+  // `window.ViewDashboard` bu satır çalıştığında zaten hazırdır. Diğer
+  // 12 ekran ilk `go(view)` çağrısında `loadViewScript()` ile enjekte edilir.
+  const VIEW_GLOBALS = {
+    dashboard: 'ViewDashboard', items: 'ViewItems', lots: 'ViewLots', counts: 'ViewCounts',
+    production: 'ViewProduction', purchasing: 'ViewPurchasing', crm: 'ViewCrm', support: 'ViewSupport',
+    sales: 'ViewSales', planning: 'ViewPlanning', quality: 'ViewQuality', reports: 'ViewReports', admin: 'ViewAdmin'
   };
+  const VIEWS = { dashboard: window.ViewDashboard };
+  const loadingPromises = {};
+
+  /** Bir ekranın paketini (yalnızca bir kez) enjekte edip yüklenmesini bekler. */
+  function loadViewScript(view) {
+    if (VIEWS[view]) return Promise.resolve();
+    // Paket zaten başka bir yoldan (ör. test ortamında hepsi önceden
+    // yüklenmişse, ya da ileride ekran paketleri statik olarak da
+    // eklenirse) sayfada mevcutsa tekrar <script> enjekte etmeye gerek yok.
+    if (window[VIEW_GLOBALS[view]]) { VIEWS[view] = window[VIEW_GLOBALS[view]]; return Promise.resolve(); }
+    if (loadingPromises[view]) return loadingPromises[view];
+    loadingPromises[view] = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = `/dist/view-${view}.js`;
+      script.onload = () => { VIEWS[view] = window[VIEW_GLOBALS[view]]; resolve(); };
+      script.onerror = () => { delete loadingPromises[view]; reject(new Error('Ekran yüklenemedi / Failed to load screen: ' + view)); };
+      document.head.appendChild(script);
+    });
+    return loadingPromises[view];
+  }
+
+  /**
+   * Başka bir ekranın (henüz yüklenmemiş olabilecek) dışa açık bir
+   * fonksiyonunu güvenle çağırmak için — bkz. `traceLot` (LotsView'ın
+   * `traceDialog`'u SalesView/QualityView/ProductionView'dan çağrılıyor,
+   * ama Partiler ekranına hiç gidilmemiş olabilir).
+   */
+  async function ensureViewLoaded(view) {
+    if (!VIEWS[view]) await loadViewScript(view);
+    return VIEWS[view];
+  }
+
+  async function traceLot(lotId) {
+    const view = await ensureViewLoaded('lots');
+    return view.traceDialog(lotId);
+  }
+
   let current = null;
 
   /* ---------- i18n on static markup ---------- */
@@ -15,14 +58,17 @@ const App = (() => {
 
   /* ---------- routing ---------- */
   async function go(view) {
-    if (!VIEWS[view]) view = 'dashboard';
+    if (!VIEW_GLOBALS[view]) view = 'dashboard';
     current = view;
     document.querySelectorAll('.nav-tab').forEach(b => b.classList.toggle('active', b.dataset.view === view));
     document.querySelectorAll('.view').forEach(s => s.classList.remove('active'));
     const el = document.getElementById('view-' + view);
     el.classList.add('active');
     location.hash = view;
-    try { await VIEWS[view].render(el); }
+    try {
+      if (!VIEWS[view]) { el.innerHTML = UI.loading(); await loadViewScript(view); }
+      await VIEWS[view].render(el);
+    }
     catch (e) { UI.err(e); el.innerHTML = `<div class="empty">${UI.esc(e.message)}</div>`; }
   }
 
@@ -212,5 +258,5 @@ const App = (() => {
 
   document.addEventListener('DOMContentLoaded', init);
 
-  return { go, refreshBadges };
+  return { go, refreshBadges, ensureViewLoaded, traceLot };
 })();

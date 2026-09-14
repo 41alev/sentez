@@ -435,7 +435,7 @@ export default function SalesView() {
                <button class="btn btn-ghost" id="shPrint">${UI.icon(UI.ICONS.print)}${t('packingList')}</button>`,
       onOpen: (box) => {
         box.querySelector('#shPrint').onclick = () => printPackingList(s);
-        box.querySelectorAll('[data-tr]').forEach(b => b.onclick = () => { closeModal(); ViewLots.traceDialog(b.dataset.tr); });
+        box.querySelectorAll('[data-tr]').forEach(b => b.onclick = () => { closeModal(); App.traceLot(b.dataset.tr); });
       }
     });
   }
