@@ -33,7 +33,6 @@ npm install --no-save jsdom   # arayüz ve barkod testleri için (dev bağımlı
 # Sunucu ayaktayken:
 npm test                # 77 — iş kuralları, yetki matrisi, uçtan uca akışlar
 npm run test:contract   # 58 — API alan adları arayüzün okuduklarıyla eşleşiyor mu
-npm run test:einvoice   # 70 — e-Fatura / e-Arşiv / e-İrsaliye üretimi ve gönderimi
 npm run test:planning   # 78 — kapasite, çizelgeleme, MRP, OEE
 npm run test:ui         # 98 — arayüz gerçek bir DOM'da çalıştırılır
 npm run test:security   # 57 — kimlik doğrulama, enjeksiyon, XSS, sır sızıntısı
@@ -128,35 +127,13 @@ Hepsi CSV olarak dışa aktarılabilir.
 - **OEE** = Kullanılabilirlik × Performans × Kalite. Üçü ayrı ayrı gösterilir, çünkü tek bir
   yüzde kaybın nerede olduğunu söylemez.
 
-### e-Belge (e-Fatura / e-Arşiv / e-İrsaliye)
-Belgeler **UBL-TR 1.2** formatında üretilir. Alıcı e-Fatura mükellefiyse e-Fatura, değilse e-Arşiv
-düzenlenir — bu seçim kullanıcıya bırakılmaz, GİB kuralıdır.
-
-- Fatura satır bazlı düzenlenir; her kalem kendi KDV oranını ve iskontosunu taşır.
-  Satır toplamı ile miktar × fiyat − iskonto arasında sapma varsa belge üretilmez.
-- Belge numarası GİB biçimindedir: 3 harf seri + yıl + 9 hane sıra (`DPT2026000000001`).
-  Sıra boşluksuz artar ve elle değiştirilemez.
-- ETTN her belge için üretilir; belge, XML'i ve SHA-256 özetiyle birlikte saklanır.
-- Sevkiyattan e-İrsaliye üretilir; parti (lot) numaraları belgeye işlenir, böylece
-  izlenebilirlik sevk belgesine kadar uzanır.
-- Gönderilmiş e-Fatura tek taraflı iptal edilemez; sistem bunu engeller ve iade faturasına yönlendirir.
-- Her belge için ayrı bir geçmiş tutulur: kim, ne zaman, hangi yanıtla.
-
-**Entegratör bağımsızdır.** Gönderim bir adaptör arkasındadır; entegratör değiştiğinde yalnızca
-yeni bir adaptör eklenir, belgeler ve geçmiş yerinde kalır. İki adaptör hazır gelir:
-
-| Adaptör | Davranış | Kullanım |
-|---|---|---|
-| `local` | Belgeyi `data/e-documents/` altına yazar, hiçbir yere göndermez | Geliştirme ve kabul testi |
-| `http` | Belgeyi REST üzerinden entegratöre POST eder, durumu sorgular | Canlı — uç noktalar ayarlardan verilir |
-
-> **Canlıya almadan önce:** Üretilen XML, seçtiğiniz entegratörün şema doğrulamasından geçirilmelidir.
-> Alan adları ve zorunluluklar GİB kılavuzuna göre yazılmıştır, ancak entegratörler ek alan isteyebilir.
-> Bu sistem hiçbir gerçek entegratöre veya GİB test ortamına karşı denenmemiştir.
-
 ### Yönetim
 Kullanıcılar ve yetki matrisi · depolar · tarihsel döviz kurları · onay ve bildirim kuralları ·
-denetim kaydı · sistem ayarları · e-Belge ayarları · yedekleme.
+denetim kaydı · sistem ayarları · yedekleme.
+
+> **Not:** e-Fatura/e-Arşiv/e-İrsaliye (resmî GİB entegrasyonu) bilinçli olarak sistemde YOK —
+> resmî belge sorumluluğu ve buna bağlı sürekli mevzuat takibi bu ürünün kapsamı dışında
+> tutuluyor. Faturalama yalnızca kayıt/raporlama amaçlıdır.
 
 ---
 
@@ -253,7 +230,6 @@ Tüm uç noktalar `/api` altında, `Authorization: Bearer <token>` ister.
 | Kalite | `/quality/plans` · `/quality/inspections` · `/quality/ncrs` · `/quality/capas` · `/quality/equipment` · `/quality/trace/backward/:lotId` · `/quality/trace/forward/:lotId` · `/quality/recall/:lotId` |
 | Rapor | `/reports/summary` · `/trends` · `/dead-stock` · `/turnover` · `/abc` · `/reorder-suggestions` · `/supplier-performance` · `/quality-kpis` · `/production-costs` · `/valuation` |
 | Yönetim | `/users` · `/warehouses` · `/settings` · `/exchange-rates` · `/approval-rules` · `/notification-rules` · `/audit` |
-| e-Belge | `/edocs` · `POST /edocs/from-invoice/:id` · `POST /edocs/from-shipment/:id` · `/edocs/:id/send` · `/edocs/:id/refresh` · `/edocs/:id/cancel` · `/edocs/:id/xml` · `/edocs/check-taxpayer/:customerId` · `/edocs/settings/current` |
 | Planlama | `/planning/work-centers` · `/shifts` · `/routings/:itemId` · `/capacity` · `/schedule/:orderId` · `/operations` · `/shift-logs` · `/oee` · `/mrp/run` · `/mrp/suggestions` |
 | Diğer | `/documents` · `/notifications` · `/notifications/mail-status` · `GET /health` (kimlik istemez) |
 

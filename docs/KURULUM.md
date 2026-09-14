@@ -25,7 +25,6 @@ Dosya olarak `data/` klasöründe durur.
 # 1. Dosyaları açın ve bağımlılıkları kurun
 unzip depo-takip-erp.zip && cd depo-takip-app
 npm install --omit=dev
-npm run native:rebuild   # e-Belge şema doğrulama modülünün ikili dosyasını indirir
 
 # 2. Ortam ayarlarını hazırlayın
 cp .env.example .env
@@ -115,15 +114,6 @@ Sırayla:
 
 Sunucu 24 saatte bir otomatik yedek alır ve son 14 kopyayı saklar.
 
-> **e-Belge saklama süresi (10 yıl):** Üretilen her e-Fatura/e-Arşiv/e-İrsaliye
-> XML'i `e_documents.xml` sütununda, canlı veritabanının kendisinde saklanır —
-> ayrı bir dosya değildir ve **hiçbir otomatik temizlik/silme işi bu tabloya
-> dokunmaz** (kod tabanında böyle bir iş kasıtlı olarak yoktur, API'de bir
-> silme ucu da yoktur). Bu, "son 14 yedek" rotasyonundan BAĞIMSIZ bir garanti:
-> gerçek saklama süresi, canlı veritabanının kendisi hiç budanmadığı için
-> sağlanır. **Bunu bozmayın** — ileride "eski kayıtları temizle" tarzı bir
-> bakım işi eklerseniz `e_documents` tablosunu bundan muaf tutun.
-
 ```bash
 npm run backup                        # elle yedek
 npm run restore -- --list             # yedekleri listele
@@ -173,7 +163,6 @@ indirip `npm run restore -- <indirilen-dosya>` ile geri yüklersiniz.
 # 2. Yeni sürümü açın (data/ klasörünü KORUYUN)
 # 3. Bağımlılıkları güncelleyin
 npm install --omit=dev
-npm run native:rebuild
 
 # 4. Yükseltmeyi çalıştırın
 npm run upgrade

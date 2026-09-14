@@ -22,7 +22,6 @@ Kod tabanı gerçekten incelenerek çıkarılmıştır (`server/migrations/001_i
 | `customers` | `contact_person`, `phone`, `email`, `address`, `tax_no` | Müşteri firma yetkilisi / şahıs |
 | `suppliers` | `contact_person`, `phone`, `email`, `address`, `tax_no`, `bank_info` | Tedarikçi firma yetkilisi / şahıs |
 | `audit_log` | işlemi yapan `user_id`, IP (varsa) | Sistem kullanıcısı |
-| `e_documents` (e-Belge) | alıcı VKN/TCKN, unvan, adres | Müşteri |
 
 `tax_no` alanı gerçek kişi müşterilerde **TCKN** (T.C. Kimlik Numarası) taşıyabilir —
 KVKK'da TCKN özel bir kategori değildir ama doğrudan kimliklendirici olduğu için önemi
@@ -109,16 +108,20 @@ Kod incelendiğinde kişisel/ticari verinin sistem dışına **gerçekten çıkt
    sağlayıcısına.
 2. **Webhook'lar** (`server/lib/webhooks.js`) — kullanıcının tanımladığı üçüncü taraf
    URL'lere (ör. bir e-ticaret entegrasyonu), sipariş/müşteri verisi içerebilir.
-3. **e-Fatura entegratörü** (bu oturumda genişletilen `server/services/einvoice.js`) —
-   müşteri VKN/unvan/adres bilgisi entegratöre gönderilir.
 
 Bunların hiçbiri kötü niyetli veya yanlış değil — B2B bir ERP'de bu aktarımlar normaldir
 ve büyük olasılıkla KVKK m.5/2-c ("bir sözleşmenin kurulması veya ifasıyla doğrudan
 doğruya ilgili olması") kapsamında rıza gerektirmeden yapılabilir. Ancak KVKK m.10 uyarınca
 **aydınlatma metninde bu aktarımların açıkça belirtilmesi** hukuki bir gerekliliktir — bu
 metin sistemin kodunda değil, şirketin kendi KVKK dokümantasyonunda olmalıdır. Burada
-öneri: hangi üçüncü taraflara veri gittiğinin bu üç nokta üzerinden listelenmesi, aydınlatma
+öneri: hangi üçüncü taraflara veri gittiğinin bu iki nokta üzerinden listelenmesi, aydınlatma
 metnini hazırlayacak danışmana doğrudan verilebilir.
+
+**Not:** Bu belgenin ilk yazıldığı tarihte var olan e-Fatura/e-Belge modülü (üçüncü
+aktarım noktası olarak burada listeleniyordu) sonradan TAMAMEN kaldırıldı (bkz.
+PROJECT_STATUS.md) — satılabilir bir ürün için resmî belge sorumluluğu/mevzuat takibi
+istenmediği için. Bu, KVKK açısından da bir aktarım noktasını ortadan kaldırdığı için
+olumlu bir yan etki.
 
 ### 3.5 — DÜŞÜK: Denetim kaydında IP adresi tutulmuyor
 

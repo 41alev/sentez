@@ -7,30 +7,41 @@ Bu belge, sistemin sahada kullanılabilir hale gelmesi için kalan işleri sıra
 
 ## Kapsam kararı (güncellendi — bkz. not)
 
-> **Not (bu güncelleme tarihinde):** Bu bölüm ilk yazıldığında hem e-Fatura hem
-> muhasebe entegrasyonu tamamen kapsam dışıydı. O tarihten sonra **program-bağımsız
-> bir muhasebe aktarım köprüsü eklendi** (bkz. §7) — bu, resmî bir e-Fatura/GİB
-> entegrasyonu DEĞİL, yalnızca CSV/JSON dışa aktarımdır, aşağıdaki e-Fatura kararını
-> etkilemez. e-Fatura/e-İrsaliye tarafı hâlâ aynı gerekçeyle kapsam dışıdır.
+> **Not (bu güncelleme tarihinde):** Ürün artık birden çok firmaya (fabrika/
+> işletme/şirket) kurulup satılacak ticari bir üründür. Bu iş modelinde
+> satıcının üstlenmek istemediği hiçbir resmî belge sorumluluğu/mevzuat takip
+> yükü OLMAMALI — bu yüzden e-Belge (e-Fatura/e-Arşiv/e-İrsaliye) modülü
+> "varsayılan kapalı" durumundan çıkarılıp **kaynak koddan TAMAMEN silindi**
+> (`server/routes/edocs.js`, `server/services/einvoice.js`, `server/lib/
+> ubl.js`, `server/lib/ubl-validate.js`, `server/lib/ubl-schema/` XSD'leri,
+> ilgili veritabanı tabloları/sütunları — bkz. `server/migrations/
+> 017_remove_einvoice_module.js`). Bu, bir müşterinin bu özelliği yanlışlıkla
+> keşfedip etkinleştirmesi ve "sisteminiz e-Fatura üretiyor" diye satıcıya
+> geri dönmesi ihtimalini kod seviyesinde ortadan kaldırıyor — yalnızca
+> "kapalı" bırakmaktan daha güçlü bir garanti. `libxmljs2` bağımlılığı (yalnızca
+> UBL şema doğrulaması için gerekliydi, ~100 alt paket) da kaldırıldı —
+> kurulum artık daha az native derleme riski taşıyor.
 
-**e-Fatura / e-İrsaliye resmî entegrasyonu kapsam dışıdır.** Resmî belge sorumluluğu
-alınmak istenmediği için bu modül devreye alınmamıştır (bir entegratör/GİB hesabı da
-yoktur — bkz. "Yalnızca sahada çözülebilecekler").
+**e-Fatura / e-İrsaliye resmî entegrasyonu kapsam dışıdır ve kod tabanında YOKTUR.**
+Resmî belge sorumluluğu hiçbir koşulda üstlenilmeyecek (bkz. "Yalnızca sahada
+çözülebilecekler" — bu artık teknik değil, iş modeli kararı).
 
-- e-Belge modülü kodda duruyor ama **varsayılan olarak kapalı** (`einvoiceEnabled = 0`,
-  bkz. `server/seed.js`, `server/scripts/setup.js`). İleride bir entegratör hesabı
-  edinilirse açılabilir; adaptör katmanı (`server/routes/edocs.js`) ve UBL şema
-  doğrulama (`server/lib/ubl.js`) hazır, yalnızca gerçek bir entegratöre karşı hiç
-  test edilmedi.
 - Faturalama sistem içinde yalnızca **kayıt ve raporlama** amaçlıdır; resmî belge
-  üretmez — bunu üreten ayrı, kapalı e-Belge modülüdür.
-- **Muhasebeye aktarım artık VAR** (bkz. §7) — resmî bir entegrasyon değil, hangi
+  hiç üretmez.
+- Genel şirket bilgisi (vergi dairesi/il/ilçe/posta kodu/MERSİS/ticaret sicil no)
+  e-Belge'den bağımsız, GENEL amaçlı alanlar olarak KALDI — yazdırma
+  şablonlarında (paket listesi, sipariş formu vb.) hâlâ kullanılıyor; artık
+  Yönetim > Belge Şablonları > "Firma Kimliği" kartından düzenleniyor (eskiden
+  yalnızca silinen e-Belge ayarları sekmesinden düzenlenebiliyordu — bu
+  ekranın kaldırılmasıyla ortaya çıkan gerçek bir regresyon önceden fark edilip
+  kapatıldı).
+- **Muhasebeye aktarım hâlâ VAR** (bkz. §7) — resmî bir entegrasyon değil, hangi
   muhasebe programına geçilirse geçilsin hesap kodu eşlemesiyle uyarlanabilen genel
-  bir yevmiye fişi dışa aktarımı.
+  bir yevmiye fişi dışa aktarımı. Bu karardan HİÇ etkilenmedi.
 
-Sistem hâlâ öncelikle *operasyonel* bir araç: stok, üretim, kalite, planlama,
+Sistem öncelikle *operasyonel* bir araç: stok, üretim, kalite, planlama,
 sevkiyat, CRM, destek takibi. Mali/resmî tarafın yalnızca "resmî belge üretme"
-kısmı (e-Fatura/e-İrsaliye) dışarıda; muhasebeye veri aktarımı artık içeride.
+kısmı hiç yok; muhasebeye veri aktarımı (dışa aktarım olarak) içeride.
 
 ---
 
@@ -375,6 +386,30 @@ bir PWA — `manifest.webmanifest` + service worker ile ana ekrana eklenip
 önbellek listesi API çağrılarını HİÇ içermiyor (aksi halde stok/sipariş verisi
 bayatlardı) — yalnızca kabuk (HTML/CSS/JS/ikonlar) önbelleklenir.
 
+### 16. Genel arama (global search) — **TAMAMLANDI**
+
+14 ekranlı bir sistemde "bu ürün/müşteri/sipariş hangi ekrandaydı" diye tek
+tek gezmek yerine, kenar çubuğundaki tek kutudan aranabiliyor.
+
+`test/search.js` → 13/13, `test/e2e-browser/global-search.spec.js` → 3/3.
+Arayüz: kenar çubuğu, firma logosunun hemen altı (her ekranda görünür).
+
+Yapılanlar:
+- Ürün (ad/kod/barkod), müşteri, tedarikçi, satış siparişi, satın alma
+  siparişi ve parti numarasında aynı anda arama; her kategori en fazla 6
+  sonuç gösterir.
+- Sonuca tıklamak doğru EKRANA götürür (kod bölme ile yüklenen ekran henüz
+  açık değilse otomatik yükler — bkz. §8). **Bilinçli kapsam sınırı:** o
+  ekranın kendi sekmesini/kaydını otomatik AÇMAZ — ör. bir müşteri sonucu
+  Satış ekranına götürür, "Müşteriler" sekmesine kullanıcı kendi tıklar. Bunu
+  otomatikleştirmek 5 ayrı ekran dosyasının iç sekme durumuna dışarıdan
+  müdahale etmeyi gerektirirdi; "hangi ekrana bakacağını bilmiyorum" sorununu
+  tek başına çözdüğü için kapsam kasıtlı dar tutuldu.
+- Basit `LIKE` sorgusu (tam metin indeksleme/FTS5 değil) — mevcut veri
+  hacminde (binlerce kayıt) fark yaratmaz; hacim gerçekten büyürse tek
+  dosyada (`server/routes/search.js`) değiştirilebilir.
+- Klavye: Escape kapatır, Enter ilk sonucu açar.
+
 ---
 
 ## Yalnızca sahada çözülebilecekler
@@ -390,6 +425,11 @@ Bunlar bu ortamda kapatılamaz; kayıt için burada duruyor.
 - **Paralel pilot** — 1–2 ay mevcut yöntemle yan yana çalıştırıp sayıların tutup
   tutmadığını görmek. Bunun yerine geçecek bir test yok.
 - **Kullanıcı eğitimi** — kılavuz yazıldı ama kimse üzerinde denenmedi.
+- **Kullanım sözleşmesi / lisans metni (EULA)** — birden çok firmaya satılan bir
+  ürün için "olduğu gibi sunulur, mevzuata uyum müşterinin sorumluluğundadır"
+  gibi standart maddeler içeren kısa bir metin bir avukata hazırlatılmalı. Bu,
+  teknik bir önlem değil (e-Belge'nin koddan tamamen kaldırılması gibi), hukuki
+  bir koruma — kod tarafında yapılabilecek bir şey yok.
 
 ---
 
@@ -412,4 +452,5 @@ Bunlar bu ortamda kapatılamaz; kayıt için burada duruyor.
 | 13 | Barkod etiket yazdırma (Zebra/ZPL) | **tamamlandı** |
 | 14 | KVKK uyumluluğu | **tamamlandı** |
 | 15 | Özel rapor oluşturucu (pivot) | **tamamlandı** (temel düzeyde — talep tahmini kapsam dışı) |
-| — | e-Fatura / e-İrsaliye RESMİ entegrasyonu | **kapsam dışı** (adaptör hazır, kapalı — entegratör hesabı yok) |
+| 16 | Genel arama (global search) | **tamamlandı** |
+| — | e-Fatura / e-İrsaliye RESMİ entegrasyonu | **kapsam dışı — kod tabanından TAMAMEN kaldırıldı** (bkz. Kapsam kararı) |

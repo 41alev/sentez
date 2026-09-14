@@ -24,20 +24,33 @@ granüler `PERMISSIONS` haritası HEM DE bazı route dosyalarının kendi yerel
 genel `can()` bayraklarıyla TEK TEK karşılaştırılmadan asla varsayılmamalı
 (bu tam olarak bu oturumdaki "rol taraması" bulgularının kök nedeniydi).
 
+**İş modeli (önemli, mimariyi etkiliyor):** Ürün artık **birden çok firmaya
+(fabrika/işletme/şirket) tek tek kurulup satılacak** ticari bir ürün — SaaS
+değil. Bu yüzden: (1) hiçbir resmî belge sorumluluğu/sürekli mevzuat takip
+yükü İSTENMİYOR — e-Fatura modülü bu yüzden koddan TAMAMEN kaldırıldı,
+"kapalı bırakmak" yeterli görülmedi (bkz. devam 31). (2) Tek-tesis mimari
+(çok şirketlilik kasıtlı atlandı) bu model için doğru — her müşteri kendi
+izole kurulumunu alıyor. (3) `server/lib/license.js`'teki imzalı lisans
+dosyası mekanizması (Ed25519, süreli/süresiz) tam bu "geliştir-kur-sat"
+modeli için hazır, varsayılan kapalı (`LICENSE_FILE` tanımlanmadıkça hiç
+devreye girmez).
+
 **Şu anki aşama:** Özellik açısından tamamlanmış, sertleştirilmiş, kapsamlı
 test paketi olan bir sistem — **sahaya ilk kurulum öncesi son doğrulama**
-aşamasında. Kod tarafında bilinen bir eksik YOK; kalanlar yalnızca sahada
-(gerçek cihaz, gerçek kullanıcı, gerçek internet/ağ koşulları) çözülebilir.
+aşamasında, gerçek bir pilot kuruluma hazır. Kod tarafında bilinen bir eksik
+YOK; kalanlar yalnızca sahada (gerçek cihaz, gerçek kullanıcı, gerçek
+internet/ağ koşulları) veya hukuken (EULA/lisans metni — kod dışı) çözülebilir.
 
-**Tamamlanan işlerin TAM listesi:** `docs/YOL-HARITASI.md` (15 madde, hepsi
+**Tamamlanan işlerin TAM listesi:** `docs/YOL-HARITASI.md` (16 madde, hepsi
 tamamlandı veya bilinçli olarak atlandı/kapsam dışı bırakıldı — bu dosyanın
 kendisinden daha güncel ve daha az kalabalık). Kısaca: Excel içe aktarım,
 yazdırılabilir belge şablonları, mobil/PWA terminal, veri sağlığı denetimi,
-kurulum/yükseltme yolu, muhasebe aktarım köprüsü, tam React geçişi, CRM,
-destek takibi, MRP/kapasite planlama, OpenAPI+Webhooks, barkod ZPL etiket,
-KVKK uyumluluğu, pivot rapor oluşturucu. e-Fatura yalnızca RESMİ entegratör
-bağlantısı kapsam dışı (kod hazır, kapalı). Çok şirketlilik şeması hazır
-ama bilinçli olarak devre dışı (tek tesis).
+kurulum/yükseltme yolu, muhasebe aktarım köprüsü (genel, programdan
+bağımsız), tam React geçişi (ekran bazlı kod bölmeli), CRM, destek takibi,
+MRP/kapasite planlama, OpenAPI+Webhooks, barkod ZPL etiket, KVKK uyumluluğu,
+pivot rapor oluşturucu, genel arama (global search). e-Fatura kod tabanından
+TAMAMEN kaldırıldı (aşağıya bkz.). Çok şirketlilik şeması hazır ama bilinçli
+olarak devre dışı (tek tesis).
 
 **Bilinen riskler / hâlâ sahada doğrulanması gerekenler** (`docs/
 YOL-HARITASI.md`'nin kendi listesi, hâlâ geçerli): gerçek bir el
@@ -48,20 +61,22 @@ yöntemle yan yana) hiç çalıştırılmadı, kullanıcı eğitimi kılavuzu ki
 başlatılamadı (Playwright "spawn UNKNOWN" — ortam kısıtı, uygulama hatası
 değil); WebKit gerçekten doğrulandı, Chromium sürekli doğrulanıyor.
 
-**Test durumu:** `node test/run-all.js` → 31 sunucu/bağımsız paket, hepsi
-yeşil. `npx playwright test` → gerçek Chromium'a karşı 30 test, hepsi
+**Test durumu:** `node test/run-all.js` → 32 sunucu/bağımsız paket, hepsi
+yeşil. `npx playwright test` → gerçek Chromium'a karşı 33 test, hepsi
 yeşil. `npm run typecheck`/`npm run lint` → temiz (0 hata). `npm audit` →
-0 açık, `npm outdated` → boş (tüm bağımlılıklar güncel).
+0 açık. Gerçek `npm run setup` (parametreli) + üretim modunda (`NODE_ENV=
+production`, gerçek `JWT_SECRET`) uçtan uca kurulum-giriş provası yapıldı —
+çalışıyor.
 
 **Bir sonraki oturum için:** Kod tarafında açık bir görev listesi yok.
-Kullanıcıdan yeni bir talep gelmediyse, en yüksek değerli sıradaki adım
-`docs/YOL-HARITASI.md`'deki "Yalnızca sahada çözülebilecekler" listesi —
-bunlar bu geliştirme ortamında kapatılamaz, gerçek donanım/kullanıcı/ağ
-gerektirir.
+Kullanıcıdan yeni bir talep gelmediyse, en yüksek değerli sıradaki adımlar:
+(1) `docs/YOL-HARITASI.md`'deki "Yalnızca sahada çözülebilecekler" listesi
+(gerçek donanım/kullanıcı/ağ gerektirir), (2) bir avukata EULA/lisans metni
+hazırlatmak (kod dışı, ticari ürün olarak satış için önemli).
 
-**Son güncelleme:** 2026-09-14 (devam 30 — genel check-up: dokümantasyon
-güncelleme, ekran bazlı kod bölme, bağımlılık yükseltmeleri; ayrıntılar
-aşağıdaki kronolojik günlükte).
+**Son güncelleme:** 2026-09-15 (devam 31 — e-Fatura modülü kalıcı olarak
+koddan kaldırıldı, genel arama eklendi, gerçek kurulum yolu uçtan uca
+doğrulandı; ayrıntılar aşağıdaki kronolojik günlükte).
 
 ---
 
@@ -71,6 +86,86 @@ Aşağıdaki girişler EKLENDİKÇE üste eklenir, geçmiş girişler asla silin
 — her bulunan gerçek hatanın, alınan mimari kararın ve reddedilen
 alternatifin kaydı. Yukarıdaki özeti güncel tutmak yeterli değilse (ör.
 belirli bir kararın TAM gerekçesini arıyorsanız) buradan devam edin.
+
+## 2026-09-15 (devam 31) — e-Fatura kalıcı olarak kaldırıldı, genel arama eklendi, gerçek kurulum yolu doğrulandı
+
+Kullanıcı iş modelini netleştirdi: bu ürün artık fabrika/işletme/şirket
+tipindeki birden çok firmaya kurulup satılacak ticari bir ürün — hiçbir
+resmî belge sorumluluğu, sürekli mevzuat takibi veya "programı sürekli
+güncellemem gereken" bir yük istenmiyor. Bu, önceki oturumun "e-Belge
+varsayılan kapalı, kod duruyor" kararını YETERSİZ kıldı — kod SİLİNDİ.
+
+**1) e-Fatura/e-Arşiv/e-İrsaliye modülü TAMAMEN kaldırıldı:**
+- Silinen dosyalar: `server/routes/edocs.js`, `server/services/einvoice.js`,
+  `server/lib/ubl.js`, `server/lib/ubl-validate.js`, `server/lib/
+  ubl-schema/` (18 XSD dosyası), `test/einvoice.js`.
+- Yeni migration `017_remove_einvoice_module.js`: `e_documents`/
+  `e_document_log`/`e_document_series` tabloları DROP edildi;
+  `companies.einvoice_sender_alias`/`edespatch_sender_alias` ve
+  `customers.identity_no`/`is_einvoice_user`/`einvoice_alias`/
+  `einvoice_checked_at` sütunları DROP COLUMN ile kaldırıldı (SQLite 3.53,
+  DROP COLUMN destekli). `002_einvoice.js`'in KENDİSİ değiştirilmedi — o
+  migration yalnızca e-Belge'ye özel değildi (genel VAT/fatura alanları da
+  ekliyordu, bkz. migration'ın kendi yorumu) — geriye dönük migration
+  geçmişini bozmadan, YALNIZCA gerçekten e-Belge'ye özel olan kısım silindi.
+- `libxmljs2` bağımlılığı kaldırıldı (yalnızca XSD doğrulama için gerekliydi)
+  — **100 alt paket** kalktı; Dockerfile'daki `native:rebuild` adımı ve
+  CI'daki karşılığı da kaldırıldı. Kurulum artık daha az native derleme
+  riski taşıyor.
+- **Gerçek regresyon bulunup düzeltildi:** e-Belge ayarları sekmesi
+  silinince, o sekmenin İÇİNDE düzenlenen ama genel amaçlı olan şirket
+  bilgisi (vergi dairesi/il/ilçe/posta kodu/MERSİS/ticaret sicil no —
+  yazdırma şablonlarında hâlâ kullanılıyor, `server/routes/templates.js`)
+  düzenlenemez hale geliyordu — hiçbir ekranda bu alanlara erişim kalmıyordu.
+  `PUT /templates/branding/current` bu alanları kabul edecek şekilde
+  genişletildi, Yönetim > Belge Şablonları > "Firma Kimliği" kartına
+  eklendi. Tarayıcıda elle doğrulandı: alan kaydediliyor VE gerçek yazdırma
+  çıktısına (`UI.printDoc`) doğru yansıyor.
+- `defaultVatRate` ayarı da (eskiden yalnızca silinen sekmeden
+  düzenlenebiliyordu) genel Ayarlar sekmesine taşındı.
+- Dokunulan diğer dosyalar: `server/index.js` (route bağlama), `server/
+  routes/sales.js` (e_documents JOIN'i kaldırıldı, fatura kalemi alanları
+  KALDI), `server/lib/kvkk.js` (KVKK dışa aktarımından e_documents
+  sorgusu kaldırıldı), `server/seed.js`/`server/scripts/setup.js`
+  (e-Fatura'ya özel seed alanları kaldırıldı, genel alanlar KALDI),
+  `test/multitenancy.js`/`test/security.js`/`test/setup-upgrade.js`/
+  `test/ui-smoke.js` (silinen tablo/sekme/ayarlara yapılan test
+  referansları temizlendi), `frontend-react/SalesView.jsx` (e-Belgeler
+  sekmesi + Faturalar'daki e-doc sütunu kaldırıldı), `frontend-react/
+  AdminView.jsx` (e-Belge Ayarları sekmesi kaldırıldı, Firma Kimliği
+  genişletildi), `public/js/i18n.js` (~50 kullanılmayan çeviri anahtarı
+  temizlendi), belgeler (README/KURULUM/KULLANIM-KILAVUZU/
+  KVKK-DEGERLENDIRME) e-Belge referanslarından arındırıldı.
+
+**2) Genel arama (global search) eklendi** — A/B grubundan, projeyi gerçek
+bir adım öne taşıyacak, düşük riskli/yüksek görünür değerli özellik olarak
+seçildi. `server/routes/search.js` (yeni): ürün/müşteri/tedarikçi/satış
+siparişi/satın alma siparişi/parti üzerinde `LIKE` tabanlı arama, her
+kategori en fazla 6 sonuç. Kenar çubuğuna (her ekranda görünür) debounce'lı
+bir arama kutusu + gruplu sonuç açılır penceresi eklendi
+(`public/js/app.js` `initGlobalSearch`). Sonuca tıklamak doğru ekrana
+götürür (o ekranın kendi sekmesini otomatik açmaz — bilinçli dar kapsam,
+bkz. kod yorumu). `test/search.js` (13 test) + `test/e2e-browser/
+global-search.spec.js` (3 test, tarayıcıda gerçek arama+navigasyon+
+Escape/sonuç-yok durumları).
+
+**3) Gerçek kurulum yolu uçtan uca doğrulandı** (yalnızca `DEMO_DATA=1`
+değil): `data/` sıfırlanıp `node server/scripts/setup.js --company ... 
+--admin-user ... --warehouse ...` (parametreli, gerçek kurulum yolu)
+çalıştırıldı, ardından `NODE_ENV=production` + gerçek `JWT_SECRET` ile
+sunucu ayağa kaldırılıp GERÇEK admin hesabıyla giriş yapıldı — başarılı.
+
+**Yan bulgu (test altyapısı, düzeltildi):** Playwright paketi büyüdükçe
+(33 test) tüm koşu genel `apiLimiter`ın dakikalık 300 istek varsayılanını
+aştı ("Çok fazla istek" ile 2 test flake verdi) — `playwright.config.js`'e
+`test/run-all.js`'in `load` paketiyle AYNI desende bir `API_RATE_LIMIT`
+gevşetmesi eklendi (yalnızca test sunucusu, üretim sınırını etkilemez).
+
+**Doğrulama:** `npm run typecheck` temiz, `npm run lint` 0 hata (28 önceden
+var olan uyarı). `node test/run-all.js` → **32/32 paket geçti** (yeni
+`search` paketi dahil). `npx playwright test` → **33/33 geçti** (2 kez art
+arda, kararlı). `npm uninstall libxmljs2` → 100 paket kalktı, `npm audit`
+hâlâ 0 açık. Gerçek kurulum + üretim modu girişi elle doğrulandı.
 
 ## 2026-09-14 (devam 29) — Tüketici rol taraması tamamlandı: 4 gerçek bulgu daha (toplam 14)
 
