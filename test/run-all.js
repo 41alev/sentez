@@ -27,7 +27,7 @@ const SERVER_SUITES = [
   'e2e', 'contract', 'import', 'templates', 'mobile',
   'data-health', 'einvoice', 'planning', 'ui-smoke', 'security', 'load',
   'multitenancy', 'accounting-export', 'labels', 'webhooks', 'openapi', 'pwa', 'crm', 'pivot', 'support', 'visits', 'kvkk',
-  'approval-limit'
+  'approval-limit', 'concurrency-races'
 ];
 // Sunucu gerektirmez — kendi geçici durumunu kendi kurar/söker.
 const STANDALONE_SUITES = ['visual-audit', 'backup-restore', 'email', 'barcode', 'dates'];
