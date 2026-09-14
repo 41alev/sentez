@@ -1,5 +1,52 @@
 # PROJECT_STATUS.md
 
+## 2026-09-14 (devam 24) — ALTINCI BULGU (kritik): Depo Terminali'nde "Sayım" da GERÇEKTE HİÇBİR ZAMAN ÇALIŞMIYORDU
+
+Mal Kabul düzeltmesinin hemen ardından, aynı şüpheyle ("aynı dosyada başka
+alan-adı/şema uyuşmazlığı olabilir mi?") `server/routes/mobile.js`'teki
+diğer `/mobile/sync` işleyicileri ('move', 'transfer', 'count_line') kod
+incelemesiyle kontrol edildi. 'move' ve 'transfer' doğruydu (alan adları
+`stock.receiveLot()`/`stock.transferLot()` ile birebir eşleşiyor, ayrıca
+'move' zaten `test/mobile.js`'te gerçek bir API çağrısıyla test ediliyor).
+Ama **'count_line' işleyicisinde ikinci bir gerçek, canlıda doğrulanmış
+çökme bulundu**: `UPDATE stock_count_lines SET counted_qty = ?,
+counted_at = ? ...` çalıştırıyordu — ama `stock_count_lines` tablosunda
+(`001_initial_schema.js`) **`counted_at` diye bir sütun hiç yok**. Depo
+Terminali'nde bir sayım satırı okutulup miktar onaylandığında istek HER
+ZAMAN "no such column: counted_at" hatasıyla başarısız oluyordu — depo
+operatörlerinin en sık kullanacağı ikinci işlem (fiziksel sayım) da mal
+kabul kadar tamamen kırıktı. Masaüstünün kendi `PUT /counts/:id/lines`
+(`server/routes/stock.js:248`) rotası doğru sütunları (`counted_qty`,
+`difference = counted_qty - system_qty`) kullanıyordu — yalnızca mobil
+senkronizasyon ucu bozuktu, ve `test/mobile.js` bu işlem tipini hiç
+test etmiyordu.
+
+Düzeltme: `count_line` işleyicisi artık masaüstüyle aynı deseni kullanıyor
+(`counted_qty` VE `difference` güncelleniyor, `counted_at` hiç
+yazılmıyor). `test/e2e-browser/mobile-count.spec.js` (yeni): masaüstünden
+taze bir sayım açılıp Depo Terminali'nde bir satır sayılıyor, sunucunun
+`{failed:0, succeeded:1}` döndürdüğü kanıtlanıyor (eskiden HER ZAMAN
+`failed:1` dönüyordu).
+
+Ayrıca canlı olarak Yer Değiştirme (parti taşıma), Toplama (yerel
+işaretleme — sevkiyat masaüstünden oluşturuluyor, tasarım gereği sunucuya
+yazmıyor) ve Malzeme Çıkışı (salt görüntüleme — malzemeler üretim
+tamamlanınca otomatik düşülüyor, tasarım gereği ayrı bir onay adımı yok)
+akışları da denendi; üçünde de sorun bulunmadı.
+
+**Doğrulama:** `npm run typecheck`/`lint` temiz. `npx playwright test` →
+18/18 geçti (2 yeni test dahil). `node test/run-all.js` → 29/29 suite
+geçti. Gerçek tarayıcıda (mobil görünüm) önce bozuk hali ("no such
+column: counted_at"), sonra düzeltilmiş hali (`succeeded:1`) doğrulandı.
+
+**Depo Terminali'nin tüm akışları artık tam test edildi** — bu, ürünün
+tüm ekranlarının/modüllerinin sistematik turunu tamamlıyor. Bu turda
+toplam **6 gerçek, canlıda doğrulanmış hata** bulunup düzeltildi (RFQ
+karşılaştırma, fatura 3'lü eşleştirme render, satış sevkiyatı tam çökme,
+denetim kaydı "null" sızıntısı, mobil mal kabul tam çökme, mobil sayım
+tam çökme) — hepsi gerçek verilerle uçtan uca doğrulandı ve kalıcı
+regresyon testleriyle korunuyor.
+
 ## 2026-09-14 (devam 23) — BEŞİNCİ BULGU (kritik): Depo Terminali'nde "Mal Kabul" GERÇEKTE HİÇBİR ZAMAN ÇALIŞMIYORDU + Yönetim tamamlandı
 
 Yönetim'in kalan sekmeleri (Ayarlar, Veri Aktarımı — şablon indirme, Belge

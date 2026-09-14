@@ -314,8 +314,11 @@ router.post('/sync', requireRole('admin', 'manager', 'operator'), async (req, re
         results.push({ clientId: op.clientId, ok: true });
 
       } else if (op.type === 'count_line') {
-        db.prepare('UPDATE stock_count_lines SET counted_qty = ?, counted_at = ? WHERE id = ?')
-          .run(op.countedQty, Date.now(), op.lineId);
+        // stock_count_lines'ta counted_at diye bir sütun hiç yok (001_initial_schema.js) -
+        // bu satır her zaman "no such column: counted_at" ile patlıyordu. Masaüstünün
+        // PUT /counts/:id/lines'taki (server/routes/stock.js:248) ile aynı deseni kullan.
+        db.prepare('UPDATE stock_count_lines SET counted_qty = ?, difference = ? - system_qty WHERE id = ?')
+          .run(op.countedQty, op.countedQty, op.lineId);
         results.push({ clientId: op.clientId, ok: true });
 
       } else {
