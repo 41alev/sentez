@@ -144,14 +144,23 @@ router.get('/branding/current', (req, res) => {
 router.put('/branding/current', MANAGER, validate(z.object({
   name: z.string().max(200).optional(), phone: z.string().max(40).optional(),
   email: z.string().max(120).optional(), website: z.string().max(200).optional(),
-  address: z.string().max(500).optional(), printFooter: z.string().max(1000).optional()
+  address: z.string().max(500).optional(), printFooter: z.string().max(1000).optional(),
+  taxNo: z.string().max(50).optional(), taxOffice: z.string().max(200).optional(),
+  district: z.string().max(200).optional(), city: z.string().max(200).optional(),
+  postalCode: z.string().max(20).optional(), mersisNo: z.string().max(50).optional(),
+  tradeRegistryNo: z.string().max(50).optional()
 })), (req, res) => {
   const b = req.valid;
   db.prepare(`UPDATE companies SET name=COALESCE(?,name), phone=COALESCE(?,phone), email=COALESCE(?,email),
-    website=COALESCE(?,website), address=COALESCE(?,address), print_footer=COALESCE(?,print_footer)
+    website=COALESCE(?,website), address=COALESCE(?,address), print_footer=COALESCE(?,print_footer),
+    tax_no=COALESCE(?,tax_no), tax_office=COALESCE(?,tax_office), district=COALESCE(?,district),
+    city=COALESCE(?,city), postal_code=COALESCE(?,postal_code), mersis_no=COALESCE(?,mersis_no),
+    trade_registry_no=COALESCE(?,trade_registry_no)
     WHERE id = 1`)
     .run(b.name ?? null, b.phone ?? null, b.email ?? null, b.website ?? null,
-         b.address ?? null, b.printFooter ?? null);
+         b.address ?? null, b.printFooter ?? null, b.taxNo ?? null, b.taxOffice ?? null,
+         b.district ?? null, b.city ?? null, b.postalCode ?? null, b.mersisNo ?? null,
+         b.tradeRegistryNo ?? null);
   logAudit(req, 'auditBrandingUpdate', { entityType: 'company', entityId: 1, newValue: b });
   res.json({ ok: true });
 });

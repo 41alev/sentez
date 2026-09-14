@@ -6,7 +6,6 @@
   "scripts": {
     "start": "node server/index.js",
     "demo": "node server/scripts/demo.js",
-    "native:rebuild": "npm run install --prefix node_modules/libxmljs2",
     "build": "node scripts/build-frontend.js",
     "build:watch": "node scripts/build-frontend.js --watch",
     "migrate": "node server/migrate.js",
@@ -17,7 +16,6 @@
     "test:contract": "node test/contract.js",
     "test:ui": "node test/ui-smoke.js",
     "test:all": "node test/run-all.js",
-    "test:einvoice": "node test/einvoice.js",
     "test:visual": "node test/visual-audit.js",
     "test:planning": "node test/planning.js",
     "test:security": "node test/security.js",
@@ -63,7 +61,6 @@
     "express": "^5.1.0",
     "express-rate-limit": "^8.7.0",
     "jsonwebtoken": "^9.0.2",
-    "libxmljs2": "^0.37.0",
     "multer": "^2.4.0",
     "nodemailer": "^10.0.10",
     "pino": "^10.3.1",

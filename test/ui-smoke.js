@@ -170,7 +170,7 @@ async function until(fn, timeout = 6000, step = 60) {
 
   console.log('\n=== SEKMELER / TABS ===');
   // Tabbed modules re-render on click; a broken tab handler leaves the pane empty.
-  for (const [view, count] of [['purchasing', 5], ['crm', 3], ['sales', 6], ['planning', 5], ['quality', 6], ['reports', 10], ['admin', 12]]) {
+  for (const [view, count] of [['purchasing', 5], ['crm', 3], ['sales', 5], ['planning', 5], ['quality', 6], ['reports', 10], ['admin', 11]]) {
     go(view);
     await until(() => doc.getElementById('view-' + view).querySelector('.chip-row'));
     const chips = [...doc.getElementById('view-' + view).querySelectorAll('.chip-row .chip')];

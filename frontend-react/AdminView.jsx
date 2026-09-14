@@ -51,7 +51,7 @@ export default function AdminView() {
       actions.innerHTML = '';
       return;
     }
-    const fns = { users: usersTab, warehouses: whTab, fx: fxTab, rules: rulesTab, audit: auditTab, settings: settingsTab, edoc: edocTab, import: importTab, templates: templatesTab, health: healthTab, accounting: accountingTab, webhooks: webhooksTab };
+    const fns = { users: usersTab, warehouses: whTab, fx: fxTab, rules: rulesTab, audit: auditTab, settings: settingsTab, import: importTab, templates: templatesTab, health: healthTab, accounting: accountingTab, webhooks: webhooksTab };
     (async () => {
       try { await fns[tab](body, actions); }
       catch (e) { UI.err(e); body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
@@ -466,6 +466,8 @@ export default function AdminView() {
           ${field(t('defaultOverheadPct'), input('stOh', { type: 'number', min: 0, step: '0.1', value: s.defaultOverheadPct, attrs: editable ? '' : 'disabled' }))}
           ${field(t('expiryWarningDays'), input('stExp', { type: 'number', min: 1, value: s.expiryWarningDays, attrs: editable ? '' : 'disabled' }))}
         </div>
+        ${field(t('vatRate'), input('stVat', { type: 'number', min: 0, max: 100, step: '0.1', value: s.defaultVatRate, attrs: editable ? '' : 'disabled' }),
+          UI.getLang() === 'tr' ? 'Kalemin kendi KDV oranı yoksa bu varsayılan kullanılır.' : 'Used when a line has no VAT rate of its own.')}
         ${editable ? `<button class="btn btn-primary" id="stGo">${t('save')}</button>` : ''}
       </div></div>
 
@@ -504,7 +506,7 @@ export default function AdminView() {
         await Api.updateSettings({
           companyName: val('stName'), baseCurrency: val('stCur'),
           defaultLaborRate: numVal('stLabor'), defaultOverheadPct: numVal('stOh'),
-          expiryWarningDays: intVal('stExp')
+          defaultVatRate: numVal('stVat'), expiryWarningDays: intVal('stExp')
         });
         UI.ok(t('saved'));
         document.getElementById('brandName').textContent = val('stName');
@@ -529,142 +531,6 @@ export default function AdminView() {
         const r = await Api.runDataRetentionSweep();
         UI.ok(`${t('kvkkSweepDone')}: ${r.anonymized}`);
       } catch (e) { UI.err(e); }
-    });
-  }
-
-  /* ================= e-BELGE AYARLARI ================= */
-  async function edocTab(body, actions) {
-    const s2 = await Api.edocSettings();
-    actions.innerHTML = '';
-    const editable = can('approve');
-    const dis = editable ? '' : 'disabled';
-    const c = s2.company || {};
-    const pc = s2.providerConfig || {};
-
-    body.innerHTML = `
-      <div class="alert info">${t('edocLegalWarning')}</div>
-      ${s2.provider === 'local' ? `<div class="alert warn">${t('edocLocalHint')}</div>` : ''}
-
-      <div class="card"><div class="card-head"><h3>${t('edocSettings')}</h3></div><div class="card-body">
-        ${UI.checkbox('edEnabled', t('edocEnabled'), s2.enabled)}
-        <div class="field-row three">
-          ${field(t('edocProvider'), select('edProvider', [
-            { v: 'local', l: UI.getLang() === 'tr' ? 'Yerel (dosyaya yaz)' : 'Local (write to disk)' },
-            { v: 'http', l: UI.getLang() === 'tr' ? 'HTTP entegratör' : 'HTTP integrator' }], s2.provider, { attrs: dis }))}
-          ${field('API URL', input('edUrl', { value: s2.providerConfig.baseUrl || '', attrs: dis }))}
-          ${field('API Key', input('edKey', { type: 'password',
-            placeholder: s2.providerConfig.apiKeySet ? '•••••• (tanımlı)' : '', attrs: dis }),
-            UI.getLang() === 'tr' ? 'Boş bırakılırsa mevcut anahtar korunur.' : 'Leave blank to keep the existing key.')}
-        </div>
-        <div class="field-row">
-          ${UI.checkbox('edTest', t('edocTestMode'), s2.testMode)}
-          ${field(t('vatRate'), input('edVat', { type: 'number', min: 0, max: 100, step: '0.1', value: s2.defaultVatRate, attrs: dis }))}
-        </div>
-      </div></div>
-
-      <div class="card"><div class="card-head"><h3>${t('edocAdvanced')}</h3></div><div class="card-body">
-        <div class="field-row three">
-          ${field(t('edocAuthType'), select('edAuthType', [
-            { v: 'bearer', l: t('edocAuthBearer') }, { v: 'basic', l: t('edocAuthBasic') },
-            { v: 'header', l: t('edocAuthHeader') }, { v: 'none', l: t('edocAuthNone') }
-          ], pc.authType || 'bearer', { attrs: dis }))}
-          ${field(t('edocAuthHeaderName'), input('edAuthHeaderName', { value: pc.authHeaderName || '', placeholder: 'X-API-Key', attrs: dis }))}
-          ${field(t('edocTimeoutMs'), input('edTimeout', { type: 'number', min: 1000, step: '1000', value: pc.timeoutMs || 30000, attrs: dis }))}
-        </div>
-        <div class="field-row three">
-          ${field(t('edocSendPath'), input('edSendPath', { value: pc.sendPath || '', placeholder: '/documents', attrs: dis }))}
-          ${field(t('edocStatusPath'), input('edStatusPath', { value: pc.statusPath || '', placeholder: '/documents', attrs: dis }))}
-          ${field(t('edocTaxpayerPath'), input('edTaxpayerPath', { value: pc.taxpayerPath || '', placeholder: '/taxpayers', attrs: dis }))}
-        </div>
-        <div class="alert info">${t('edocTestConnectionHint')}</div>
-        <button class="btn" id="edTestConn" type="button">${t('edocTestConnection')}</button>
-        <div id="edTestConnResult" style="margin-top:8px"></div>
-      </div></div>
-
-      <div class="card"><div class="card-head"><h3>${UI.getLang() === 'tr' ? 'Gönderici bilgileri' : 'Sender details'}</h3></div>
-      <div class="card-body">
-        <div class="alert info">${UI.getLang() === 'tr'
-          ? 'Bu bilgiler faturanın üzerinde yer alır. Hatalı olması belgenin GİB tarafından reddedilmesine yol açar.'
-          : 'These appear on the invoice header. Errors here cause the document to be rejected.'}</div>
-        <div class="field-row">
-          ${field(t('companyName'), input('edName', { value: c.name || '', attrs: dis }))}
-          ${field(t('identityNo'), input('edTaxNo', { value: c.taxNo || '', attrs: dis }))}
-        </div>
-        <div class="field-row three">
-          ${field(t('taxOffice'), input('edTaxOffice', { value: c.taxOffice || '', attrs: dis }))}
-          ${field(t('district'), input('edDistrict', { value: c.district || '', attrs: dis }))}
-          ${field(t('city'), input('edCity', { value: c.city || '', attrs: dis }))}
-        </div>
-        ${field(UI.getLang() === 'tr' ? 'Adres' : 'Address', input('edAddr', { value: c.address || '', attrs: dis }))}
-        <div class="field-row three">
-          ${field(t('postalCode'), input('edPostal', { value: c.postalCode || '', attrs: dis }))}
-          ${field(t('mersisNo'), input('edMersis', { value: c.mersisNo || '', attrs: dis }))}
-          ${field(t('tradeRegistryNo'), input('edTrade', { value: c.tradeRegistryNo || '', attrs: dis }))}
-        </div>
-        <div class="field-row">
-          ${field(t('senderAlias'), input('edAlias', { value: c.senderAlias || '', attrs: dis }),
-            'urn:mail:defaultgb@firma.com')}
-          ${field(t('despatchAlias'), input('edDespAlias', { value: c.despatchAlias || '', attrs: dis }))}
-        </div>
-      </div></div>
-
-      <div class="card"><div class="card-head"><h3>${UI.getLang() === 'tr' ? 'Belge serileri' : 'Document series'}</h3></div>
-      <div class="card-body">
-        <div class="alert info">${UI.getLang() === 'tr'
-          ? 'Seri kodu 3 büyük harf olmalıdır. Sıra numarası boşluksuz artar ve elle değiştirilemez.'
-          : 'The prefix must be 3 uppercase letters. The sequence increments without gaps and cannot be edited.'}</div>
-        ${table([
-          { key: 'doc_type', label: t('edocType'), render: r => esc(
-            { einvoice: t('edocEinvoice'), earchive: t('edocEarchive'), edespatch: t('edocEdespatch') }[r.doc_type] || r.doc_type) },
-          { key: 'prefix', label: t('seriesPrefix'), render: r => editable
-              ? `<input class="ed-series" data-type="${esc(r.doc_type)}" data-year="${r.year}" value="${esc(r.prefix)}" maxlength="3"
-                   style="width:74px;text-transform:uppercase;background:var(--panel-2);border:1px solid var(--border-input);border-radius:5px;padding:5px 7px;color:var(--text)">`
-              : `<span class="mono">${esc(r.prefix)}</span>` },
-          { key: 'year', label: UI.getLang() === 'tr' ? 'Yıl' : 'Year', num: true, render: r => r.year },
-          { key: 'next_value', label: UI.getLang() === 'tr' ? 'Sıradaki no' : 'Next no', num: true, render: r => num(r.next_value) },
-          { key: 'sample', label: UI.getLang() === 'tr' ? 'Örnek' : 'Sample', render: r =>
-              `<span class="mono">${esc(r.prefix)}${r.year}${String(r.next_value).padStart(9, '0')}</span>` }
-        ], s2.series || [])}
-      </div></div>
-
-      ${editable ? `<button class="btn btn-primary" id="edSave">${t('save')}</button>` : ''}`;
-
-    document.getElementById('edSave')?.addEventListener('click', async () => {
-      const series = [...body.querySelectorAll('.ed-series')].map(i => ({
-        docType: i.dataset.type, year: Number(i.dataset.year), prefix: i.value.toUpperCase().trim()
-      }));
-      try {
-        await Api.updateEdocSettings({
-          enabled: UI.checked('edEnabled'), provider: val('edProvider'), testMode: UI.checked('edTest'),
-          defaultVatRate: numVal('edVat'),
-          providerConfig: {
-            baseUrl: val('edUrl'), apiKey: val('edKey') || undefined,
-            authType: val('edAuthType'), authHeaderName: val('edAuthHeaderName'),
-            sendPath: val('edSendPath'), statusPath: val('edStatusPath'), taxpayerPath: val('edTaxpayerPath'),
-            timeoutMs: numVal('edTimeout')
-          },
-          company: {
-            name: val('edName'), taxNo: val('edTaxNo'), taxOffice: val('edTaxOffice'),
-            district: val('edDistrict'), city: val('edCity'), address: val('edAddr'),
-            postalCode: val('edPostal'), mersisNo: val('edMersis'), tradeRegistryNo: val('edTrade'),
-            senderAlias: val('edAlias'), despatchAlias: val('edDespAlias')
-          },
-          series
-        });
-        UI.ok(t('saved')); reload();
-      } catch (e) { UI.err(e); }
-    });
-
-    document.getElementById('edTestConn')?.addEventListener('click', async () => {
-      const out = document.getElementById('edTestConnResult');
-      out.innerHTML = '';
-      try {
-        const r = await Api.testEdocConnection();
-        out.innerHTML = `<div class="alert ok">${esc(t('edocTestConnectionOk'))} (${r.tookMs} ms)` +
-          (r.alias ? ` — ${esc(r.alias)}` : '') + `</div>`;
-      } catch (e) {
-        out.innerHTML = `<div class="alert crit">${esc(e.message)}</div>`;
-      }
     });
   }
 
@@ -968,6 +834,17 @@ export default function AdminView() {
               ${field('Web', input('brWeb', { value: branding.website || '' }))}
             </div>
             ${field(UI.getLang() === 'tr' ? 'Adres' : 'Address', input('brAddr', { value: branding.address || '' }))}
+            <div class="field-row three">
+              ${field(t('taxOffice'), input('brTaxOffice', { value: branding.taxOffice || '' }))}
+              ${field(t('district'), input('brDistrict', { value: branding.district || '' }))}
+              ${field(t('city'), input('brCity', { value: branding.city || '' }))}
+            </div>
+            <div class="field-row three">
+              ${field(t('identityNo'), input('brTaxNo', { value: branding.taxNo || '' }))}
+              ${field(t('postalCode'), input('brPostal', { value: branding.postalCode || '' }))}
+              ${field(t('mersisNo'), input('brMersis', { value: branding.mersisNo || '' }))}
+            </div>
+            ${field(t('tradeRegistryNo'), input('brTrade', { value: branding.tradeRegistryNo || '' }))}
             ${field(t('printFooter'), textarea('brFooter', { value: branding.printFooter || '', rows: 2 }), t('printFooterHint'))}
             <button class="btn btn-primary btn-sm" id="brSave">${t('save')}</button>
           </div>
@@ -1072,7 +949,10 @@ export default function AdminView() {
       try {
         await Api.saveBranding({
           name: val('brName'), phone: val('brPhone'), email: val('brEmail'),
-          website: val('brWeb'), address: val('brAddr'), printFooter: val('brFooter')
+          website: val('brWeb'), address: val('brAddr'), printFooter: val('brFooter'),
+          taxNo: val('brTaxNo'), taxOffice: val('brTaxOffice'), district: val('brDistrict'),
+          city: val('brCity'), postalCode: val('brPostal'), mersisNo: val('brMersis'),
+          tradeRegistryNo: val('brTrade')
         });
         UI.clearPrintCache(); UI.ok(t('saved')); reload();
       } catch (e) { UI.err(e); }
@@ -1514,7 +1394,7 @@ export default function AdminView() {
       { k: 'users', l: t('tabUsers') }, { k: 'warehouses', l: t('tabWarehouses') },
       { k: 'fx', l: t('tabFx') }, { k: 'rules', l: t('tabRules') },
       { k: 'audit', l: t('tabAudit') }, { k: 'settings', l: t('tabSettings') },
-      { k: 'import', l: t('tabImport') }, { k: 'templates', l: t('tabTemplates') }, { k: 'health', l: t('tabDataHealth') }, { k: 'edoc', l: t('edocSettings') },
+      { k: 'import', l: t('tabImport') }, { k: 'templates', l: t('tabTemplates') }, { k: 'health', l: t('tabDataHealth') },
       { k: 'accounting', l: t('tabAccounting') }, { k: 'webhooks', l: t('tabWebhooks') }
     ], tab, k => setTab(k))}
     <div id="adBody">${loading()}</div>`;

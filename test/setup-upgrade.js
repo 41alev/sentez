@@ -99,8 +99,6 @@ function openDb(dataDir) {
   ok('kur tablosu boş bırakılmadı',
     db1.prepare('SELECT COUNT(*) c FROM exchange_rates').get().c >= 1,
     'boş kur tablosu ilk dövizli işlemde hata verir');
-  ok('e-Belge kapalı başlıyor (kapsam dışı)',
-    db1.prepare("SELECT value FROM settings WHERE key='einvoiceEnabled'").get().value === '0');
   ok('belge şablonları hazır geliyor',
     db1.prepare('SELECT COUNT(*) c FROM document_templates').get().c === 8,
     'kullanıcı önce şablon tanımlamak zorunda kalmamalı');

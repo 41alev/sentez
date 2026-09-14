@@ -16,11 +16,10 @@ RUN npm run build
 
 FROM node:22-slim
 
-# better-sqlite3 ve libxmljs2 her platform için önceden derlenmiş ikili
-# kullanır (kök dizindeki .npmrc: ignore-scripts=true, node-gyp'i hiç
-# tetiklemez — bkz. PROJECT_STATUS.md). Bu araçlar normal yolda
-# KULLANILMAZ; yalnızca bir platform için prebuild hiç yayınlanmamışsa
-# devreye giren bir güvenlik ağıdır.
+# better-sqlite3 her platform için önceden derlenmiş ikili kullanır (kök
+# dizindeki .npmrc: ignore-scripts=true, node-gyp'i hiç tetiklemez — bkz.
+# PROJECT_STATUS.md). Bu araç normal yolda KULLANILMAZ; yalnızca bir
+# platform için prebuild hiç yayınlanmamışsa devreye giren bir güvenlik ağıdır.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 make g++ ca-certificates \
     && rm -rf /var/lib/apt/lists/*
@@ -30,10 +29,6 @@ WORKDIR /app
 # Bağımlılıklar önce kopyalanır: kaynak değişince npm katmanı yeniden kurulmaz
 COPY package*.json ./
 RUN npm ci --omit=dev
-# libxmljs2'nin kendi meşru kurulum betiği (prebuild-install ile önceden
-# derlenmiş ikili indirir) .npmrc'deki ignore-scripts=true yüzünden
-# otomatik çalışmıyor — bkz. package.json "native:rebuild" ve CI.
-RUN npm run native:rebuild
 
 COPY . .
 COPY --from=builder /app/public/dist ./public/dist

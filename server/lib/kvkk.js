@@ -4,11 +4,8 @@
  * veriyi geri döndürülemez şekilde anonimleştirme ve "hangi veri tutuluyor"
  * dışa aktarım raporu (bkz. docs/KVKK-DEGERLENDIRME.md §3.1, §3.2).
  *
- * Mali/ticari kayıtlar (sipariş, fatura tutarı, e-Belge) KORUNUR — yalnızca
+ * Mali/ticari kayıtlar (sipariş, fatura tutarı) KORUNUR — yalnızca
  * kimliklendirici alanlar (ad, iletişim, VKN/TCKN, banka bilgisi) silinir.
- * Geçmiş e-Belge XML'leri üretim anındaki bir kopyayı zaten kendi içinde
- * taşıdığı için (bkz. e_documents.xml, hiç purge edilmiyor — docs/KURULUM.md),
- * bu işlem VUK'un 10 yıllık belge saklama zorunluluğunu ihlal etmez.
  */
 const bcrypt = require('bcryptjs');
 const db = require('../db');
@@ -66,11 +63,6 @@ function exportCustomerData(id) {
   if (!customer) throw new AppError('Müşteri bulunamadı / Customer not found', 404);
   const salesOrders = db.prepare('SELECT id, so_no, date, status, total_base FROM sales_orders WHERE customer_id = ? ORDER BY date DESC').all(id);
   const invoices = db.prepare('SELECT id, invoice_no, invoice_date, amount, currency, status, original_invoice_id FROM customer_invoices WHERE customer_id = ? ORDER BY invoice_date DESC').all(id);
-  const invoiceIds = invoices.map(i => i.id);
-  const eDocuments = invoiceIds.length
-    ? db.prepare(`SELECT id, doc_type, document_no, issue_date, status, source_id FROM e_documents
-        WHERE source_type = 'customer_invoice' AND source_id IN (${invoiceIds.map(() => '?').join(',')})`).all(...invoiceIds)
-    : [];
   const shipments = db.prepare('SELECT id, shipment_no, date, status, destination FROM shipments WHERE customer_id = ? ORDER BY date DESC').all(id);
   const supportTickets = db.prepare('SELECT id, ticket_no, subject, status, created_at FROM support_tickets WHERE customer_id = ? ORDER BY created_at DESC').all(id);
   const visits = db.prepare('SELECT id, visit_date, purpose, visited_by FROM customer_visits WHERE customer_id = ? ORDER BY visit_date DESC').all(id);
@@ -84,7 +76,7 @@ function exportCustomerData(id) {
       phone: customer.phone, email: customer.email, address: customer.address, country: customer.country,
       taxNo: customer.tax_no, isActive: !!customer.is_active, anonymizedAt: customer.anonymized_at
     },
-    relatedRecords: { salesOrders, invoices, eDocuments, shipments, supportTickets, visits, opportunities, auditLog }
+    relatedRecords: { salesOrders, invoices, shipments, supportTickets, visits, opportunities, auditLog }
   };
 }
 

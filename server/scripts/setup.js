@@ -179,8 +179,6 @@ async function setup(args) {
     setS.run('baseCurrency', currency);
     setS.run('lowStockCheckEnabled', '1');
     setS.run('defaultVatRate', '20');
-    // e-Belge kapsam dışı: kapalı başlar
-    setS.run('einvoiceEnabled', '0');
     setS.run('setupCompletedAt', String(Date.now()));
   });
 

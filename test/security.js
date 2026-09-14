@@ -80,8 +80,6 @@ async function api(method, p, { token, body, headers = {}, raw } = {}) {
   ok('görüntüleyici stok değiştiremiyor',
     (await api('POST', '/api/stock/move', { token: viewer, body: { itemId: 'x', type: 'in', qty: 1, warehouseId: 1 } })).status === 403);
   ok('operatör MRP çalıştıramıyor', (await api('POST', '/api/planning/mrp/run', { token: operator, body: {} })).status === 403);
-  ok('operatör e-Belge gönderemiyor',
-    [403, 404].includes((await api('POST', '/api/edocs/xxx/send', { token: operator })).status));
 
   // Son yöneticinin düşürülmesi sistemi kilitler; engellenmeli.
   const demote = await api('PUT', '/api/users/1', { token: admin, body: { role: 'viewer' } });
@@ -260,10 +258,6 @@ async function api(method, p, { token, body, headers = {}, raw } = {}) {
   const users = await api('GET', '/api/users', { token: admin });
   ok('kullanıcı listesinde şifre özeti yok',
     !JSON.stringify(users.data).match(/password_hash|passwordHash|\$2[aby]\$/), '');
-  const edocSettings = await api('GET', '/api/edocs/settings/current', { token: admin });
-  ok('entegratör API anahtarı geri döndürülmüyor',
-    edocSettings.data.providerConfig && edocSettings.data.providerConfig.apiKey === undefined);
-
   // Sunucu hatası yığın izi sızdırmamalı
   const badId = await api('GET', '/api/items/' + 'x'.repeat(500), { token: admin });
   ok('hata yanıtlarında yığın izi yok',

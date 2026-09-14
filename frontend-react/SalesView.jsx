@@ -42,7 +42,7 @@ export default function SalesView() {
     const body = document.getElementById('salesBody');
     const actions = document.getElementById('salesActions');
     if (!body || !actions) return;
-    const fns = { orders: renderOrders, shipments: renderShipments, customers: renderCustomers, invoices: renderInvoices, edocs: renderEdocs, profit: renderProfit };
+    const fns = { orders: renderOrders, shipments: renderShipments, customers: renderCustomers, invoices: renderInvoices, profit: renderProfit };
     (async () => {
       try { await fns[tab](body, actions); }
       catch (e) { UI.err(e); body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
@@ -595,12 +595,6 @@ export default function SalesView() {
     let res;
     try { res = await Api.customerInvoices({ pageSize: 50 }); } catch (e) { UI.err(e); return; }
     const rows = res.data || res;
-    // One extra call fills the e-document column for every row at once.
-    const edocByInvoice = {};
-    try {
-      const docs = await Api.edocs({ pageSize: 200 });
-      (docs.data || []).forEach(d => { if (d.sourceType === 'customer_invoice') edocByInvoice[d.sourceId] = d; });
-    } catch {}
 
     body.innerHTML = `<div class="card">${table([
       { key: 'invoice_no', label: t('invoiceNo'), render: r => `<span class="mono">${esc(r.invoice_no)}</span>` },
@@ -613,14 +607,7 @@ export default function SalesView() {
         } },
       { key: 'amount', label: UI.getLang() === 'tr' ? 'Tutar' : 'Amount', num: true, render: r => `${num(r.amount, 2)} ${cur(r.currency)}` },
       { key: 'status', label: t('status'), render: r => invoiceStatusBadge(r.status) },
-      { key: 'edoc', label: t('edocTitle'), render: r => {
-          const d = edocByInvoice[r.id];
-          if (!d) return `<span class="badge plain">—</span>`;
-          return `${edocTypeBadge(d.docType)} ${edocStatusBadge(d.status)}`;
-        } },
       { key: 'act', label: t('actions'), render: r => `<div class="row-actions">
-          ${!edocByInvoice[r.id] && can('write') ? `<button class="btn btn-ghost btn-sm" data-edoc="${esc(r.id)}">${t('createEdoc')}</button>` : ''}
-          ${edocByInvoice[r.id] ? `<button class="btn btn-ghost btn-sm" data-viewdoc="${esc(edocByInvoice[r.id].id)}">${t('detail')}</button>` : ''}
           ${r.status === 'issued' && can('write') ? `<button class="btn btn-ghost btn-sm" data-pay="${esc(r.id)}">${UI.getLang() === 'tr' ? 'Tahsil Et' : 'Mark Paid'}</button>` : ''}
         </div>` }
     ], rows)}</div>`;
@@ -628,14 +615,6 @@ export default function SalesView() {
     body.querySelectorAll('[data-pay]').forEach(b => b.onclick = async () => {
       try { await Api.payInvoice(b.dataset.pay); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); }
     });
-    body.querySelectorAll('[data-edoc]').forEach(b => b.onclick = async () => {
-      try {
-        const d = await Api.edocFromInvoice(b.dataset.edoc);
-        UI.ok(`${d.documentNo} ${UI.getLang() === 'tr' ? 'oluşturuldu' : 'created'}`);
-        reload();
-      } catch (e) { UI.err(e); }
-    });
-    body.querySelectorAll('[data-viewdoc]').forEach(b => b.onclick = () => openEdoc(b.dataset.viewdoc));
   }
 
   function invoiceForm(so) {
@@ -715,121 +694,6 @@ export default function SalesView() {
     });
   }
 
-  /* ================= e-BELGELER ================= */
-
-  const edocTypeBadge = (t2) => {
-    const m = { einvoice: ['info', t('edocEinvoice')], earchive: ['purple', t('edocEarchive')], edespatch: ['plain', t('edocEdespatch')] };
-    const [c, l] = m[t2] || ['plain', t2];
-    return `<span class="badge ${c}">${esc(l)}</span>`;
-  };
-  const edocStatusBadge = (st) => {
-    const m = {
-      draft: ['plain', t('edocDraft')], queued: ['warn', t('edocQueued')], sent: ['info', t('edocSent')],
-      accepted: ['ok', t('edocAccepted')], rejected: ['crit', t('edocRejected')],
-      error: ['crit', t('edocError')], cancelled: ['plain', t('edocCancelled')]
-    };
-    const [c, l] = m[st] || ['plain', st];
-    return `<span class="badge ${c}">${esc(l)}</span>`;
-  };
-
-  async function renderEdocs(body, actions) {
-    let res, settings;
-    try {
-      [res, settings] = await Promise.all([
-        Api.edocs({ pageSize: 50 }),
-        Api.edocSettings().catch(() => ({}))
-      ]);
-    } catch (e) { UI.err(e); return; }
-    actions.innerHTML = '';
-    const rows = res.data || res;
-
-    body.innerHTML = `
-      ${settings.provider === 'local' ? `<div class="alert warn">${t('edocLocalHint')}</div>` : ''}
-      <div class="alert info">${t('edocLegalWarning')}</div>
-      <div class="card">${table([
-        { key: 'documentNo', label: t('edocNo'), render: d => `<button class="link-btn" data-open="${esc(d.id)}">${esc(d.documentNo)}</button>
-            <div class="sub-line mono" style="font-size:11px">${esc(String(d.ettn).slice(0, 18))}…</div>` },
-        { key: 'docType', label: t('edocType'), render: d => edocTypeBadge(d.docType) },
-        { key: 'customerName', label: t('customerName'), render: d => esc(d.customerName || '—') },
-        { key: 'issueDate', label: t('date'), render: d => dt(d.issueDate), cls: 'nowrap' },
-        { key: 'grandTotal', label: t('grandTotal'), num: true, render: d =>
-            d.docType === 'edespatch' ? '—' : `${num(d.grandTotal, 2)} ${cur(d.currency)}` },
-        { key: 'status', label: t('status'), render: d => edocStatusBadge(d.status) },
-        { key: 'act', label: t('actions'), render: d => `<div class="row-actions">
-            ${['draft', 'queued', 'error'].includes(d.status) && can('approve')
-              ? `<button class="btn btn-primary btn-sm" data-send="${esc(d.id)}">${t('sendEdoc')}</button>` : ''}
-            ${['sent', 'queued'].includes(d.status) && can('write')
-              ? `<button class="btn btn-ghost btn-sm" data-refresh="${esc(d.id)}">${t('refreshEdoc')}</button>` : ''}
-            <a class="icon-btn" href="/api/edocs/${esc(d.id)}/xml" title="${t('downloadXml')}" style="text-decoration:none">${UI.icon(UI.ICONS.download)}</a>
-          </div>` }
-      ], rows)}${res.totalPages ? pager(res, () => reload()) : ''}</div>`;
-
-    body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openEdoc(b.dataset.open));
-    body.querySelectorAll('[data-send]').forEach(b => b.onclick = () => {
-      UI.confirmDialog(
-        UI.getLang() === 'tr'
-          ? 'Belge entegratöre gönderilecek. Gönderilmiş e-Fatura tek taraflı iptal edilemez.'
-          : 'The document will be transmitted. A sent e-Invoice cannot be unilaterally cancelled.',
-        async () => {
-          try { await Api.sendEdoc(b.dataset.send); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); }
-        }, { confirmLabel: t('sendEdoc') });
-    });
-    body.querySelectorAll('[data-refresh]').forEach(b => b.onclick = async () => {
-      try { const d = await Api.refreshEdoc(b.dataset.refresh); UI.ok(d.gibStatusText || t('saved')); reload(); }
-      catch (e) { UI.err(e); }
-    });
-  }
-
-  async function openEdoc(id) {
-    let d;
-    try { d = await Api.edoc(id); } catch (e) { UI.err(e); return; }
-    modal({
-      title: d.documentNo, sub: `${d.customerName || ''} · ${dt(d.issueDate)}`, size: 'wide',
-      body: `
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
-          ${edocTypeBadge(d.docType)} ${edocStatusBadge(d.status)}
-          ${d.profileId ? `<span class="badge plain">${esc(d.profileId)}</span>` : ''}
-        </div>
-        <div class="kv-grid">
-          <div class="kv"><div class="k">${t('ettn')}</div><div class="v mono" style="font-size:11.5px">${esc(d.ettn)}</div></div>
-          <div class="kv"><div class="k">${t('einvoiceAlias')}</div><div class="v mono" style="font-size:11.5px">${esc(d.receiverAlias || '—')}</div></div>
-          ${d.docType !== 'edespatch' ? `
-          <div class="kv"><div class="k">${t('subtotal')}</div><div class="v">${num(d.subtotal, 2)} ${cur(d.currency)}</div></div>
-          <div class="kv"><div class="k">${t('vatTotal')}</div><div class="v">${num(d.vatTotal, 2)} ${cur(d.currency)}</div></div>
-          <div class="kv"><div class="k">${t('grandTotal')}</div><div class="v">${num(d.grandTotal, 2)} ${cur(d.currency)}</div></div>` : ''}
-          <div class="kv"><div class="k">${t('edocProvider')}</div><div class="v">${esc(d.provider || '—')}${d.providerRef ? ` · ${esc(d.providerRef)}` : ''}</div></div>
-        </div>
-        ${d.errorMessage ? `<div class="alert crit">${esc(d.errorMessage)}</div>` : ''}
-        ${d.gibStatusText ? `<div class="alert info">${esc(d.gibStatusText)}</div>` : ''}
-
-        <div class="section-title">${t('edocLog')}</div>
-        <div class="timeline">${(d.log || []).map(l => `
-          <div class="tl-row">
-            <div class="tl-main">
-              <div>${esc(l.action)}${l.status ? ` · ${esc(l.status)}` : ''}</div>
-              <div class="tl-meta">${esc(l.message || '')}${l.username ? ' — ' + esc(l.username) : ''}</div>
-            </div>
-            <div class="tl-right"><div class="tl-meta">${ts(l.ts)}</div></div>
-          </div>`).join('') || `<div class="empty" style="padding:18px">${t('noData')}</div>`}</div>`,
-      footer: `<button class="btn btn-ghost" data-close>${t('close')}</button>
-               <a class="btn btn-ghost" href="/api/edocs/${esc(d.id)}/xml">${UI.icon(UI.ICONS.download)}${t('downloadXml')}</a>
-               ${['draft', 'queued', 'error'].includes(d.status) && can('approve')
-                 ? `<button class="btn btn-primary" id="edSend">${t('sendEdoc')}</button>` : ''}
-               ${['draft', 'error'].includes(d.status) && can('approve')
-                 ? `<button class="btn btn-danger" id="edCancel">${t('cancelEdoc')}</button>` : ''}`,
-      onOpen: (box) => {
-        box.querySelector('#edSend')?.addEventListener('click', async () => {
-          try { await Api.sendEdoc(d.id); closeModal(); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); }
-        });
-        box.querySelector('#edCancel')?.addEventListener('click', () => {
-          UI.confirmDialog(t('confirmDelete'), async () => {
-            try { await Api.cancelEdoc(d.id, ''); closeModal(); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); }
-          }, { danger: true });
-        });
-      }
-    });
-  }
-
   if (!ready) {
     return <div dangerouslySetInnerHTML={{ __html: loading() }} />;
   }
@@ -842,7 +706,7 @@ export default function SalesView() {
     ${UI.tabs([
       { k: 'orders', l: t('tabSalesOrders') }, { k: 'shipments', l: t('tabShipments') },
       { k: 'customers', l: t('tabCustomers') }, { k: 'invoices', l: t('tabSalesInvoices') },
-      { k: 'edocs', l: t('tabEdocs') }, { k: 'profit', l: t('tabProfit') }
+      { k: 'profit', l: t('tabProfit') }
     ], tab, k => setTab(k))}
     <div id="salesBody">${loading()}</div>`;
 

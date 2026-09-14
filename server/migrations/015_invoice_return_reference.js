@@ -2,13 +2,9 @@
 /**
  * İade faturası ↔ orijinal fatura ilişkisi.
  *
- * GİB'in resmi UBL-TR örnek paketindeki IadeFaturasiOrnegi.xml, bir iade
- * faturasının (InvoiceTypeCode=IADE) `cac:BillingReference` bloğuyla
- * MUTLAKA orijinal faturaya (belge no + tarih) referans verdiğini gösteriyor
- * (bkz. server/lib/ubl.js signatureBlock yorumu ve buildInvoice). Bu alan
- * eskiden yoktu; `invoice_type='iade'` seçilebiliyordu ama hangi faturanın
- * iade edildiği hiçbir yerde tutulmuyordu — üretilen e-Belge GİB'in
- * beklediği izlenebilirliği taşımıyordu.
+ * Bu alan eskiden yoktu; `invoice_type='iade'` seçilebiliyordu ama hangi
+ * faturanın iade edildiği hiçbir yerde tutulmuyordu — bir iade kaydına
+ * bakıldığında hangi orijinal satışı kredilendirdiği izlenemiyordu.
  */
 module.exports = {
   name: 'invoice_return_reference',

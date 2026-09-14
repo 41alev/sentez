@@ -300,10 +300,11 @@ const invoiceSchema = z.object({
   amount: z.coerce.number().min(0).optional(),
   currency: z.enum(['TRY', 'USD', 'EUR']).default('TRY'),
   invoiceType: z.enum(['satis', 'iade', 'tevkifat', 'istisna', 'ihrackayitli']).default('satis'),
-  // GİB'in iade faturası için beklediği BillingReference bağlantısı için —
+  // İade faturasının hangi orijinal faturayı kredilendirdiğini izler —
   // 'iade' seçildiğinde zorunludur (bkz. aşağıdaki kontrol).
   originalInvoiceId: z.string().max(1000).optional(),
-  // Kalemler e-Belge için zorunludur; verilmezse siparişin sevk edilen satırlarından türetilir.
+  // Kalem bazlı KDV/iskonto doğru raporlama için gerekir; verilmezse
+  // siparişin sevk edilen satırlarından türetilir.
   lines: z.array(z.object({
     itemId: z.string().max(1000).optional(),
     itemName: z.string().min(1).max(200),
@@ -322,8 +323,8 @@ router.post('/invoices', WRITE, validate(invoiceSchema), (req, res) => {
     const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(b.customerId);
     if (!customer) throw new AppError('Müşteri bulunamadı / Customer not found', 404);
 
-    // İade faturası GİB'in BillingReference'ı için hangi faturanın iade
-    // edildiğini bilmek zorunda — bkz. server/migrations/015_invoice_return_reference.js.
+    // İade faturası hangi faturanın iade edildiğini bilmek zorunda —
+    // bkz. server/migrations/015_invoice_return_reference.js.
     if (b.invoiceType === 'iade') {
       if (!b.originalInvoiceId) throw new AppError('İade faturası için orijinal fatura seçilmeli / An original invoice is required for a return invoice', 422, { hint: 'originalInvoiceId' });
       const original = db.prepare('SELECT id, customer_id FROM customer_invoices WHERE id = ?').get(b.originalInvoiceId);
@@ -338,7 +339,7 @@ router.post('/invoices', WRITE, validate(invoiceSchema), (req, res) => {
     const defaultVat = Number(require('../lib/core').getSetting('defaultVatRate') || 20);
 
     // Kalemler: doğrudan verilebilir ya da siparişin sevk edilmiş satırlarından türetilir.
-    // e-Fatura satır bazlı düzenlendiği için toplam tutar tek başına yeterli değildir.
+    // Kalem bazlı KDV/iskonto raporlaması için toplam tutar tek başına yeterli değildir.
     let lines = b.lines;
     if (!lines && b.soId) {
       lines = db.prepare(`SELECT sol.*, i.code AS item_code, i.unit, i.vat_rate AS item_vat
@@ -390,14 +391,12 @@ router.post('/invoices', WRITE, validate(invoiceSchema), (req, res) => {
   res.status(201).json(result);
 });
 
-/** Faturanın kalemleri — e-Belge üretimi ve yazdırma bunu kullanır. */
+/** Faturanın kalemleri — yazdırma bunu kullanır. */
 router.get('/invoices/:id', (req, res) => {
   const inv = db.prepare(`SELECT ci.*, c.name AS customer_name FROM customer_invoices ci
     LEFT JOIN customers c ON c.id = ci.customer_id WHERE ci.id = ?`).get(req.params.id);
   if (!inv) throw new AppError('Fatura bulunamadı / Invoice not found', 404);
   const lines = db.prepare('SELECT * FROM customer_invoice_lines WHERE invoice_id = ? ORDER BY line_no').all(inv.id);
-  const edoc = db.prepare(`SELECT id, doc_type, document_no, status FROM e_documents
-    WHERE source_type='customer_invoice' AND source_id = ? ORDER BY created_at DESC LIMIT 1`).get(inv.id);
   res.json({
     id: inv.id, invoiceNo: inv.invoice_no, customerId: inv.customer_id, customerName: inv.customer_name,
     invoiceDate: inv.invoice_date, dueDate: inv.due_date, amount: inv.amount, currency: inv.currency,
@@ -408,8 +407,7 @@ router.get('/invoices/:id', (req, res) => {
       id: l.id, itemId: l.item_id, itemName: l.item_name, itemCode: l.item_code,
       qty: l.qty, unit: l.unit, unitPrice: l.unit_price, discountRate: l.discount_rate,
       discountAmount: l.discount_amount, vatRate: l.vat_rate, vatAmount: l.vat_amount, lineTotal: l.line_total
-    })),
-    eDocument: edoc ? { id: edoc.id, docType: edoc.doc_type, documentNo: edoc.document_no, status: edoc.status } : null
+    }))
   });
 });
 

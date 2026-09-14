@@ -18,11 +18,10 @@ function seed() {
   db.transaction(() => {
     // ---------- Company & users ----------
     db.prepare(`INSERT INTO companies (name, tax_no, address, phone, email, base_currency,
-        tax_office, district, city, postal_code, mersis_no, einvoice_sender_alias, edespatch_sender_alias)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+        tax_office, district, city, postal_code, mersis_no)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
       .run('Örnek Metal Sanayi A.Ş.', '1234567890', 'Tuzla OSB 3. Cadde No:12', '+90 216 555 0000',
-           'muhasebe@ornekmetal.com', 'TRY', 'Tuzla', 'Tuzla', 'İstanbul', '34953', '0123456789012345',
-           'urn:mail:defaultgb@ornekmetal.com', 'urn:mail:irsaliyepk@ornekmetal.com');
+           'muhasebe@ornekmetal.com', 'TRY', 'Tuzla', 'Tuzla', 'İstanbul', '34953', '0123456789012345');
 
     const insUser = db.prepare(`INSERT INTO users (company_id,username,full_name,email,password_hash,role,approval_limit,must_change_password,is_active,created_at)
       VALUES (1,?,?,?,?,?,?,?,1,?)`);
@@ -41,11 +40,6 @@ function seed() {
     setS.run('defaultOverheadPct', '15');
     setS.run('expiryWarningDays', '30');
     setS.run('lowStockCheckEnabled', '1');
-    // e-Belge kapsam dışı: modül kodda duruyor ama varsayılan olarak KAPALI.
-    // İstenirse Yönetim > e-Belge Ayarları'ndan açılabilir; adaptör katmanı hazırdır.
-    setS.run('einvoiceEnabled', '0');
-    setS.run('einvoiceProvider', 'local');
-    setS.run('einvoiceTestMode', '1');
     setS.run('defaultVatRate', '20');
 
     const insFx = db.prepare('INSERT INTO exchange_rates (currency,rate,rate_date,source,created_at) VALUES (?,?,?,?,?)');
@@ -74,14 +68,14 @@ function seed() {
 
     // ---------- Customers ----------
     const insCus = db.prepare(`INSERT INTO customers (company_id,code,name,contact_person,phone,email,address,country,tax_no,currency,payment_terms_days,credit_limit,incoterm,created_at,
-        identity_no,tax_office,district,city,is_einvoice_user,einvoice_alias)
-      VALUES (1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+        tax_office,district,city)
+      VALUES (1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     const cusAnadolu = insCus.run('MUS-001', 'Anadolu Makine A.Ş.', 'Fatih Şahin', '+90 312 555 6060', 'satinalma@anadolumakine.com', 'OSTİM, Ankara', 'TR', '4445556667', 'TRY', 60, 2000000, 'DAP', Date.now(),
-      '4445556667', 'Ostim', 'Yenimahalle', 'Ankara', 1, 'urn:mail:defaultpk@anadolumakine.com').lastInsertRowid;
+      'Ostim', 'Yenimahalle', 'Ankara').lastInsertRowid;
     const cusNordic = insCus.run('MUS-002', 'Nordic Industrial AB', 'Erik Lindqvist', '+46 8 555 7070', 'purchasing@nordicind.se', 'Göteborg, Sweden', 'SE', 'SE556677', 'EUR', 45, 500000, 'FOB', Date.now(),
-      'SE556677', null, null, 'Göteborg', 0, null).lastInsertRowid;
+      null, null, 'Göteborg').lastInsertRowid;
     const cusEge = insCus.run('MUS-003', 'Ege Otomotiv Ltd.', 'Zeynep Arslan', '+90 232 555 8080', 'tedarik@egeotomotiv.com', 'Torbalı, İzmir', 'TR', '5556667778', 'TRY', 30, 750000, 'EXW', Date.now(),
-      '5556667778', 'Torbalı', 'Torbalı', 'İzmir', 0, null).lastInsertRowid;
+      'Torbalı', 'Torbalı', 'İzmir').lastInsertRowid;
 
     // ---------- Items ----------
     const insItem = db.prepare(`INSERT INTO items (company_id,id,name,code,barcode,category,item_type,origin,default_warehouse_id,location,unit,

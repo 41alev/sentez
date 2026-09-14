@@ -54,7 +54,6 @@ const NEW_TABLES = [
   'production_operations', 'mrp_runs', 'mrp_suggestions', 'shift_logs',
   'inspections', 'inspection_lines', 'inspection_plans', 'ncrs', 'capas',
   'documents', 'equipment', 'calibrations',
-  'e_documents', 'e_document_log', 'e_document_series',
   'import_batches', 'import_rows',
   'audit_log', 'approval_rules', 'notification_rules', 'notifications', 'exchange_rates'
 ];

@@ -32,14 +32,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # .npmrc'deki ignore-scripts=true (bkz. d2a53c6) better-sqlite3'ün
-      # gereksiz node-gyp derlemesini engelliyor, ama bunun yan etkisi
-      # olarak libxmljs2'nin KENDİ meşru kurulum betiği de (prebuild-install
-      # ile önceden derlenmiş ikili indirir) otomatik çalışmıyor. Bu adım
-      # onu elle, yalnızca bu paket için tetikler.
-      - name: Fetch libxmljs2 native binary (XSD validation)
-        run: npm run native:rebuild
-
       - name: Type check
         run: npm run typecheck
 

@@ -259,19 +259,8 @@ const Api = (() => {
     convertSuggestion: (id, d) => req('POST', `/planning/mrp/suggestions/${id}/convert`, d || {}),
     dismissSuggestion: (id) => req('POST', `/planning/mrp/suggestions/${id}/dismiss`),
 
-    // e-documents
-    edocs: (p) => req('GET', '/edocs' + qs(p)),
-    edoc: (id) => req('GET', '/edocs/' + id),
-    edocFromInvoice: (invoiceId) => req('POST', '/edocs/from-invoice/' + invoiceId),
-    edocFromShipment: (shipmentId, d) => req('POST', '/edocs/from-shipment/' + shipmentId, d || {}),
-    sendEdoc: (id) => req('POST', `/edocs/${id}/send`),
-    refreshEdoc: (id) => req('POST', `/edocs/${id}/refresh`),
-    cancelEdoc: (id, reason) => req('POST', `/edocs/${id}/cancel`, { reason }),
-    checkTaxpayer: (customerId) => req('POST', '/edocs/check-taxpayer/' + customerId),
-    edocSettings: () => req('GET', '/edocs/settings/current'),
-    updateEdocSettings: (d) => req('PUT', '/edocs/settings/current', d),
-    testEdocConnection: () => req('POST', '/edocs/settings/test-connection'),
     customerInvoice: (id) => req('GET', '/sales/invoices/' + id),
+    search: (q) => req('GET', '/search?q=' + encodeURIComponent(q)),
 
     // admin
     users: () => req('GET', '/users'),

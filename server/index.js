@@ -185,7 +185,6 @@ app.use('/api/quality', require('./routes/quality'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/documents', require('./routes/documents'));
 app.use('/api/notifications', require('./routes/notifications'));
-app.use('/api/edocs', require('./routes/edocs'));
 app.use('/api/planning', require('./routes/planning'));
 app.use('/api/import', require('./routes/import'));
 app.use('/api/templates', require('./routes/templates'));
@@ -198,6 +197,7 @@ app.use('/api/docs', require('./routes/docs'));
 app.use('/api/crm', require('./routes/crm'));
 app.use('/api/support', require('./routes/support'));
 app.use('/api/visits', require('./routes/visits'));
+app.use('/api/search', require('./routes/search'));
 app.use('/api', require('./routes/admin'));   // users, warehouses, settings, fx, rules, audit
 
 // ---------- Health ----------
