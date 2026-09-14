@@ -212,6 +212,29 @@ async function uploadPreview(token, importType, buffer, fileName = 'test.xlsx', 
   ok('ad güncellendi', nowNew.name === 'Geçerli Ürün A GÜNCEL', nowNew.name);
   ok('kritik stok güncellendi', nowNew.minStock === 99, String(nowNew.minStock));
 
+  // "hata ver" modu: önizleme aşamasında satır GEÇERLİ sayılır (tekrar kontrolü
+  // yalnızca commit sırasında, gerçek DB durumuna göre yapılır) — asıl davranış
+  // commit'te tek satırın reddedilip PARTİNİN GERİ KALANININ yazılmasıdır.
+  const failFile = await makeXlsx(
+    ['Ad', 'Kod', 'Birim', 'Kritik Stok'],
+    [['Bu Asla Yazılmamalı', 'IMP-A', 'adet', 1]]
+  );
+  const failPrev = await uploadPreview(manager, 'items', failFile, 'tekrar3.xlsx', 'fail');
+  ok('"hata ver" modunda önizleme kabul ediliyor', failPrev.status === 201,
+    JSON.stringify(failPrev.data).slice(0, 160));
+  const failCommit = await api('POST', `/api/import/batches/${failPrev.data.batchId}/commit`, { token: manager });
+  ok('"hata ver" modunda tekrar eden kayıt satır bazında reddediliyor (failed:1)',
+    failCommit.status === 200 && failCommit.data.failed === 1
+      && failCommit.data.created === 0 && failCommit.data.updated === 0,
+    JSON.stringify(failCommit.data));
+  const failRows = (await api('GET', `/api/import/batches/${failPrev.data.batchId}/rows`, { token: admin })).data;
+  const failedRow = failRows.data.find(r => r.action === 'failed');
+  ok('hata mesajı "zaten var" içeriyor', !!failedRow && /zaten var/.test(failedRow.errors.join()),
+    JSON.stringify(failedRow));
+  const untouchedByFail = (await api('GET', '/api/items?q=IMP-A&pageSize=5', { token: admin })).data.data[0];
+  ok('"hata ver" modunda mevcut kayıt değişmeden kalıyor',
+    untouchedByFail.name === 'Geçerli Ürün A GÜNCEL', untouchedByFail.name);
+
   console.log('\n=== REFERANS DOĞRULAMA / REFERENCE VALIDATION ===');
   const badStock = await makeXlsx(
     ['Ürün Kodu', 'Depo', 'Miktar', 'Birim Maliyet', 'Parti No'],
