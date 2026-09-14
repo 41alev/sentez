@@ -1,5 +1,69 @@
 # PROJECT_STATUS.md
 
+## 2026-09-14 (devam 29) — Tüketici rol taraması tamamlandı: 4 gerçek bulgu daha (toplam 14)
+
+"her modülün her satır-aksiyonunu her rolle dene" talimatı üzerine
+frontend-react/*.jsx'in TAMAMI (14 ekran) + public/js/mobile.js, 3 paralel
+araştırma ajanıyla tek tek tarandı; her aksiyonun frontend `can()` kapısı
+gerçek backend yetkilendirmesiyle karşılaştırıldı. Ajan bulguları KÖRÜ
+KÖRÜNE uygulanmadı — her biri ilgili route dosyası okunarak kendim tekrar
+doğrulandı; birkaçı (Admin'deki Muhasebe/İçe Aktarım/Şablonlar/e-Belge
+sekmeleri) bu şekilde YANLIŞ ALARM olarak elendi (Yönetim nav butonu
+zaten yalnızca admin+manager'a açık — ajan bunu hesaba katmamıştı).
+
+**Purchasing/Sales/CRM/Support/Planning: 0 uyuşmazlık** (tam kapsamlı,
+ayrı bir ajan raporu).
+
+**4 gerçek bulgu bulundu ve düzeltildi:**
+- **Bulgu 11:** `LotsView.jsx`'teki parti durum değiştirme (karantina/
+  blokaj/serbest bırakma) ikonu `can('quality')||can('write')` idi —
+  Müdür/Operatör'e görünüyordu ama `POST /lot-status`
+  (`requirePermission('stock.status')`) yalnızca admin+quality'de var.
+  `can()`'e ayrı bir `'lotStatus'` bayrağı eklendi.
+- **Bulgu 12:** `POST /mobile/sync` TÜMÜYLE `requireRole('admin','manager',
+  'operator')` idi — kalite masaüstünde sayabildiği (count.write) halde
+  mobil terminalde HİÇBİR işlem yapamıyordu. Route'a quality eklendi,
+  ama yalnızca `count_line` işlemine izin verilecek şekilde (move/transfer
+  hâlâ reddediliyor — masaüstüyle aynı sınır).
+- **Bulgu 14:** `ReportsView.jsx`'teki kayıtlı rapor silme (✕) ikonu
+  sahiplik kontrolü olmadan HERKESE gösteriliyordu — backend
+  (`DELETE /saved/:id`) yalnızca sahibine veya admin/manager'a izin
+  veriyor. İkon artık `createdBy===currentUser.id || can('approve')`.
+- **Bulgu 13+15 (en önemlisi):** `AdminView.jsx`'teki Webhooks sekmesi
+  can() korumasızdı, backend admin-only — Müdür'e her zaman 403 (bulgu 13,
+  usersTab deseniyle düzeltildi). Daha derin inceleme: `public/js/app.js`
+  yalnızca Yönetim NAV BUTONUNU gizliyor, `App.go(view)`'ın kendisi HİÇBİR
+  yetki kontrolü yapmıyor — viewer/operator/quality `location.hash='admin'`
+  yaparsa (eski yer imi vb.) Yönetim ekranı yine render oluyor, bazı
+  sekmelerin backend'i de tamamen açık olduğundan gerçek veri görünüyordu.
+  "Gizli buton = yetkilendirme" — CLAUDE.md §27'nin tam uyardığı hata.
+  Düzeltme: AdminView'in kendisine TÜM sekmeleri kapsayan `can('approve')`
+  giriş kontrolü eklendi.
+
+**Yeni testler:** `test/e2e-browser/permission-matrix.spec.js`'e 5 yeni
+test (toplam 8), `test/mobile.js`'e kalite-mobil-erişim için 4 yeni
+assertion.
+
+**Süreç notu (önemli):** `frontend-react/*.jsx` bir Vite build adımından
+(`npm run build` → `public/dist/react-views.js`, gitignore'lu) geçiyor —
+kaynak dosyayı düzenlemek TEK BAŞINA yeterli değil, her JSX değişikliğinden
+sonra yeniden build ALINMADAN Playwright testleri ESKİ bundle'a karşı
+çalışır ve düzeltme "etkisiz" görünür (bu oturumda bir kez bu tuzağa
+düşüldü, fark edilip düzeltildi).
+
+**Doğrulama:** `npm run typecheck` temiz, `npm run lint` 0 hata (27
+önceden var olan uyarı — `eslint.config.js`'e bu oturumda eklenen
+`playwright.cross-browser.config.js` için de Node global'i tanımlandı).
+`npx playwright test` → 30/30 geçti. `node test/run-all.js` → 31/31 paket
+geçti (`mobile` 63/63 dahil).
+
+**Bu oturumun TAMAMINDAKİ toplam bulgu sayısı: 14** — kullanıcının
+7 kalemlik listesi ("devam 27/28") + rol taramasından 4 yeni bulgu
+(bu bölüm) + önceki "devam 26"dan gelen 10 (o oturumun kendi sayımıyla
+çakışan numaralandırma nedeniyle, bulgu numaraları bu oturumdaki
+10'dan devam ediyor: 11,12,13,14,15 — beş ayrı düzeltme noktası, 4 madde
+altında gruplandı).
+
 ## 2026-09-14 (devam 28) — Kullanıcının 7 kalemlik listesi kapatıldı: mobil çevrimdışı kuyruk, eşzamanlı kullanıcı, tarayıcı uyumluluğu, yazdırma içeriği
 
 "devam 27"de ele alınan onay limiti + içe aktarım "hata ver" modu dışında
