@@ -25,9 +25,9 @@ const HEALTH_URL = 'http://localhost:3000/health';
 // Sunucu gerektiren paketler (README: "Sunucu ayaktayken").
 const SERVER_SUITES = [
   'e2e', 'contract', 'import', 'templates', 'mobile',
-  'data-health', 'einvoice', 'planning', 'ui-smoke', 'security', 'load',
+  'data-health', 'planning', 'ui-smoke', 'security', 'load',
   'multitenancy', 'accounting-export', 'labels', 'webhooks', 'openapi', 'pwa', 'crm', 'pivot', 'support', 'visits', 'kvkk',
-  'approval-limit', 'concurrency-races'
+  'approval-limit', 'concurrency-races', 'search'
 ];
 // Sunucu gerektirmez — kendi geçici durumunu kendi kurar/söker.
 const STANDALONE_SUITES = ['visual-audit', 'backup-restore', 'email', 'barcode', 'dates'];

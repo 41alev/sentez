@@ -31,7 +31,12 @@ module.exports = defineConfig({
     command: 'node test/e2e-browser/reset-and-start.js',
     url: 'http://localhost:3000/health',
     reuseExistingServer: false,
-    env: { ...process.env, DEMO_DATA: '1' },
+    // Bu paket büyüdükçe (33+ test, her biri login + birden çok API çağrısı
+    // tetikliyor) tüm koşu genel `apiLimiter`ın dakikalık 300 istek
+    // varsayılanını aşabiliyor — bkz. test/run-all.js'teki SUITE_ENV_OVERRIDES
+    // `load` girişiyle AYNI sebep/desen. Üretimdeki gerçek sınırı DEĞİŞTİRMEZ,
+    // yalnızca bu test sunucusu örneğini gevşetir.
+    env: { ...process.env, DEMO_DATA: '1', API_RATE_LIMIT: '200000' },
     timeout: 30000,
     stdout: 'pipe'
   }

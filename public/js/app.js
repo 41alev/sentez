@@ -53,6 +53,7 @@ const App = (() => {
   /* ---------- i18n on static markup ---------- */
   function applyStaticI18n() {
     document.querySelectorAll('[data-i18n]').forEach(n => { n.textContent = UI.t(n.dataset.i18n); });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(n => { n.placeholder = UI.t(n.dataset.i18nPlaceholder); });
     document.getElementById('htmlRoot').lang = UI.getLang();
   }
 
@@ -154,6 +155,80 @@ const App = (() => {
     el.classList.toggle('hidden', !count);
   };
 
+  /* ---------- global search ---------- */
+  // Ekran bazlı kod bölme (bkz. loadViewScript) nedeniyle sonuca tıklamak
+  // yalnızca DOĞRU EKRANA götürür — o ekranın kendi sekmesini/kaydını
+  // otomatik açmaz (ör. bir müşteri sonucu Satış ekranına götürür, kullanıcı
+  // "Müşteriler" sekmesine kendisi tıklar). Her görünümün iç sekme durumuna
+  // dışarıdan müdahale etmek 5 ayrı ekran dosyasına dokunmayı gerektirirdi;
+  // bu, "hangi ekrana bakacağımı bilmiyorum" sorununu tek başına çözüyor,
+  // kapsamı kasıtlı olarak dar tutuldu.
+  const GS_GROUPS = [
+    ['items', 'gsItems', 'items'],
+    ['customers', 'gsCustomers', 'sales'],
+    ['suppliers', 'gsSuppliers', 'purchasing'],
+    ['salesOrders', 'gsSalesOrders', 'sales'],
+    ['purchaseOrders', 'gsPurchaseOrders', 'purchasing'],
+    ['lots', 'gsLots', 'lots']
+  ];
+
+  function initGlobalSearch() {
+    const input = document.getElementById('gsInput');
+    const results = document.getElementById('gsResults');
+    let debounceTimer = null;
+    let lastQuery = '';
+
+    function closeResults() { results.classList.add('hidden'); results.innerHTML = ''; }
+
+    function renderResults(data, q) {
+      lastQuery = q;
+      const groups = GS_GROUPS
+        .map(([key, labelKey, view]) => ({ key, view, label: UI.t(labelKey), rows: data[key] || [] }))
+        .filter(g => g.rows.length);
+
+      if (!groups.length) {
+        results.innerHTML = `<div class="gs-empty">${UI.esc(UI.t('gsNoResults'))}</div>`;
+        results.classList.remove('hidden');
+        return;
+      }
+      results.innerHTML = groups.map(g => `
+        <div class="gs-group-title">${UI.esc(g.label)}</div>
+        ${g.rows.map(r => `<div class="gs-item" data-view="${g.view}">
+            <div class="gs-label">${UI.esc(r.label)}</div>
+            ${r.sub ? `<div class="gs-sub">${UI.esc(r.sub)}</div>` : ''}
+          </div>`).join('')}
+      `).join('');
+      results.querySelectorAll('.gs-item').forEach(el => el.onclick = () => {
+        go(el.dataset.view);
+        closeResults();
+        input.value = '';
+        input.blur();
+      });
+      results.classList.remove('hidden');
+    }
+
+    input.addEventListener('input', () => {
+      const q = input.value.trim();
+      clearTimeout(debounceTimer);
+      if (q.length < 2) { closeResults(); return; }
+      debounceTimer = setTimeout(async () => {
+        try {
+          const data = await Api.search(q);
+          // Kullanıcı yazmaya devam ettiyse eski bir yanıtı gösterme.
+          if (input.value.trim() === q) renderResults(data, q);
+        } catch { closeResults(); }
+      }, 250);
+    });
+    input.addEventListener('focus', () => { if (results.innerHTML && input.value.trim() === lastQuery) results.classList.remove('hidden'); });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { closeResults(); input.blur(); }
+      else if (e.key === 'Enter') { results.querySelector('.gs-item')?.click(); }
+    });
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.global-search')) closeResults();
+    });
+  }
+
   /* ---------- notifications panel ---------- */
   async function openNotifications() {
     const panel = document.getElementById('notifPanel');
@@ -228,6 +303,8 @@ const App = (() => {
       const v = location.hash.replace('#', '');
       if (v && v !== current) go(v);
     });
+
+    initGlobalSearch();
 
     document.getElementById('btnNotifications').onclick = openNotifications;
     document.getElementById('btnNotifClose').onclick = () => document.getElementById('notifPanel').classList.remove('show');
