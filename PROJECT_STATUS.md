@@ -1,5 +1,77 @@
 # PROJECT_STATUS.md
 
+## Güncel Durum Özeti (bu bölüm her önemli değişiklikte güncellenir)
+
+> Bu dosya 2000+ satırlık kronolojik bir oturum günlüğüne dönüştüğü için
+> (aşağıda, en yeniden en eskiye), "şu an neredeyiz" sorusuna hızlı cevap
+> vermek üzere bu özet eklendi (genel check-up, madde 3). Aşağıdaki
+> kronolojik günlük SİLİNMEDİ — geçmiş kararların gerekçesi ve bulunan
+> gerçek hatalar için hâlâ birincil kaynak. Yeni bir oturuma başlarken
+> önce burayı, sonra ihtiyaç oldukça günlüğü okuyun.
+
+**Proje:** Sentez ERP (depo-takip-app) — stok, üretim, kalite, planlama,
+satın alma, satış, CRM, destek ve raporlama için tek-tesis bir web ERP'si.
+Türkçe birincil dil (İngilizce de destekleniyor).
+
+**Mimari:** Node.js/Express 5 + better-sqlite3 (tek dosya SQLite, WAL) API
+sunucusu; masaüstü arayüz TAMAMEN React'te (`frontend-react/*.jsx`, 13
+ekran, ekran bazlı kod bölme ile derleniyor — bkz. `scripts/
+build-frontend.js`); ayrı, vanilla JS bir mobil depo terminali
+(`public/mobile.html` + `public/js/mobile.js`, PWA, çevrimdışı kuyruklu).
+Kimlik doğrulama JWT; yetkilendirme HEM `server/middleware/auth.js`'teki
+granüler `PERMISSIONS` haritası HEM DE bazı route dosyalarının kendi yerel
+`requireRole(...)` sabitleri üzerinden — bu iki paralel sistem, frontend'in
+genel `can()` bayraklarıyla TEK TEK karşılaştırılmadan asla varsayılmamalı
+(bu tam olarak bu oturumdaki "rol taraması" bulgularının kök nedeniydi).
+
+**Şu anki aşama:** Özellik açısından tamamlanmış, sertleştirilmiş, kapsamlı
+test paketi olan bir sistem — **sahaya ilk kurulum öncesi son doğrulama**
+aşamasında. Kod tarafında bilinen bir eksik YOK; kalanlar yalnızca sahada
+(gerçek cihaz, gerçek kullanıcı, gerçek internet/ağ koşulları) çözülebilir.
+
+**Tamamlanan işlerin TAM listesi:** `docs/YOL-HARITASI.md` (15 madde, hepsi
+tamamlandı veya bilinçli olarak atlandı/kapsam dışı bırakıldı — bu dosyanın
+kendisinden daha güncel ve daha az kalabalık). Kısaca: Excel içe aktarım,
+yazdırılabilir belge şablonları, mobil/PWA terminal, veri sağlığı denetimi,
+kurulum/yükseltme yolu, muhasebe aktarım köprüsü, tam React geçişi, CRM,
+destek takibi, MRP/kapasite planlama, OpenAPI+Webhooks, barkod ZPL etiket,
+KVKK uyumluluğu, pivot rapor oluşturucu. e-Fatura yalnızca RESMİ entegratör
+bağlantısı kapsam dışı (kod hazır, kapalı). Çok şirketlilik şeması hazır
+ama bilinçli olarak devre dışı (tek tesis).
+
+**Bilinen riskler / hâlâ sahada doğrulanması gerekenler** (`docs/
+YOL-HARITASI.md`'nin kendi listesi, hâlâ geçerli): gerçek bir el
+terminalinde hiç denenmedi, kamerayla barkod okuma gerçek cihazda
+denenmedi, bağımsız sızma testi yapılmadı, paralel pilot (1-2 ay mevcut
+yöntemle yan yana) hiç çalıştırılmadı, kullanıcı eğitimi kılavuzu kimse
+üzerinde denenmedi. Firefox motoru bu geliştirme ortamında hiç
+başlatılamadı (Playwright "spawn UNKNOWN" — ortam kısıtı, uygulama hatası
+değil); WebKit gerçekten doğrulandı, Chromium sürekli doğrulanıyor.
+
+**Test durumu:** `node test/run-all.js` → 31 sunucu/bağımsız paket, hepsi
+yeşil. `npx playwright test` → gerçek Chromium'a karşı 30 test, hepsi
+yeşil. `npm run typecheck`/`npm run lint` → temiz (0 hata). `npm audit` →
+0 açık, `npm outdated` → boş (tüm bağımlılıklar güncel).
+
+**Bir sonraki oturum için:** Kod tarafında açık bir görev listesi yok.
+Kullanıcıdan yeni bir talep gelmediyse, en yüksek değerli sıradaki adım
+`docs/YOL-HARITASI.md`'deki "Yalnızca sahada çözülebilecekler" listesi —
+bunlar bu geliştirme ortamında kapatılamaz, gerçek donanım/kullanıcı/ağ
+gerektirir.
+
+**Son güncelleme:** 2026-09-14 (devam 30 — genel check-up: dokümantasyon
+güncelleme, ekran bazlı kod bölme, bağımlılık yükseltmeleri; ayrıntılar
+aşağıdaki kronolojik günlükte).
+
+---
+
+## Kronolojik Oturum Günlüğü (en yeniden en eskiye)
+
+Aşağıdaki girişler EKLENDİKÇE üste eklenir, geçmiş girişler asla silinmez
+— her bulunan gerçek hatanın, alınan mimari kararın ve reddedilen
+alternatifin kaydı. Yukarıdaki özeti güncel tutmak yeterli değilse (ör.
+belirli bir kararın TAM gerekçesini arıyorsanız) buradan devam edin.
+
 ## 2026-09-14 (devam 29) — Tüketici rol taraması tamamlandı: 4 gerçek bulgu daha (toplam 14)
 
 "her modülün her satır-aksiyonunu her rolle dene" talimatı üzerine
