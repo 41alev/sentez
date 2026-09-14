@@ -45,7 +45,9 @@ test.describe('Yazdırma çıktıları — gerçek belge içeriği', () => {
       row.locator('[data-print]').click()
     ]);
     // document.write senkron yazılır; popup'ın body'sinin dolmasını bekle.
-    await popup.waitForFunction(() => document.body && document.body.textContent.trim().length > 0, { timeout: 10000 });
+    // (String olarak veriliyor: bu dosya test/**/*.js için tarayıcı global'leri
+    // olmadan lint ediliyor — fonksiyon gövdesi popup içinde çalışır, burada değil.)
+    await popup.waitForFunction('document.body && document.body.textContent.trim().length > 0', { timeout: 10000 });
     const printedText = await popup.locator('body').innerText();
 
     expect(printedText, 'sevkiyat numarası çıktıda görünmüyor').toContain(shipmentNo);

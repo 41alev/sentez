@@ -17,7 +17,7 @@ import { useEffect, useState, useRef } from 'react';
 const DEAD_STOCK_DEFAULT_DAYS = 180;
 
 export default function ReportsView() {
-  const { t, esc, num, money, dt, ts, table, loading, select, field, input, modal, closeModal, val } = UI;
+  const { t, esc, num, money, dt, ts, table, loading, select, field, input, modal, closeModal, val, can } = UI;
 
   const [tab, setTab] = useState('valuation');
   const [reloadToken, setReloadToken] = useState(0);
@@ -417,8 +417,17 @@ export default function ReportsView() {
       ${saved.length ? `<div class="card"><div class="card-body">
         <div class="section-title">${t('savedReports')}</div>
         <div style="display:flex;flex-wrap:wrap;gap:8px">
-          ${saved.map(s => `<span class="badge plain" style="cursor:pointer" data-load="${esc(s.id)}">${esc(dsOf(s.dataSource).label)} · ${esc(s.name)}
-            <span data-del="${esc(s.id)}" style="margin-left:6px;opacity:.7">✕</span></span>`).join('')}
+          ${saved.map(s => {
+            // Rol taraması bulgu 14: server/routes/reports.js:450-456'daki
+            // DELETE /saved/:id yalnızca sahibine veya admin/manager'a izin
+            // veriyor — ama ✕ ikonu HERKESE, başkasının raporunda bile
+            // koşulsuz gösteriliyordu; operator/kalite/viewer başkasının
+            // raporunu silmeye çalışınca hep 403 alıyordu.
+            const currentUser = Api.getUser();
+            const canDelete = s.createdBy === currentUser?.id || can('approve');
+            return `<span class="badge plain" style="cursor:pointer" data-load="${esc(s.id)}">${esc(dsOf(s.dataSource).label)} · ${esc(s.name)}
+            ${canDelete ? `<span data-del="${esc(s.id)}" style="margin-left:6px;opacity:.7">✕</span>` : ''}</span>`;
+          }).join('')}
         </div>
       </div></div>` : ''}
       <div id="pvResult"></div>`;

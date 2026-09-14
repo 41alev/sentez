@@ -95,6 +95,7 @@ async function api(method, p, { token, body } = {}) {
   const admin = await login('admin', 'Admin123!');
   const operator = await login('operator', 'Operator123!');
   const viewer = await login('viewer', 'Viewer123!');
+  const quality = await login('kalite', 'Kalite123!');
 
   console.log('=== KOD ÇÖZME / SCAN RESOLUTION ===');
   const items = (await api('GET', '/api/items?pageSize=50', { token: admin })).data.data;
@@ -233,6 +234,35 @@ async function api(method, p, { token, body } = {}) {
     token: operator, body: { operations: Array.from({ length: 250 }, (_, i) => ({ clientId: 'h' + i, type: 'move' })) }
   });
   ok('aşırı büyük parti reddediliyor (200 sınırı)', hugeSync.status === 400, `got ${hugeSync.status}`);
+
+  console.log('\n=== KALİTE ROLÜ MOBİL ERİŞİMİ / QUALITY ROLE MOBILE ACCESS ===');
+  // Regresyon (rol taraması bulgu 12): POST /mobile/sync TÜMÜYLE
+  // requireRole('admin','manager','operator') idi — kalite masaüstünde
+  // sayım kaydedebildiği (count.write) halde mobil terminalde HİÇBİR işlem
+  // yapamıyordu (route seviyesinde tamamen dışlanıyordu). Düzeltme: kalite
+  // route'a girebiliyor ama yalnızca count_line işlemi kabul ediliyor,
+  // stok girişi/transfer (stock.write gerektirir, kalitede yok) hâlâ
+  // reddediliyor — masaüstüyle birebir aynı yetki sınırı.
+  const qCnt = await api('POST', '/api/stock/counts', { token: operator, body: { warehouseId: 1 } });
+  ok('sayım oluşturuldu (kalite testi için)', qCnt.status === 201, JSON.stringify(qCnt.data).slice(0, 120));
+  const qDetail = await api('GET', `/api/stock/counts/${qCnt.data.id}`, { token: operator });
+  const qLine = qDetail.data.lines[0];
+  const qualitySync = await api('POST', '/api/mobile/sync', {
+    token: quality,
+    body: {
+      operations: [
+        { clientId: 'q1', type: 'count_line', lineId: qLine.id, countedQty: qLine.systemQty },
+        { clientId: 'q2', type: 'move', itemId: somun.id, warehouseId: 1, qty: 1 }
+      ]
+    }
+  });
+  ok('kalite artık mobil terminale erişebiliyor (403 değil)', qualitySync.status === 200,
+    JSON.stringify(qualitySync.data).slice(0, 140));
+  ok('kalite sayım işlemini kaydedebiliyor', qualitySync.data.results.find(r => r.clientId === 'q1').ok === true,
+    JSON.stringify(qualitySync.data.results));
+  ok('kalite stok girişi yapamıyor (stock.write yok — masaüstüyle tutarlı)',
+    qualitySync.data.results.find(r => r.clientId === 'q2').ok === false,
+    JSON.stringify(qualitySync.data.results.find(r => r.clientId === 'q2')));
 
   console.log('\n=== ARAYÜZ / TERMINAL UI ===');
   let JSDOM;

@@ -264,7 +264,7 @@ export default function LotsView() {
         { key: 'receivedAt', label: t('receivedAt'), render: r => UI.ts(r.receivedAt), cls: 'nowrap' },
         { key: 'act', label: t('actions'), render: r => `<div class="row-actions">
             <button class="icon-btn" data-trace="${esc(r.id)}" title="${t('traceability')}">${UI.icon(UI.ICONS.eye)}</button>
-            ${can('quality') || can('write') ? `<button class="icon-btn" data-status="${esc(r.id)}" title="${t('changeStatus')}">${UI.icon(UI.ICONS.check)}</button>` : ''}
+            ${can('lotStatus') ? `<button class="icon-btn" data-status="${esc(r.id)}" title="${t('changeStatus')}">${UI.icon(UI.ICONS.check)}</button>` : ''}
             ${can('write') ? `<button class="icon-btn" data-transfer="${esc(r.id)}" title="${t('transferLot')}">${UI.icon(UI.ICONS.truck)}</button>` : ''}
             ${can('write') ? `<button class="icon-btn" data-label="${esc(r.id)}" title="${UI.getLang() === 'tr' ? 'Etiket yazdır' : 'Print label'}">${UI.icon(UI.ICONS.print)}</button>` : ''}
           </div>` }

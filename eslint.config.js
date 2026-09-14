@@ -29,7 +29,7 @@ const PUBLIC_GLOBALS = {
 module.exports = [
   js.configs.recommended,
   {
-    files: ['eslint.config.js', 'vite.config.js', 'playwright.config.js'],
+    files: ['eslint.config.js', 'vite.config.js', 'playwright.config.js', 'playwright.cross-browser.config.js'],
     languageOptions: { ecmaVersion: 2022, sourceType: 'commonjs', globals: { ...globals.node } }
   },
   {

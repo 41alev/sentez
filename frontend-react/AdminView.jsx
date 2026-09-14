@@ -34,6 +34,23 @@ export default function AdminView() {
     const body = document.getElementById('adBody');
     const actions = document.getElementById('adActions');
     if (!body || !actions) return;
+    // public/js/app.js yalnızca Yönetim sekmesinin NAV BUTONUNU viewer/
+    // operator/quality'den gizliyor — App.go(view) kendisi hiçbir yetki
+    // kontrolü yapmıyor (bkz. app.js:17-27). Yani bu üç rolden biri
+    // location.hash'i doğrudan '#admin' yaparsa (eski bir yer imi, tarayıcı
+    // geçmişi, vb.) bu bileşen YİNE render olurdu — ve accounting/import/
+    // templates/edoc gibi bazı sekmelerin İLK yükleme çağrısı kendi
+    // başına can() kontrolü içermiyordu (yalnızca ALT aksiyon butonları
+    // gated'dı). "Gizli buton = yetkilendirme" varsayımı yanlıştır — rol
+    // taraması bulgu 15: tüm Yönetim ekranına GERÇEK bir giriş kontrolü
+    // eklendi (usersTab/webhooksTab'ın kendi can('admin') deseniyle aynı
+    // ruhta, ama tüm sekmeler için — admin+manager zaten her ikisi de
+    // can('approve') olduğu için onlar için hiçbir şey değişmiyor).
+    if (!can('approve')) {
+      body.innerHTML = `<div class="empty">${UI.getLang() === 'tr' ? 'Bu bölüm yalnızca yöneticilere açıktır.' : 'This section is admin-only.'}</div>`;
+      actions.innerHTML = '';
+      return;
+    }
     const fns = { users: usersTab, warehouses: whTab, fx: fxTab, rules: rulesTab, audit: auditTab, settings: settingsTab, edoc: edocTab, import: importTab, templates: templatesTab, health: healthTab, accounting: accountingTab, webhooks: webhooksTab };
     (async () => {
       try { await fns[tab](body, actions); }
@@ -1357,6 +1374,17 @@ export default function AdminView() {
 
   /* ================= WEBHOOKS ================= */
   async function webhooksTab(body, actions) {
+    // Rol taraması bulgu 13: server/routes/webhooks.js'teki HER route (liste
+    // dahil) requireRole('admin') — ama Yönetim sekmesinin kendisi
+    // admin+manager'a açık (public/js/app.js) ve bu sekme listesinde
+    // (satır ~1490) Webhooks hiçbir can() koşuluyla gizlenmiyordu. Müdür bu
+    // sekmeye tıklayınca ilk Api.webhooks() çağrısı her zaman 403 veriyordu.
+    // usersTab'daki aynı "yalnızca yöneticilere açık" deseni burada da
+    // uygulandı.
+    if (!can('admin')) {
+      body.innerHTML = `<div class="empty">${UI.getLang() === 'tr' ? 'Bu bölüm yalnızca yöneticilere açıktır.' : 'This section is admin-only.'}</div>`;
+      actions.innerHTML = ''; return;
+    }
     const [rows, events] = await Promise.all([Api.webhooks(), Api.webhookEvents()]);
     eventCatalogRef.current = events;
     actions.innerHTML = `<button class="btn btn-primary btn-sm" id="whNew2">${UI.icon(UI.ICONS.plus)}${t('newWebhook')}</button>`;

@@ -472,11 +472,19 @@ const UI = (() => {
     // (belge/eki yükleme) admin/manager/operator/quality içeriyor — quality'nin
     // ürüne kalite sertifikası/test raporu ekleyebilmesi gerekiyor, ama genel
     // 'write' bayrağı ona verilirse stok/satış/üretim yazma erişimi de sızardı.
+    // 'lotStatus' de ayrı: server/routes/stock.js'teki POST /lot-status
+    // requirePermission('stock.status') kullanıyor ve PERMISSIONS'ta bu
+    // yalnızca admin (*) ve quality'de var — manager'da YOK (quality.write'ı
+    // olsa da stock.status'u yok). Genel 'quality' bayrağı manager'a da
+    // verildiği için (kalite dispozisyonu gibi quality.write işleri için),
+    // parti durumu değiştirme (karantina/blokaj/serbest bırakma) o bayrakla
+    // kapatılırsa manager ve operator'a hep 403 veren bir buton gösterilmiş
+    // olur — bkz. PROJECT_STATUS.md rol taraması bulgu 11.
     const P = {
-      admin: ['write', 'delete', 'approve', 'quality', 'admin', 'count', 'docs'],
+      admin: ['write', 'delete', 'approve', 'quality', 'admin', 'count', 'docs', 'lotStatus'],
       manager: ['write', 'delete', 'approve', 'quality', 'count', 'docs'],
       operator: ['write', 'count', 'docs'],
-      quality: ['quality', 'count', 'docs'],
+      quality: ['quality', 'count', 'docs', 'lotStatus'],
       viewer: []
     };
     return (P[u.role] || []).includes(perm);

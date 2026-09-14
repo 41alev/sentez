@@ -287,7 +287,7 @@ router.get('/issue-list/:orderId', (req, res) => {
  * bağlantı gelince toplu gönderir. Her işlem tek tek değerlendirilir; birinin
  * hatası diğerlerini düşürmez — aksi halde kullanıcı hangisinin geçtiğini bilemez.
  */
-router.post('/sync', requireRole('admin', 'manager', 'operator'), async (req, res) => {
+router.post('/sync', requireRole('admin', 'manager', 'operator', 'quality'), async (req, res) => {
   const ops = Array.isArray(req.body && req.body.operations) ? req.body.operations : [];
   if (!ops.length) throw new AppError('İşlem listesi boş / No operations', 400);
   if (ops.length > 200) throw new AppError('Tek seferde en fazla 200 işlem / Max 200 operations', 400);
@@ -297,6 +297,17 @@ router.post('/sync', requireRole('admin', 'manager', 'operator'), async (req, re
 
   for (const op of ops) {
     try {
+      // Kalite rolü masaüstünde de yalnızca sayım kaydedebilir (count.write) —
+      // stok girişi/transfer stock.write gerektirir, kalitede yok (bkz.
+      // PERMISSIONS, server/middleware/auth.js). Aynı ayrım burada da
+      // uygulanmazsa kalite kullanıcısı mobil terminalde HİÇBİR işlem
+      // yapamaz hale gelirdi (route seviyesinde tamamen dışlanıyordu) —
+      // rol taraması bulgusu.
+      if (req.user.role === 'quality' && op.type !== 'count_line') {
+        results.push({ clientId: op.clientId, ok: false, error: 'Bu işlem için yetkiniz yok / Not authorized for this operation' });
+        continue;
+      }
+
       if (op.type === 'move') {
         const r = db.txImmediate(() => stock.receiveLot({
           itemId: op.itemId, warehouseId: op.warehouseId, qty: op.qty,
