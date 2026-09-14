@@ -1,5 +1,59 @@
 # PROJECT_STATUS.md
 
+## 2026-09-14 (devam 23) — BEŞİNCİ BULGU (kritik): Depo Terminali'nde "Mal Kabul" GERÇEKTE HİÇBİR ZAMAN ÇALIŞMIYORDU + Yönetim tamamlandı
+
+Yönetim'in kalan sekmeleri (Ayarlar, Veri Aktarımı — şablon indirme, Belge
+Şablonları — firma kimliği/düzen/varsayılana dön, Veri Sağlığı — denetim
+çalıştır + KAYIT BİRLEŞTİR gerçek bir kayıtla uçtan uca test edildi,
+Muhasebe Aktarımı, Webhook'lar — oluştur/test et (gerçek dış URL'e HTTP
+POST)/başarısız teslimat+otomatik yeniden deneme/elle yeniden dene/sil)
+tamamlandı. Ardından tur son büyük parçaya, Depo Terminali'ne (mobile.html)
+geçti.
+
+**Beşinci ve bu turun EN CİDDİ ikinci bulgusu**: gerçek bir telefon/el
+terminali senaryosunda "Mal Kabul" (satın alma siparişi teslim alma)
+akışı denendi — kalem seçilip miktar onaylandığında sunucu **HER ZAMAN
+422 "Expected number, received nan"** hatasıyla reddediyordu. Kök neden:
+`public/js/mobile.js`'teki `receive()` fonksiyonu
+`POST /purchasing/orders/:id/receipts` çağrısına
+`lines: [{ itemId: i.itemId, ... }]` gönderiyordu — ama sunucu
+(`server/routes/purchasing.js:478`, zod şeması) `poItemId` (sipariş
+KALEMİNİN kendi satır id'si, sayısal) bekliyor; `itemId` (ürünün kendi
+UUID id'si) tamamen farklı bir alan ve `z.coerce.number()` bir UUID'yi
+`NaN`'a çeviriyor. **Masaüstü arayüzdeki (`PurchasingView.jsx`) AYNI
+işlem doğru `poItemId: Number(inp.dataset.id)` gönderiyordu** — yalnızca
+mobil terminal ucu bozuktu. `test/mobile.js` (jsdom) yalnızca görev
+listesinin (`GET /mobile/tasks`) yüklendiğini kontrol ediyordu, gerçek
+"ONAYLA" tıklamasını hiç denemiyordu; `test/e2e-browser/mobile.spec.js`
+de yalnızca giriş/barkod/kamera akışını test ediyordu — bu yüzden depo
+operatörlerinin en sık kullanacağı işlem (mal kabul) hiçbir testte hiç
+denenmemişti.
+
+Ayrıca test sırasında önemli bir ek gözlem: mobile.html gerçek bir
+service worker (PWA) ile önbelleğe alınıyor — düzeltmeden sonra bile
+tarayıcı önbellekteki ESKİ `mobile.js`'i çalıştırmaya devam etti,
+service worker + cache elle temizlenip sayfa yeniden yüklendikten sonra
+düzeltme etkili oldu. Bu, gerçek kullanıcı cihazlarında bir düzeltmenin
+service worker'ın kendi güncelleme döngüsü tamamlanana kadar
+gecikebileceği anlamına gelir — kod tarafında bir hata değil, PWA'nın
+doğal bir özelliği, ancak dağıtım sürecinde akılda tutulmalı.
+
+`receive()` artık `poItemId: i.id` gönderiyor (`i.id` = `serializePO()`'nun
+döndürdüğü po_items satır id'si).
+`test/e2e-browser/mobile-receiving.spec.js` (yeni): seed'deki SA-2026-003
+siparişinin Hidrolik Yağ 15L kalemi gerçekten teslim alınıp sunucunun
+201 döndürdüğünü VE başarı toast'ının göründüğünü kanıtlıyor.
+
+**Doğrulama:** `npm run typecheck`/`lint` temiz. `npx playwright test` →
+17/17 geçti (yeni test dahil). `node test/run-all.js` → 29/29 suite geçti.
+Gerçek tarayıcıda (mobil görünüm) önce bozuk hali (422, sheet kapanmıyor),
+sonra düzeltilmiş hali (201, "... teslim alındı" toast'ı, sonraki
+sipariş listesinden kalem düşüyor) doğrulandı.
+
+**Bu turun geri kalanı devam ediyor** — Depo Terminali'nin diğer akışları
+(Toplama, Sayım, Malzeme Çıkışı, Yer Değiştirme, barkod/kamera okuma,
+çevrimdışı kuyruk) sırayla test edilecek.
+
 ## 2026-09-14 (devam 22) — Satış, Kalite, CRM, Destek, Planlama, Raporlar, Yönetim (kısmi) tam test edildi — 1 küçük bulgu daha
 
 Sevkiyat çökmesi düzeltildikten sonra tur devam etti: Satış modülünün kalan

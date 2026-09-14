@@ -508,10 +508,12 @@
           <div class="m-field"><label>İrsaliye no</label>
             <input type="text" id="qsWaybill" placeholder="İsteğe bağlı"></div>`,
         onConfirm: async (qty) => {
-          // Mal kabul sipariş bağını korumalı; genel stok girişi değil satın alma ucu kullanılır
+          // Mal kabul sipariş bağını korumalı; genel stok girişi değil satın alma ucu kullanılır.
+          // Sunucu poItemId (sipariş KALEMİNİN satır id'si) bekler, itemId (ürünün kendi id'si)
+          // değil — ikisi karıştırılırsa her istek 422 ile reddedilir.
           await api('POST', `/purchasing/orders/${po.id}/receipts`, {
             waybillNo: $('qsWaybill').value.trim() || undefined,
-            lines: [{ itemId: i.itemId, qty, lotNo: $('qsLot').value.trim() || undefined }]
+            lines: [{ poItemId: i.id, qty, lotNo: $('qsLot').value.trim() || undefined }]
           });
           closeSheet();
           toast(`${num(qty, 2)} teslim alındı`, 'ok');
