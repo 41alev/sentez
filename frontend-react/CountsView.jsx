@@ -105,7 +105,7 @@ export default function CountsView() {
         </table></div>
         <div class="totals-row" id="cntTotals"></div>`,
       footer: `<button class="btn btn-ghost" data-close>${t('close')}</button>
-               ${editable && can('write') ? `<button class="btn btn-ghost" id="cntSave">${t('saveCounts')}</button>` : ''}
+               ${editable && can('count') ? `<button class="btn btn-ghost" id="cntSave">${t('saveCounts')}</button>` : ''}
                ${editable && can('approve') ? `<button class="btn btn-primary" id="cntApprove">${t('approveCount')}</button>` : ''}`,
       onOpen: (box) => {
         const recalc = () => {
@@ -170,7 +170,7 @@ export default function CountsView() {
     <div class="topbar">
       <div><h2>${t('countsTitle')}</h2><div class="sub">${t('countsSub')}</div></div>
       <div class="topbar-actions">
-        ${can('write') ? `<button class="btn btn-primary btn-sm" id="cNew">${UI.icon(UI.ICONS.plus)}${t('newCount')}</button>` : ''}
+        ${can('count') ? `<button class="btn btn-primary btn-sm" id="cNew">${UI.icon(UI.ICONS.plus)}${t('newCount')}</button>` : ''}
       </div>
     </div>
     <div class="card">

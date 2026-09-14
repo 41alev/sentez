@@ -1,5 +1,73 @@
 # PROJECT_STATUS.md
 
+## 2026-09-14 (devam 25) — Rol bazlı tur: kullanıcı "sadece admin ile mi test ettin?" diye sordu — haklıydı, 2 bulgu daha
+
+Kullanıcı önceki turun tamamının (neredeyse) yalnızca `admin` (ve Depo
+Terminali'nde `operator`) ile yapıldığını fark edip sordu. Doğruydu —
+Müdür, Kalite ve Görüntüleyici rolleriyle canlı hiçbir şey denenmemişti.
+Bu eksik kapatıldı: önce `server/middleware/auth.js`'teki backend
+PERMISSIONS matrisi ile `public/js/ui.js`'teki frontend `can()` matrisi
+karşılaştırıldı (birebir örtüşmüyorlar — backend granüler
+`stock.write`/`purchase.approve`/`count.write` gibi izinler kullanırken
+frontend `write`/`delete`/`approve`/`quality`/`admin` gibi genel
+bayraklara indirgiyor), sonra dört rolle de (`viewer`, `kalite`, `mudur`,
+tekrar `admin`) canlı gezinip hem UI'ı hem doğrudan `fetch()` ile API'yi
+denendi.
+
+**Görüntüleyici:** Tüm modüllerde yazma butonları doğru gizli; doğrudan
+API'ye (ürün oluştur, sipariş oluştur, kullanıcı oluştur, sayım aç vb.)
+saldırı denemesi hepsinde 403/401 ile reddedildi. Temiz.
+
+**Müdür:** Satın alma onay akışı (₺100.000 üstü PO onaylama) doğru
+çalıştı; Yönetim'de yetkisi olmayan bölümler (Kullanıcılar, Onay
+Kuralları, KVKK, Webhook'lar) doğru şekilde "yetkiniz yok" ile
+karşılandı. Temiz.
+
+**Yedinci bulgu** (kozmetik, güvenlik etkisi yok — içerik zaten
+sunucu tarafında korunuyor): `public/js/app.js:47`'deki "Admin tab is
+meaningless for roles that cannot see anything in it" mantığı Yönetim
+sekmesini yalnızca `viewer` ve `operator` için gizliyordu — **`quality`
+unutulmuştu**. Kalite rolünün backend'de (`PERMISSIONS.quality`) hiç
+admin yetkisi yokken tıklanabilir bir Yönetim sekmesi görüp içeride
+yalnızca "Bu bölüm yalnızca yöneticilere açıktır" ile karşılaşması
+sağlanmıştı. `quality` listeye eklendi.
+`test/e2e-browser/login.spec.js`'e "kalite rolünde Yönetim sekmesi
+gizli" testi eklendi.
+
+**Sekizinci bulgu** (gerçek, canlıda doğrulanmış işlevsel bug):
+Backend `PERMISSIONS.quality` (`server/middleware/auth.js`) açıkça
+`count.write` içeriyor — yani Kalite rolü fiziksel sayım
+oluşturup kaydedebilmeli. Ama frontend `can()` matrisinde `quality: 
+['quality']` idi — `'write'` hiç yoktu. `frontend-react/CountsView.jsx`
+hem "Yeni Sayım" (satır 173) hem "Sayımı Kaydet" (satır 108) butonlarını
+genel `can('write')` ile kapatıyordu. Sonuç: **Kalite kullanıcısı
+masaüstünden ne yeni bir sayım açabiliyordu ne de saydığı miktarları
+kaydedebiliyordu** — backend'in açıkça izin verdiği bir işlev UI'da
+tamamen erişilemezdi (sayım ekranına girip rakamları yazabiliyordu ama
+"Kaydet" butonu hiç görünmediği için girdiği her şey kaybolurdu).
+Doğrudan `POST /api/stock/counts` çağrısıyla backend'in gerçekten izin
+verdiği canlı olarak kanıtlandıktan sonra düzeltildi: `can()`'e
+backend'in `count.write`/`count.approve` ayrımını yansıtan ayrı bir
+`'count'` yetkisi eklendi (operator/manager/admin/quality'de var,
+"Onayla" hâlâ yalnızca `can('approve')` ile admin/manager'a kısıtlı —
+`count.approve` backend'de de yalnızca onlarda). İki buton da
+`can('count')`'a geçirildi. `test/e2e-browser/counts-quality-role.spec.js`
+(yeni): kalite kullanıcısının gerçekten yeni bir sayım açıp bir satırı
+kaydedebildiğini VE "Onayla" butonunun ona hiç görünmediğini kanıtlıyor.
+
+**Doğrulama:** `npm run typecheck`/`lint` temiz. `npx playwright test` →
+20/20 geçti (2 yeni test dahil). `node test/run-all.js` → 29/29 suite
+geçti (bir çalıştırmada "barcode" paketi geçici bir ortam çakışmasıyla
+başarısız oldu, tek başına VE tekrar tam pakette 21/21 geçerek flake
+olduğu doğrulandı — kod değişikliğiyle ilgisi yok).
+
+**Önemli ders:** Önceki "tüm ekranlar test edildi" iddiası eksikti —
+yalnızca EN GENİŞ yetkili rolle (admin) test etmek, dar yetkili bir
+rolün ("quality" gibi) backend'in izin verdiği ama frontend'in
+unuttuğu bir özelliği hiç kullanamamasını YAKALAYAMAZ. Rol matrisi olan
+her uygulamada exhaustive tur, en az bir kez HER rolle (özellikle en
+kısıtlı VE en özelleşmiş roller) yapılmalı.
+
 ## 2026-09-14 (devam 24) — ALTINCI BULGU (kritik): Depo Terminali'nde "Sayım" da GERÇEKTE HİÇBİR ZAMAN ÇALIŞMIYORDU
 
 Mal Kabul düzeltmesinin hemen ardından, aynı şüpheyle ("aynı dosyada başka

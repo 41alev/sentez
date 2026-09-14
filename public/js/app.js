@@ -42,9 +42,13 @@ const App = (() => {
     document.getElementById('userRole').textContent = UI.roleLabel(u.role);
     document.getElementById('userAvatar').textContent = (u.fullName || u.username).charAt(0).toUpperCase();
 
-    // Admin tab is meaningless for roles that cannot see anything in it
+    // Admin tab is meaningless for roles that cannot see anything in it.
+    // 'quality' has no admin permission at all (see PERMISSIONS.quality in
+    // server/middleware/auth.js) so it belongs in this list too — it was
+    // missing, leaving quality users a clickable tab that only ever showed
+    // "Bu bölüm yalnızca yöneticilere açıktır."
     const adminTab = document.querySelector('.nav-tab[data-view="admin"]');
-    if (adminTab) adminTab.style.display = (u.role === 'viewer' || u.role === 'operator') ? 'none' : '';
+    if (adminTab) adminTab.style.display = ['viewer', 'operator', 'quality'].includes(u.role) ? 'none' : '';
 
     try {
       const s = await Api.settings();

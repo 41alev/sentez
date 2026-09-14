@@ -27,6 +27,16 @@ test.describe('Giriş ve temel gezinme', () => {
     await expect(page.locator('.nav-tab[data-view="admin"]')).toBeHidden();
   });
 
+  test('kalite rolünde Yönetim sekmesi gizli', async ({ page }) => {
+    // Regresyon: public/js/app.js:47 Yönetim sekmesini yalnızca viewer/operator
+    // için gizliyordu, quality unutulmuştu — quality'nin PERMISSIONS.quality'de
+    // (server/middleware/auth.js) hiç admin yetkisi olmadığı halde tıklanabilir
+    // bir sekme görüp içeride yalnızca "Bu bölüm yalnızca yöneticilere açıktır"
+    // mesajıyla karşılaşıyordu.
+    await login(page, 'kalite', 'Kalite123!');
+    await expect(page.locator('.nav-tab[data-view="admin"]')).toBeHidden();
+  });
+
   for (const view of ['items', 'lots', 'crm', 'sales', 'reports']) {
     test(`${view} ekranı hatasız render oluyor`, async ({ page }) => {
       const errors = [];

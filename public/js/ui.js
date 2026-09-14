@@ -462,11 +462,17 @@ const UI = (() => {
   function can(perm) {
     const u = Api.getUser();
     if (!u) return false;
+    // 'count' burada ayrı tutuluyor çünkü backend'in kendi izin matrisinde
+    // (server/middleware/auth.js PERMISSIONS) count.write hem operator/manager/
+    // admin'de HEM DE quality'de var — genel 'write' bayrağına eklemek yerine
+    // ayrı tutulması, quality'ye yanlışlıkla stok/satış/üretim yazma erişimi
+    // sızdırmadan sayım özelliğini doğru şekilde açıyor (bkz. PROJECT_STATUS.md:
+    // Sayım oluşturma/kaydetme butonları quality için hiç görünmüyordu).
     const P = {
-      admin: ['write', 'delete', 'approve', 'quality', 'admin'],
-      manager: ['write', 'delete', 'approve', 'quality'],
-      operator: ['write'],
-      quality: ['quality'],
+      admin: ['write', 'delete', 'approve', 'quality', 'admin', 'count'],
+      manager: ['write', 'delete', 'approve', 'quality', 'count'],
+      operator: ['write', 'count'],
+      quality: ['quality', 'count'],
       viewer: []
     };
     return (P[u.role] || []).includes(perm);
