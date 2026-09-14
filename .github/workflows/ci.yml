@@ -46,7 +46,7 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Build frontend (React pilot)
+      - name: Build frontend (React — tüm ekranlar, bkz. docs/YOL-HARITASI.md §8)
         run: npm run build
 
       - name: Run full test suite (isolated per package)

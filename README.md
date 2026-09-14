@@ -308,7 +308,9 @@ server/
   seed.js               örnek fabrika verisi
 public/
   index.html, css/, js/{api,ui,i18n,app}.js
-  dist/react-views.js   derlenmiş React bundle'ı (10 ekranın tamamı)
-frontend-react/         React kaynağı (Vite ile public/dist/'e derlenir — bkz. vite.config.js)
+  dist/                 derlenmiş React paketleri: vendor-react.js (paylaşılan
+                         React) + ekran başına bir view-*.js (13 ekran, ekran
+                         bazlı kod bölme — bkz. scripts/build-frontend.js)
+frontend-react/         React kaynağı (Vite ile public/dist/'e derlenir — bkz. scripts/build-frontend.js)
 test/e2e.js             77 uçtan uca test
 ```
