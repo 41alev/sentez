@@ -1,5 +1,70 @@
 # PROJECT_STATUS.md
 
+## 2026-09-14 (devam 27) — Onay limiti + içe aktarım "hata ver" modu testleri; webhook/import "eksik" iddiası düzeltmesi
+
+Kullanıcı, kendi listelediği 7 kalemi ("Yazdırma çıktılarının gerçek
+içeriği, Mobil çevrimdışı kuyruk, Webhook otomatik yeniden deneme, Onay
+limiti sınır durumu, Veri Aktarımı'nda çakışan kayıt senaryosu, Eşzamanlı
+kullanıcı senaryoları, Tarayıcı uyumluluğu") ve ayrıca rol taramasının
+tam kapsamlı olmasını istedi. Bu oturumda önce her kalem tek tek
+incelendi (kod okuma + mevcut test dosyalarının gerçekten neyi
+kapsadığının doğrulanması):
+
+- **Webhook otomatik yeniden deneme:** ÖNCEDEN "eksik" diye
+  raporlanmıştı — bu YANLIŞTI. `test/webhooks.js` bunu zaten tam olarak
+  kanıtlıyor: `WEBHOOK_RETRY_BASE_MS` kısaltılarak (run-all.js
+  `SUITE_ENV_OVERRIDES`) `nextRetryAt` geçmişe düşürülüyor,
+  `POST /api/webhooks/process-retry-queue` (admin-only) tetikleniyor,
+  GERÇEK ikinci bir teslimat denemesi yapıldığı ve `retryCount`'un
+  arttığı doğrulanıyor. Kod değişikliği YOK — yalnızca yanlış
+  değerlendirme düzeltildi.
+- **Veri Aktarımı çakışan kayıt senaryosu:** `test/import.js` zaten
+  `'skip'` ve `'update'` modlarını gerçek Excel dosyalarıyla test
+  ediyordu. Yalnızca üçüncü mod (kodda gerçek adı `'error'` değil
+  `'fail'` — `server/services/import-commit.js`) test edilmiyordu. Bu
+  modda tekrar eden satır TÜM PARTİYİ düşürmez, yalnızca o satır
+  `commit()` içindeki try/catch'te (import-commit.js:224-236) "failed"
+  olarak işaretlenir, mevcut kayıt dokunulmadan kalır. `test/import.js`'e
+  4 yeni assertion eklendi: önizleme kabul ediliyor → commit'te
+  `failed:1` → hata mesajı "zaten var" içeriyor → mevcut kayıt
+  değişmemiş.
+- **Onay limiti sınır durumu:** `test/approval-limit.js` DAHA ÖNCE
+  oluşturulmuştu ama var olmayan bir `./helpers` modülünü `require`
+  ediyordu (bu projede sunucu seviyesi testler paylaşımlı helper
+  KULLANMAZ — o desen yalnızca `test/e2e-browser/` Playwright testlerine
+  özgü) — hiç çalışmıyordu ve `run-all.js`'e kayıtlı değildi. Dosya
+  `test/e2e.js`'nin gerçek deseniyle (kendi `api()`/`ok()`/`login()`,
+  kendi IIFE, `process.exit`) yeniden yazıldı, `SERVER_SUITES`'e eklendi.
+  Canlı çalıştırmada bir varsayım hatası bulundu: `POST
+  /orders/:id/approve` yalnızca `{ok:true}` döner, güncellenmiş
+  siparişi DEĞİL — test bunu yanlış varsaymıştı; düzeltildi (onay
+  sonrası ayrı `GET` ile `approvalStatus` doğrulanıyor). Test artık asıl
+  senaryoyu kanıtlıyor: approval_rules eşiği (₺100.000→Müdür) sağlansa
+  bile Müdür'ün KİŞİSEL `approval_limit`'i (seed ₺250.000) aşılan bir
+  ₺300.000 siparişte onay 403 ile reddediliyor, admin ise kişisel limit
+  kontrolüne tabi olmadan onaylayabiliyor.
+
+**Hâlâ tamamen açık kalemler (bu oturumda BAŞLANMADI, ayrı iş
+gerektiriyor):** Yazdırma çıktılarının gerçek içeriği (window.open
+popup'ı tarayıcı aracının sandbox'ında engelleniyor — bir intercept
+tekniği gerekiyor), Mobil çevrimdışı kuyruk (navigator.onLine override +
+IndexedDB/MobileDB doğrulaması), Eşzamanlı kullanıcı senaryoları (iki
+paralel oturum/sekme ile aynı kayda yarış durumu), Tarayıcı uyumluluğu
+(mevcut araç seti yalnızca Chromium — gerçek çoklu tarayıcı testi
+yapılamıyor, yalnızca zarif bozulma kod yolları doğrulanabilir), ve
+tamamen tüketici bir rol×satır-aksiyon taraması (5 rol × her modülün her
+buton/satır-aksiyonu).
+
+**Doğrulama:** `npm run typecheck` temiz, `npm run lint` 0 hata (yalnızca
+önceden var olan uyarılar, değiştirilen dosyalarda yok). `node
+test/run-all.js` → 30/30 sunucu paketi + tüm standalone paketler geçti
+(yeni `approval-limit` paketi dahil, `import` paketi 87/87). `npx
+playwright test` → 22/22 geçti (değişmedi).
+
+**Dosyalar:** `test/approval-limit.js` (yeniden yazıldı), `test/import.js`
+(4 yeni assertion), `test/run-all.js` (`approval-limit` `SERVER_SUITES`'e
+eklendi).
+
 ## 2026-09-14 (devam 26) — Tam yetki matrisi taraması: 2 gerçek bulgu daha (toplam 10)
 
 Kullanıcının "tara" talimatıyla, `frontend-react/*.jsx`'teki TÜM `can(...)`
