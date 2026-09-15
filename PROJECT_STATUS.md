@@ -9,7 +9,8 @@
 > gerçek hatalar için hâlâ birincil kaynak. Yeni bir oturuma başlarken
 > önce burayı, sonra ihtiyaç oldukça günlüğü okuyun.
 
-**Proje:** Sentez ERP (depo-takip-app) — stok, üretim, kalite, planlama,
+**Proje:** Dream Plus (eski adıyla Sentez ERP, kod klasörü: `project`,
+eski adıyla `depo-takip-app`) — stok, üretim, kalite, planlama,
 satın alma, satış, CRM, destek ve raporlama için tek-tesis bir web ERP'si.
 Türkçe birincil dil (İngilizce de destekleniyor).
 
@@ -74,9 +75,10 @@ Kullanıcıdan yeni bir talep gelmediyse, en yüksek değerli sıradaki adımlar
 (gerçek donanım/kullanıcı/ağ gerektirir), (2) bir avukata EULA/lisans metni
 hazırlatmak (kod dışı, ticari ürün olarak satış için önemli).
 
-**Son güncelleme:** 2026-09-15 (devam 31 — e-Fatura modülü kalıcı olarak
-koddan kaldırıldı, genel arama eklendi, gerçek kurulum yolu uçtan uca
-doğrulandı; ayrıntılar aşağıdaki kronolojik günlükte).
+**Son güncelleme:** 2026-09-15 (devam 32 — proje adı "Sentez"ten "Dream
+Plus"a değiştirildi, kod klasörü `depo-takip-app`'ten `project`e taşındı,
+sahaya götürülecek iki yeni kurulum kılavuzu eklendi; ayrıntılar aşağıdaki
+kronolojik günlükte).
 
 ---
 
@@ -86,6 +88,74 @@ Aşağıdaki girişler EKLENDİKÇE üste eklenir, geçmiş girişler asla silin
 — her bulunan gerçek hatanın, alınan mimari kararın ve reddedilen
 alternatifin kaydı. Yukarıdaki özeti güncel tutmak yeterli değilse (ör.
 belirli bir kararın TAM gerekçesini arıyorsanız) buradan devam edin.
+
+## 2026-09-15 (devam 32) — Marka adı "Sentez"ten "Dream Plus"a değiştirildi, klasör taşındı, saha kurulum kılavuzları eklendi
+
+Kullanıcı önce giriş ekranındaki geliştirme izlerini (uzun ürün adı, alt
+başlık, demo hesap listesi) kaldırmamı istedi, ardından proje klasörünü
+`depo-takip-app`'ten `project`e taşıdı (kod tabanında klasör adına
+sabitlenmiş bir referans olmadığı doğrulandı — güvenli), sonunda tüm
+ürünün adını **"Dream Plus"** olarak değiştirmemi istedi.
+
+**1) Giriş ekranı/kenar çubuğu sadeleştirmesi:** `public/index.html`'de
+giriş kartındaki "Sentez ERP" → sade "Sentez" yapıldı, alt başlık
+("Stok · Üretim · Satın Alma · Kalite") ve demo hesap bilgisi kaldırıldı;
+aynı alt başlık kenar çubuğundaki şirket adının altından da kaldırıldı.
+Kullanılmayan `brandSub`/`demoAccounts` çeviri anahtarları ve
+`.login-hint` CSS kuralı temizlendi.
+
+**2) Marka adı "Dream Plus" olarak değiştirildi** — kod tabanında
+gerçekten görünen/kullanıcıya ulaşan HER "Sentez" referansı tarandı
+(`grep -rn Sentez`) ve değiştirildi: `public/index.html` (sayfa başlığı,
+giriş ekranı, kenar çubuğu varsayılan adı), `public/mobile.html` ve
+`public/manifest.webmanifest` (PWA terminal adı), `public/api-docs.html`,
+`server/lib/openapi.js` (Entegrasyon API başlığı), `server/index.js`
+(açılış log satırı), `server/scripts/setup.js`/`upgrade.js` (konsol
+başlıkları), `server/routes/admin.js` (companyName varsayılan değeri —
+firma adı ayarlanmadan önce gösterilen isim), `server/routes/
+notifications.js`/`server/services/notifications.js` (e-posta konu
+etiketi `[Sentez]` → `[Dream Plus]`, `test/email.js`'teki karşılık gelen
+test güncellendi), `server/services/import-commit.js` (Excel dosya
+üreteni), `server/scripts/license-generate.js` (`product` alanı ve
+lisans no öneki `SNT-` → `DPL-` — `server/lib/license.js`'teki imza
+doğrulama bu alanın içeriğini kontrol etmiyor, yalnızca imzayı
+doğruluyor, bu yüzden `test/license.js`'teki eski sabit kod imzalı test
+verileri (`product: 'Sentez ERP'`, `licenseId: 'SNT-TEST-...'`) BİLİNÇLİ
+OLARAK değiştirilmedi — bunlar genel imza/süre mantığını test ediyor,
+marka adıyla ilgisi yok), `LICENSE`, `README.md`, `docs/
+KULLANIM-KILAVUZU.md`, `nginx.conf`, `package.json` (npm paket adı
+`sentez` → `dream-plus`, ardından `npm install` ile `package-lock.json`
+senkronize edildi), `docs/SAHA-KURULUM-KARTI.md` ve `docs/
+SAHA-KURULUM-COK-BASIT.md` (NSSM servis adı, systemd servis adı, örnek
+klasör adları).
+
+Bilinçli olarak DOKUNULMADI: `PROJECT_STATUS.md`'nin kendi kronolojik
+günlüğündeki geçmiş "Sentez" girişleri (bu günlük asla geriye dönük
+düzenlenmez — o kararın o an alındığı gerçeği değişmiyor), `test/
+license.js` ve `test/security.js`'teki `sentez-license-`/
+`sentez-jwtsecret-` geçici klasör önekleri (kullanıcıya hiç görünmeyen,
+saf test altyapısı), `depo-takip.sqlite` veritabanı dosya adı ve
+`docker-compose.yml`'deki `depo-takip`/`depo-takip-nginx` konteyner
+adları (bunlar "Sentez" markasıyla değil eski "depo-takip" repo adıyla
+ilgili, kullanıcı yalnızca marka adını değiştirmemi istedi, bu ayrı bir
+iç isimlendirme kararı — istenirse ayrıca ele alınabilir).
+
+**3) İki yeni saha kurulum belgesi eklendi** (kullanıcı her firmaya kendi
+sunucusunda ayrı bir kurulum yapacağını belirtti — mevcut tek-tesis
+mimari zaten bu modele uygun): `docs/SAHA-KURULUM-KARTI.md` — pratik bir
+kontrol listesi (Windows için NSSM, Linux için systemd ile sunucuyu
+kalıcı/otomatik servis haline getirme dahil, mevcut `docs/KURULUM.md`
+bu konuyu hiç işlemiyordu). `docs/SAHA-KURULUM-COK-BASIT.md` — aynı
+Windows kurulum yolunun, bilgisayar kullanmayı hiç bilmeyen biri için,
+temel terimleri ("tıkla", "kopyala/yapıştır") baştan tanımlayarak,
+buton adı seviyesinde anlatılan hâli.
+
+**Doğrulama:** `npm install` (paket adı değişikliği için lockfile
+senkronizasyonu) → 0 açık. `npm run typecheck` temiz, `npm run lint` 0
+hata. `node test/run-all.js` → **31/31 paket yeşil** (`email` paketi
+dahil, yeni `[Dream Plus]` konu etiketini doğruluyor). `npx playwright
+test` → **33/33 yeşil**. Tarayıcıda elle doğrulandı: sayfa başlığı,
+giriş ekranı ve kenar çubuğu artık "Dream Plus" gösteriyor.
 
 ## 2026-09-15 (devam 31) — e-Fatura kalıcı olarak kaldırıldı, genel arama eklendi, gerçek kurulum yolu doğrulandı
 

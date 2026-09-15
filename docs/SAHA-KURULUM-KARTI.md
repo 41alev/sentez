@@ -80,23 +80,23 @@ gününde** çöz — geri dönüp ikinci kez gitmek istemezsin.
    tek dosya, kuruluma gerek yok).
 2. Yönetici olarak PowerShell/CMD aç, proje klasörüne git:
    ```powershell
-   nssm install SentezERP "C:\Program Files\nodejs\node.exe" "server\index.js"
-   nssm set SentezERP AppDirectory "C:\yol\proje-klasoru"
-   nssm set SentezERP Start SERVICE_AUTO_START
-   nssm start SentezERP
+   nssm install DreamPlus "C:\Program Files\nodejs\node.exe" "server\index.js"
+   nssm set DreamPlus AppDirectory "C:\yol\proje-klasoru"
+   nssm set DreamPlus Start SERVICE_AUTO_START
+   nssm start DreamPlus
    ```
 3. Kontrol: `http://localhost:3000` açılıyor mu? Bilgisayarı yeniden
    başlatıp tekrar dene — otomatik açılmalı.
 
-Servisi durdurmak/kaldırmak gerekirse: `nssm stop SentezERP` /
-`nssm remove SentezERP confirm`.
+Servisi durdurmak/kaldırmak gerekirse: `nssm stop DreamPlus` /
+`nssm remove DreamPlus confirm`.
 
 ### Linux — systemd ile servis yap
 
 ```bash
-sudo tee /etc/systemd/system/sentez-erp.service > /dev/null <<'EOF'
+sudo tee /etc/systemd/system/dream-plus.service > /dev/null <<'EOF'
 [Unit]
-Description=Sentez ERP
+Description=Dream Plus
 After=network.target
 
 [Service]
@@ -104,18 +104,18 @@ Type=simple
 WorkingDirectory=/yol/proje-klasoru
 ExecStart=/usr/bin/node server/index.js
 Restart=on-failure
-User=sentez
+User=dreamplus
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now sentez-erp
-sudo systemctl status sentez-erp
+sudo systemctl enable --now dream-plus
+sudo systemctl status dream-plus
 ```
 
-(`User=sentez` — root ile çalıştırma; yoksa önce `sudo useradd -r sentez`
+(`User=dreamplus` — root ile çalıştırma; yoksa önce `sudo useradd -r dreamplus`
 ile bir servis kullanıcısı oluştur ve proje klasörünün sahipliğini ona ver.)
 
 ---

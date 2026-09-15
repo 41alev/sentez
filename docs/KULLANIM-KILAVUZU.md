@@ -1,4 +1,4 @@
-# Sentez ERP — Kullanım Kılavuzu
+# Dream Plus — Kullanım Kılavuzu
 
 Bu kılavuz sistemi kullanacak kişiler içindir. Teknik kurulum için `README.md` dosyasına bakın.
 

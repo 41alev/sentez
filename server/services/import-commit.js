@@ -366,7 +366,7 @@ async function template(importType) {
   if (!schema) throw new AppError('Bilinmeyen aktarım tipi / Unknown import type', 400);
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'Sentez ERP';
+  wb.creator = 'Dream Plus';
   const ws = wb.addWorksheet(schema.label);
 
   const fields = Object.entries(schema.fields);

@@ -260,7 +260,7 @@ if (process.env.DISABLE_JOBS !== '1') {
 
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, () => {
-  logger.info(`Sentez ERP çalışıyor / running at http://localhost:${PORT}`);
+  logger.info(`Dream Plus çalışıyor / running at http://localhost:${PORT}`);
 });
 
 function shutdown(signal) {

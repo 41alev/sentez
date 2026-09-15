@@ -1,4 +1,4 @@
-# Sentez ERP
+# Dream Plus
 
 Fabrika ölçeğinde depo, üretim, satın alma, satış ve kalite yönetimi. Node.js + Express + SQLite backend,
 bağımlılıksız çok modüllü frontend. Türkçe/İngilizce arayüz.

@@ -49,12 +49,12 @@ olmasını ister. Önce onu kuracaksın.
 ## Adım 2 — Program dosyalarını bilgisayara koy
 
 1. Masaüstünde boş bir yere sağ tıkla → "Yeni" → "Klasör" → adını
-   `SentezERP` yap.
+   `DreamPlus` yap.
 2. Sana verilen program dosyasını (bir `.zip` dosyası, USB'den veya
-   internetten) bu `SentezERP` klasörünün İÇİNE kopyala.
+   internetten) bu `DreamPlus` klasörünün İÇİNE kopyala.
 3. O `.zip` dosyasına sağ tıkla → **"Tümünü Ayıkla..."** (veya
    "Extract All...") → çıkan pencerede "Ayıkla/Extract" butonuna bas.
-4. Şimdi `SentezERP` klasörünün içinde, program dosyalarının olduğu bir
+4. Şimdi `DreamPlus` klasörünün içinde, program dosyalarının olduğu bir
    klasör olacak (içinde `server`, `public` gibi klasörler, `package.json`
    diye bir dosya görürsen doğru yerdesin).
 
@@ -73,7 +73,7 @@ olmasını ister. Önce onu kuracaksın.
    cd
    ```
    (yani: `cd` yaz, boşluk bırak, yapıştır, Enter — örnek görünüm:
-   `cd C:\Users\Sen\Desktop\SentezERP\depo-takip-app`)
+   `cd C:\Users\Sen\Desktop\DreamPlus`)
 4. Doğru gittiysen, pencerede en solda o klasörün adı görünür.
 
 **Bundan sonraki her adımda:** aşağıdaki kutulardaki yazıyı olduğu gibi
@@ -148,7 +148,7 @@ kapatma** (şimdilik) — kapatırsan program durur.
 ```
 localhost:3000
 ```
-Sentez ERP'nin giriş ekranı açılmalı. Adım 6'da yazdığın kullanıcı
+Dream Plus'ın giriş ekranı açılmalı. Adım 6'da yazdığın kullanıcı
 adı/şifre ile giriş yap, panelin göründüğünü kontrol et.
 
 **Buraya kadar çalıştıysa program kurulmuş demektir.** Şimdi tek eksik:
@@ -179,18 +179,18 @@ açman gerekir.
    klasör yollarınla değiştirmen lazım:
 
    ```
-   .\nssm.exe install SentezERP "C:\Program Files\nodejs\node.exe" "server\index.js"
+   .\nssm.exe install DreamPlus "C:\Program Files\nodejs\node.exe" "server\index.js"
    ```
    ```
-   .\nssm.exe set SentezERP AppDirectory "<PROGRAM KLASÖRÜNÜN TAM YOLU>"
+   .\nssm.exe set DreamPlus AppDirectory "<PROGRAM KLASÖRÜNÜN TAM YOLU>"
    ```
    (`<PROGRAM KLASÖRÜNÜN TAM YOLU>` = Adım 3'te `cd` yaparken kullandığın
-   o adres, örnek: `C:\Users\Sen\Desktop\SentezERP\depo-takip-app`)
+   o adres, örnek: `C:\Users\Sen\Desktop\DreamPlus`)
    ```
-   .\nssm.exe set SentezERP Start SERVICE_AUTO_START
+   .\nssm.exe set DreamPlus Start SERVICE_AUTO_START
    ```
    ```
-   .\nssm.exe start SentezERP
+   .\nssm.exe start DreamPlus
    ```
 
 7. Tarayıcıda tekrar `localhost:3000` yaz — açılıyorsa çalışıyor demektir,

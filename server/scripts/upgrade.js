@@ -41,7 +41,7 @@ function ask(question) {
 
 async function main() {
   console.log('\n╭─────────────────────────────────────────╮');
-  console.log('│  Sentez ERP — Sürüm Yükseltme           │');
+  console.log('│  Dream Plus — Sürüm Yükseltme           │');
   console.log('╰─────────────────────────────────────────╯\n');
 
   const pkg = require('../../package.json');

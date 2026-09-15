@@ -181,7 +181,7 @@ router.get('/settings', (req, res) => {
   const out = {};
   rows.forEach(r => out[r.key] = r.value);
   res.json({
-    companyName: out.companyName || 'Sentez',
+    companyName: out.companyName || 'Dream Plus',
     baseCurrency: out.baseCurrency || 'TRY',
     defaultLaborRate: Number(out.defaultLaborRate || 0),
     defaultOverheadPct: Number(out.defaultOverheadPct || 0),

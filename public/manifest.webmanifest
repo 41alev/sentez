@@ -1,7 +1,7 @@
 {
-  "name": "Sentez Terminal",
-  "short_name": "Sentez Terminal",
-  "description": "Sentez ERP saha el terminali — mal kabul, toplama, sayım, malzeme çıkışı",
+  "name": "Dream Plus Terminal",
+  "short_name": "Dream Plus",
+  "description": "Dream Plus saha el terminali — mal kabul, toplama, sayım, malzeme çıkışı",
   "start_url": "/mobile.html",
   "scope": "/",
   "display": "standalone",

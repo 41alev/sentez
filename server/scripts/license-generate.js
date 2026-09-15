@@ -68,9 +68,9 @@ function main() {
 
   const privateKeyPem = loadOrCreatePrivateKey();
   const payload = {
-    licenseId: `SNT-${new Date().getFullYear()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`,
+    licenseId: `DPL-${new Date().getFullYear()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`,
     licensee: args.licensee,
-    product: 'Sentez ERP',
+    product: 'Dream Plus',
     issuedAt: new Date().toISOString().slice(0, 10),
     expiresAt: args.expires || null
   };

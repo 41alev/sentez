@@ -99,7 +99,7 @@ function createPrompt() {
 /* ---------- Kurulum ---------- */
 async function setup(args) {
   console.log('\n╭─────────────────────────────────────────╮');
-  console.log('│  Sentez ERP — Kurulum                   │');
+  console.log('│  Dream Plus — Kurulum                   │');
   console.log('╰─────────────────────────────────────────╯\n');
 
   runMigrations({ silent: true });
