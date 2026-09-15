@@ -1,7 +1,6 @@
 // @ts-nocheck
 const I18N = {
 tr: {
-  brandSub:"Stok · Üretim · Satın Alma · Kalite", demoAccounts:"Demo hesaplar",
   loginUsername:"Kullanıcı adı", loginPassword:"Şifre", loginSubmit:"Giriş Yap",
   loginFailed:"Kullanıcı adı veya şifre hatalı.", logout:"Çıkış",
   navDashboard:"Panel", navGroupStock:"Stok", navItems:"Ürünler", navLots:"Partiler / Lotlar",
@@ -380,7 +379,6 @@ tr: {
   auditLogin:"giriş yapıldı", auditLoginFailed:"başarısız giriş denemesi", auditLogout:"çıkış yapıldı", auditPasswordChanged:"şifre değiştirildi",
 },
 en: {
-  brandSub:"Stock · Production · Purchasing · Quality", demoAccounts:"Demo accounts",
   loginUsername:"Username", loginPassword:"Password", loginSubmit:"Sign In",
   loginFailed:"Incorrect username or password.", logout:"Sign out",
   navDashboard:"Dashboard", navGroupStock:"Stock", navItems:"Items", navLots:"Lots / Batches",

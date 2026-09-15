@@ -24,8 +24,6 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
 .login-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:32px 30px;width:100%;max-width:400px}
 .login-error{color:var(--danger);font-size:12.5px;margin:-4px 0 12px;min-height:16px}
-.login-hint{font-size:11px;color:var(--text-faint);text-align:center;margin-top:16px;line-height:1.7}
-.login-hint b{color:var(--text-muted)}
 .login-lang{display:flex;justify-content:center;margin-top:14px}
 
 /* ---------- Shell ---------- */
