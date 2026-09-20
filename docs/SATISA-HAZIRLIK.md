@@ -2,6 +2,8 @@
 
 ## 20 Eylül 2026 — bakım güvenliği ve kalıcı kayıt
 
+Bakım koruması `55f1d87` commit'inde; önceki düzeltmeler `933cf79` commit'inde kalıcıdır. 36 test paketi ve 35 Chromium testi geçti; tip kontrolü başarılı; lint 0 hata/29 uyarı. Yerel uygulama bu kodla yeniden başlatıldı; sağlık kontrolü başarılı ve bekleyen migration yok.
+
 Önceki değişiklikler `933cf79` Git commit'inde kaydedildi. S05 için sunucu/restore/upgrade arasında süreçler arası bakım kilidi eklendi. `--force` çalışan sunucu kilidini aşamaz; restore ayrıca dolu WAL dosyasını reddeder. S06 kapsamında üretim anahtarı ve lisans doğrulaması migration öncesine alındı. CLI bakım komutları `.env` veri yolu ayarlarını okur. S04 kapsamındaki dosyaları da içeren otomatik tam yedek ve geri yükleme çalışması açık kalıyor.
 
 ## 20 Eylül 2026 — mali kayıt geliştirmeleri

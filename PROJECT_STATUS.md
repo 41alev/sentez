@@ -2,6 +2,14 @@
 
 ## 20 Eylül 2026 — kalıcı kayıt ve bakım güvenliği
 
+Bakım değişiklikleri ve inceleme raporu `55f1d87` commit'inde kaydedildi.
+Son doğrulama: 36 test paketi ve 35 Chromium testi geçti; tip kontrolü
+başarılı; lint 0 hata/29 uyarı. Son küçük CLI/kilit yolu değişikliklerinden
+sonra bakım, yedekten dönüş ve kurulum/yükseltme paketleri ayrıca tekrar geçti.
+Yerel sunucu yeni kodla yeniden başlatıldı: health=ok, DB=connected,
+pendingMigrations=0. Kullanıcıya ait `.claude/` ve `CLAUDE.md` dışındaki
+tamamlanmış değişiklikler Git kayıtlarına alındı.
+
 Önceki stok, finans, mobil, yetki ve test izolasyonu düzeltmeleri `933cf79`
 Git commit'inde kalıcı kayda alındı. Özel ortam/veri dosyaları ve kullanıcının
 `.claude/` ile `CLAUDE.md` dosyaları bu kayda eklenmedi.
