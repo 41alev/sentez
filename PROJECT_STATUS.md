@@ -1,5 +1,63 @@
 # PROJECT_STATUS.md
 
+## 20 Eylül 2026 — mali doğruluk geliştirmeleri
+
+Doğrulama tamamlandı: 35 test paketi ve 35 Chromium testi geçti (35,6 sn);
+derleme ve tip kontrolü başarılı; lint 0 hata/29 uyarı; diff kontrolü temiz.
+Son test kayıtları `C:\Erp\dream-plus-release-verification` altında
+`server-financial.log`, `browser-financial.log`, `lint-financial.log`.
+020/021/022 geçişleri mevcut verinin kopyasında doğrulandı; sonra yerel
+sunucu durdurulup `C:\Erp\backups\pre-financial-final-2026-09-20T01-22-33-424Z`
+altına veritabanı ve uploads yedeği alındı. Yerel kurulum güncellendi ve
+`http://localhost:3000` yeniden başlatıldı: health=ok, bekleyen migration=0,
+integrity=ok, yabancı anahtar hatası=0. Mevcut veride eski yöntemle kaydedilmiş
+1 ek maliyet mutabakat bekliyor; eksik satır kuru yok. Dış müşteri kurulumu
+ve satışa hazır kabulü yapılmadı.
+
+Satın alma satırı kuru sabitlendi (020); fatura miktarı sevkiyat satırlarına
+bağlandı (021); ek maliyetin tekrar uygulanması engellendi ve parti bazlı
+tahsis kaydı eklendi (022). Satış arayüzü kalan faturalanabilir miktarın
+KDV dahil tutarını sunucudan önizliyor. Karma para birimi, kısmi teslim/fatura,
+eşzamanlı mükerrer istek, farklı kaynak üzerinden tekrar fatura, masrafın
+tekrar uygulanması ve bölünmüş parti maliyeti testleri geçti.
+
+Açık: eski fatura/kur/maliyet kayıtlarının mutabakatı ve tüketilmiş mallara
+sonradan gelen masrafın muhasebeleştirilmesi. Güvenilir bağlantı olmayan
+kayıtlarda işlem açık hata veriyor. Önceki listedeki diğer geliştirmeler
+devam ediyor; satışa hazır onayı verilmedi.
+
+## 19 Eylül 2026 — yerel kurulum güncellendi ve çalıştırıldı
+
+Kullanıcının isteğiyle mevcut düzeltmeler derlendi ve yerel uygulama başlatıldı.
+Önce `C:\Erp\backups\pre-update-2026-09-19T20-19-02-134Z` dizinine SQLite
+online yedeği ve uploads kopyası alındı; yedek bütünlüğü doğrulandı. 018/019
+geçişleri önce ayrı kopyada denendi, ardından uygulama açılışında mevcut yerel
+veritabanına uygulandı. Son bütünlük kontrolü `ok`, yabancı anahtar hatası 0.
+`http://localhost:3000/health`: status=ok, db=connected, pendingMigrations=0.
+Ana sayfa, mobil terminal ve kontrol edilen derlenmiş JS dosyaları HTTP 200.
+Sunucu arka planda başlatıldı; Windows otomatik başlangıç servisi kurulmadı.
+Bu yerel çalıştırma, satışa hazır onayı değildir. Aşağıdaki önceki oturumun
+“veritabanına uygulanmadı” ifadeleri bu işlemden önceki durumu anlatır.
+
+## 19 Eylül 2026 — satışa hazırlık düzeltmeleri (güncel)
+
+Ürün henüz satış onayı almadı. Aşağıdaki tarihsel günlükteki “tamamlandı”,
+“bilinen sorun yok” ve müşteri `data` dizinini silme yönlendirmeleri güncel değildir.
+Güncel uygulama matrisi, kalan işler ve geçiş planı: [SATISA-HAZIRLIK.md](docs/SATISA-HAZIRLIK.md).
+
+Stok tüketimi/sevkiyat, iptal ve parti izleme, sayım, kalite miktarları,
+mobil kalıcı tekrar koruması ve kullanıcıya bağlı kuyruk, zorunlu şifre değişimi,
+kısmi güncelleme, satın alma onayı, iade bakiyesi/muhasebesi ve tarihsel kur
+düzeltmeleri çalışma ağacında uygulandı. Docker kapsamı daraltıldı; testler
+müşteri verilerinden bağımsız geçici veritabanlarına taşındı.
+
+018 ve 019 migration dosyaları eklendi; yalnız izole test ortamlarında çalıştırıldı.
+Gerçek müşteri verilerine uygulanmadı. Kaynak değişiklikleri henüz commit edilmedi.
+Son birleşik doğrulamada 35 test paketi ve 35 Playwright testi geçti; derleme ve
+tip kontrolü başarılı; lint 0 hata/30 uyarı. Docker kurulu değil; imaj dağıtımı
+doğrulanmadı. İlk incelemenin 25 davranışsal ve 20 statik/operasyonel bulgusu,
+tamamı kapatılmış gibi değerlendirilmemelidir.
+
 ## Güncel Durum Özeti (bu bölüm her önemli değişiklikte güncellenir)
 
 > Bu dosya 2000+ satırlık kronolojik bir oturum günlüğüne dönüştüğü için
@@ -36,11 +94,17 @@ dosyası mekanizması (Ed25519, süreli/süresiz) tam bu "geliştir-kur-sat"
 modeli için hazır, varsayılan kapalı (`LICENSE_FILE` tanımlanmadıkça hiç
 devreye girmez).
 
-**Şu anki aşama:** Özellik açısından tamamlanmış, sertleştirilmiş, kapsamlı
-test paketi olan bir sistem — **sahaya ilk kurulum öncesi son doğrulama**
-aşamasında, gerçek bir pilot kuruluma hazır. Kod tarafında bilinen bir eksik
-YOK; kalanlar yalnızca sahada (gerçek cihaz, gerçek kullanıcı, gerçek
-internet/ağ koşulları) veya hukuken (EULA/lisans metni — kod dışı) çözülebilir.
+**Şu anki aşama (19 Eylül 2026 incelemesi):** Geniş modül kapsamı ve geçen
+test altyapısı var; ancak stok, sevkiyat, sayım, maliyet, iade, güncelleme
+ve yetki kurallarında açık bulgular nedeniyle genel üretim onayı verilmedi.
+Önceki “kod tarafında bilinen eksik yok” değerlendirmesi güncel değildir.
+[Teknik inceleme ve teslim planı](docs/analiz-2026-09-19/TEKNIK-ANALIZ.md)
+25 yeniden üretilmiş davranış ve 20 kaynak/operasyon bulgusu içerir;
+bunlar 45 bağımsız kök neden anlamına gelmez. İzole kaynak kopyasında
+31/31 sunucu paketi, 33/33 Chromium testi, build ve typecheck geçti;
+lint 0 hata/28 uyarı verdi. Uygulama kodu bu incelemede değiştirilmedi.
+Mevcut test komutları proje `data` dizinini silebildiğinden normal veri
+klasöründe çalıştırılmamalı; rapordaki S02 önce kapatılmalıdır.
 
 **Tamamlanan işlerin TAM listesi:** `docs/YOL-HARITASI.md` (16 madde, hepsi
 tamamlandı veya bilinçli olarak atlandı/kapsam dışı bırakıldı — bu dosyanın

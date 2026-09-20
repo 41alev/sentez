@@ -12,7 +12,7 @@
 const express = require('express');
 const db = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
-const { validate, z } = require('../middleware/validate');
+const { validate, validatePartial, z } = require('../middleware/validate');
 const { AppError, uuid, logAudit, paginate } = require('../lib/core');
 const { companyIdOf } = require('../lib/tenant');
 
@@ -100,9 +100,9 @@ router.post('/', WRITE, validate(visitSchema), (req, res) => {
   res.status(201).json(serialize(result));
 });
 
-const visitUpdateSchema = visitSchema.omit({ customerId: true }).partial();
+const visitUpdateSchema = visitSchema.omit({ customerId: true });
 
-router.put('/:id', WRITE, validate(visitUpdateSchema), (req, res) => {
+router.put('/:id', WRITE, validatePartial(visitUpdateSchema), (req, res) => {
   const before = db.prepare('SELECT * FROM customer_visits WHERE id = ?').get(req.params.id);
   if (!before) throw new AppError('Ziyaret kaydı bulunamadı / Visit not found', 404);
   const b = req.valid;

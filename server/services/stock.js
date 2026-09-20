@@ -124,6 +124,7 @@ function availableQty(itemId, warehouseId = null) {
 
 /** Consume stock using FEFO. Returns the lots actually consumed (for genealogy). */
 function issueStock({ itemId, qty, warehouseId, refType, refId, note, userId, allowPartial = false }) {
+  if (!Number.isFinite(qty) || qty <= 0) throw new AppError('Geçersiz miktar / Invalid quantity', 422);
   const item = db.prepare('SELECT id, name, unit FROM items WHERE id = ?').get(itemId);
   if (!item) throw new AppError('Ürün bulunamadı / Item not found', 404);
 
@@ -173,6 +174,7 @@ function changeLotStatus({ lotId, toStatus, qty, note, userId, refType, refId })
       targetLotId, lot.item_id, lot.warehouse_id, lot.lot_no, lot.serial_no, moveQty, toStatus,
       lot.expiry_date, lot.unit_cost, lot.received_at, lot.source_type, lot.source_id, lot.supplier_id, lot.notes
     );
+    db.prepare('UPDATE stock_lots SET parent_lot_id=?,parent_qty=? WHERE id=?').run(lot.id, moveQty, targetLotId);
   } else {
     db.prepare('UPDATE stock_lots SET status = ? WHERE id = ?').run(toStatus, lot.id);
   }
@@ -212,6 +214,7 @@ function transferLot({ lotId, targetWarehouseId, qty, note, userId }) {
       targetLotId, lot.item_id, targetWarehouseId, lot.lot_no, lot.serial_no, moveQty, lot.status,
       lot.expiry_date, lot.unit_cost, lot.received_at, lot.source_type, lot.source_id, lot.supplier_id, lot.notes
     );
+    db.prepare('UPDATE stock_lots SET parent_lot_id=?,parent_qty=? WHERE id=?').run(lot.id, moveQty, targetLotId);
   } else {
     db.prepare('UPDATE stock_lots SET warehouse_id = ? WHERE id = ?').run(targetWarehouseId, lot.id);
     targetLotId = lot.id;
@@ -269,20 +272,26 @@ function allocate(itemId, qty, warehouseId = null, strategy = 'FEFO') {
 }
 
 /** Consume lots already picked by allocate() or chosen explicitly by the caller. */
-function consume(picks, { itemId, itemName, note, refType, refId, userId }) {
+function consume(picks, { itemId, itemName, note, refType, refId, userId, warehouseId = null, allowedStatuses = ['available'] }) {
+  return db.txImmediate(() => {
   for (const p of picks) {
     const lot = db.prepare('SELECT * FROM stock_lots WHERE id = ?').get(p.lotId);
     if (!lot) throw new AppError('Parti bulunamadı / Lot not found', 404);
+    if (lot.item_id !== itemId) throw new AppError('Ürün ile lot eşleşmiyor / Lot does not belong to item', 422);
+    if (warehouseId != null && Number(warehouseId) !== lot.warehouse_id) throw new AppError('Lot seçilen depoda değil / Lot warehouse mismatch', 422);
+    if (!allowedStatuses.includes(lot.status)) throw new AppError('Lot bu işlem için uygun değil / Lot status is not eligible', 409);
+    if (!Number.isFinite(p.qty) || p.qty <= 0 || p.qty > lot.qty + 1e-9) throw new AppError('Geçersiz veya yetersiz miktar / Invalid or insufficient quantity', 422);
     const newQty = lot.qty - p.qty;
     db.prepare('UPDATE stock_lots SET qty = ?, status = CASE WHEN ? <= 0 THEN ? ELSE status END WHERE id = ?')
       .run(newQty, newQty, 'consumed', lot.id);
     recordMovement({
       itemId, itemName, lotId: lot.id, lotNo: lot.lot_no, warehouseId: lot.warehouse_id,
-      type: 'out', qty: p.qty, unitCost: p.unitCost ?? lot.unit_cost,
-      fromStatus: 'available', note, refType, refId, userId
+      type: 'out', qty: p.qty, unitCost: lot.unit_cost,
+      fromStatus: lot.status, note, refType, refId, userId
     });
   }
   recalcItemQty(itemId);
+  });
 }
 
 /** Total stock value at lot cost — the number you can actually give to accounting. */

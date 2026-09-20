@@ -74,9 +74,8 @@ function fxRate(currency, dateStr) {
   const date = dateStr || todayLocal();
   const row = db.prepare('SELECT rate FROM exchange_rates WHERE currency = ? AND rate_date <= ? ORDER BY rate_date DESC LIMIT 1')
     .get(currency, date);
-  if (row) return row.rate;
-  const latest = db.prepare('SELECT rate FROM exchange_rates WHERE currency = ? ORDER BY rate_date DESC LIMIT 1').get(currency);
-  return latest ? latest.rate : 1;
+  if (row && Number.isFinite(row.rate) && row.rate > 0) return row.rate;
+  throw new AppError(`${currency} için ${date} tarihinde geçerli kur bulunamadı / No valid exchange rate on or before document date`, 422);
 }
 
 function toBase(amount, currency, dateStr) {

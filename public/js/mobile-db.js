@@ -35,8 +35,9 @@
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE, mode);
       fn(tx.objectStore(STORE));
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+      tx.onabort = () => { db.close(); reject(tx.error || new Error('Queue transaction aborted')); };
     });
   }
 
@@ -50,11 +51,25 @@
       const db = await openDb();
       return new Promise((resolve, reject) => {
         const req = db.transaction(STORE, 'readonly').objectStore(STORE).getAll();
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
+        req.onsuccess = () => { db.close(); resolve(req.result); };
+        req.onerror = () => { db.close(); reject(req.error); };
       });
     },
-    /** Kuyruğu tamamen boşaltır (başarılı gönderim veya elle silme sonrası). */
+    /** Only acknowledge the exact sent records; new records remain untouched. */
+    acknowledge(sent, results) {
+      const byId = new Map(results.map(result => [result.clientId, result]));
+      return withStore('readwrite', store => {
+        for (const op of sent) {
+          const result = byId.get(op.clientId);
+          if (result && result.ok) store.delete(op.seq);
+          else if (result) store.put({ ...op, lastError: result.error, lastAttempt: Date.now() });
+        }
+      });
+    },
+    remove(records) {
+      return withStore('readwrite', store => records.forEach(op => store.delete(op.seq)));
+    },
+    /** Explicit maintenance only; never used to acknowledge a sync batch. */
     clear() {
       return withStore('readwrite', (store) => store.clear());
     }

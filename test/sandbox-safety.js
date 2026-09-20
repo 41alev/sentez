@@ -1,0 +1,16 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { createSandbox } = require('./helpers/sandbox');
+const sandbox = createSandbox();
+assert.notEqual(sandbox.dir, process.env.DATA_DIR);
+assert.equal(path.dirname(sandbox.env.DB_PATH), sandbox.dir);
+const marker = path.join(sandbox.dir, '.test-owner');
+const owner = fs.readFileSync(marker, 'utf8');
+fs.writeFileSync(marker, 'different-owner');
+assert.throws(() => sandbox.cleanup(), /unowned/);
+assert(fs.existsSync(sandbox.dir));
+fs.writeFileSync(marker, owner);
+sandbox.cleanup();
+assert(!fs.existsSync(sandbox.dir));
+console.log('✓ Test directory ownership checked; unowned directories retained');

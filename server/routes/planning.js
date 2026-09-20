@@ -2,7 +2,7 @@
 const express = require('express');
 const db = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
-const { validate, z } = require('../middleware/validate');
+const { validate, validatePartial, z } = require('../middleware/validate');
 const { AppError, logAudit, diff, paginate } = require('../lib/core');
 const dates = require('../lib/dates');
 const { companyIdOf } = require('../lib/tenant');
@@ -64,7 +64,7 @@ router.post('/work-centers', MANAGER, validate(wcSchema), (req, res) => {
   res.status(201).json({ id: result });
 });
 
-router.put('/work-centers/:id', MANAGER, validate(wcSchema.partial()), (req, res) => {
+router.put('/work-centers/:id', MANAGER, validatePartial(wcSchema), (req, res) => {
   const before = db.prepare('SELECT * FROM work_centers WHERE id = ?').get(req.params.id);
   if (!before) throw new AppError('İş merkezi bulunamadı / Work centre not found', 404);
   const b = req.valid;

@@ -245,9 +245,9 @@ export default function SalesView() {
       { key: 'date', label: t('date'), render: r => dt(r.date), cls: 'nowrap' },
       { key: 'status', label: t('status'), render: r => UI.shipStatusBadge(r.status) },
       { key: 'act', label: t('actions'), render: r => `<div class="row-actions">
-          ${r.status !== 'Teslim Edildi' && can('write') ? `<button class="icon-btn ok" data-adv="${esc(r.id)}" title="${t('advanceStatus')}">${UI.icon(UI.ICONS.check)}</button>` : ''}
+          ${['Hazırlanıyor', 'Yolda'].includes(r.status) && can('write') ? `<button class="icon-btn ok" data-adv="${esc(r.id)}" title="${t('advanceStatus')}">${UI.icon(UI.ICONS.check)}</button>` : ''}
           <button class="icon-btn" data-print="${esc(r.id)}" title="${t('print')}">${UI.icon(UI.ICONS.print)}</button>
-          ${can('admin') && r.status !== 'Teslim Edildi' ? `<button class="icon-btn danger" data-del="${esc(r.id)}">${UI.icon(UI.ICONS.trash)}</button>` : ''}
+          ${can('admin') && r.status === 'Hazırlanıyor' ? `<button class="icon-btn danger" data-del="${esc(r.id)}" title="Sevkiyatı iptal et">${UI.icon(UI.ICONS.trash)}</button>` : ''}
         </div>` }
     ], rows)}${res.totalPages ? pager(res, () => reload()) : ''}</div>`;
 
@@ -257,8 +257,8 @@ export default function SalesView() {
       try { await Api.advanceShipment(b.dataset.adv); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); }
     });
     body.querySelectorAll('[data-print]').forEach(b => b.onclick = async () => printPackingList(await Api.shipment(b.dataset.print)));
-    body.querySelectorAll('[data-del]').forEach(b => b.onclick = () => UI.confirmDialog(t('confirmDelete'), async () => {
-      try { await Api.deleteShipment(b.dataset.del); UI.ok(t('deleted')); reload(); } catch (e) { UI.err(e); }
+    body.querySelectorAll('[data-del]').forEach(b => b.onclick = () => UI.confirmDialog(UI.getLang() === 'tr' ? 'Sevkiyat iptal edilip stok geri alınacak. Belge geçmişi korunacak. Devam edilsin mi?' : 'Cancel this shipment and restore stock while preserving its history?', async () => {
+      try { await Api.deleteShipment(b.dataset.del); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); }
     }, { danger: true }));
   }
 
@@ -269,7 +269,7 @@ export default function SalesView() {
 
     // Lines default to what the order still owes; a standalone shipment starts with one blank line.
     let lines = so
-      ? (so.lines || []).filter(l => l.remainingQty > 1e-9).map(l => ({ itemId: l.itemId, qty: l.remainingQty, lotId: '' }))
+      ? (so.lines || []).filter(l => l.remainingQty > 1e-9).map(l => ({ itemId: l.itemId, salesOrderLineId: l.id, qty: l.remainingQty, lotId: '' }))
       : [{ itemId: items[0]?.id || '', qty: 1, lotId: '' }];
     let crates = [];
     let lotCache = {};
@@ -391,7 +391,7 @@ export default function SalesView() {
               date: val('shDate'), trackingNo: val('shTrack'),
               warehouseId: val('shWh') ? intVal('shWh') : undefined,
               items: lines.filter(l => l.itemId && l.qty > 0).map(l => ({
-                itemId: l.itemId, qty: l.qty, lotId: l.lotId || undefined
+                itemId: l.itemId, salesOrderLineId: l.salesOrderLineId, qty: l.qty, lotId: l.lotId || undefined
               })),
               crates: crates.filter(c => c.w || c.h || c.d || c.weight)
             });
@@ -617,15 +617,15 @@ export default function SalesView() {
     });
   }
 
-  function invoiceForm(so) {
-    const total = (so.lines || []).reduce((s, l) => s + (l.shippedQty || 0) * l.price, 0);
+  async function invoiceForm(so) {
+    let preview;
+    try { preview = await Api.customerInvoicePreview(so.id); } catch (e) { UI.err(e); return; }
     modal({
       title: t('newInvoice'), sub: `${so.soNo} · ${so.customerName || ''}`,
       body: `
         <div class="field-row">
-          ${field(t('invoiceAmount'), input('ciAmt', { type: 'number', min: 0, step: '0.01', value: total.toFixed(2) }),
-            UI.getLang() === 'tr' ? 'Sevk edilen miktarlara göre önerildi.' : 'Suggested from shipped quantities.')}
-          ${field(t('currency'), select('ciCur', [{ v: 'TRY', l: 'TRY' }, { v: 'USD', l: 'USD' }, { v: 'EUR', l: 'EUR' }], so.currency))}
+          ${field(t('invoiceAmount'), `<strong>${preview.amount.toFixed(2)} ${esc(preview.currency)}</strong>`,
+            UI.getLang() === 'tr' ? 'Yalnız faturalanmamış sevkler, KDV dahil. Kaydederken tekrar kontrol edilir.' : 'Uninvoiced shipments only, including VAT. Rechecked when saving.')}
         </div>
         ${field(t('date'), input('ciDate', { type: 'date', value: UI.today() }))}`,
       footer: `<button class="btn btn-ghost" data-close>${t('cancel')}</button>
@@ -634,8 +634,8 @@ export default function SalesView() {
         box.querySelector('#ciGo').onclick = async () => {
           try {
             await Api.createCustomerInvoice({
-              customerId: so.customerId, soId: so.id, amount: numVal('ciAmt'),
-              currency: val('ciCur'), invoiceDate: val('ciDate')
+              customerId: so.customerId, soId: so.id,
+              currency: preview.currency, invoiceDate: val('ciDate')
             });
             closeModal(); UI.ok(t('saved')); reload();
           } catch (e) { UI.err(e); }

@@ -395,7 +395,7 @@ async function api(method, p, { token, body, headers = {}, raw } = {}) {
   });
   const uploaded = await uploadRes.json();
   ok('tehlikeli uzantılı ama geçerli MIME\'li dosya kabul ediliyor', uploadRes.status === 201, JSON.stringify(uploaded));
-  const uploadDirPath = path.join(__dirname, '..', 'data', 'uploads');
+  const uploadDirPath = process.env.UPLOAD_DIR || path.join(process.env.DATA_DIR || path.join(__dirname, '..', 'data'), 'uploads');
   const onDisk = fs.readdirSync(uploadDirPath).find(f => fs.statSync(path.join(uploadDirPath, f)).mtimeMs > Date.now() - 10000);
   ok('diskteki dosya MIME\'den türetilen uzantıyı taşıyor (.png), istemcinin ".php" uzantısını DEĞİL',
     !!onDisk && onDisk.endsWith('.png') && !onDisk.endsWith('.php'), String(onDisk));

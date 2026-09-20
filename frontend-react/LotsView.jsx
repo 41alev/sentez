@@ -72,8 +72,12 @@ function renderForward(f) {
   // gösteriyordu, gerçek ileri izlenebilirlik verisi olsa bile.
   const used = f?.usedIn || [];
   const shipped = f?.shippedTo || [];
-  if (!used.length && !shipped.length) return `<div class="empty" style="padding:18px">${t('noTrace')}</div>`;
+  const splits = f?.splits || [];
+  if (!used.length && !shipped.length && !splits.length) return `<div class="empty" style="padding:18px">${t('noTrace')}</div>`;
   return `
+    ${splits.map(split => `<div class="trace-node"><div class="trace-title">${UI.getLang() === 'tr' ? 'Bölünen / geri alınan parti' : 'Split / restored lot'} · ${esc(split.output?.lotNo || '—')}</div>
+      <div class="trace-meta">${num(split.qty)} · ${esc(split.output?.status || '')}</div>
+      ${split.output ? renderForward(split.output) : ''}</div>`).join('')}
     ${used.map(u => `
       <div class="trace-node">
         <div class="trace-title">${esc(u.productionOrderNo || '—')} → ${esc(u.outputItem || '—')}</div>

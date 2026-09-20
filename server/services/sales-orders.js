@@ -24,8 +24,7 @@ function createSalesOrder(req, input) {
 
     // Credit limit check — a real business will not let an over-limit customer order freely
     if (customer.credit_limit > 0) {
-      const outstanding = db.prepare(`SELECT COALESCE(SUM(amount * fx_rate),0) t FROM customer_invoices
-        WHERE customer_id = ? AND status = 'issued'`).get(customer.id).t;
+      const outstanding = require('./customer-balance').outstandingBalance(customer.id);
       const orderTotal = input.lines.reduce((s, l) => s + l.qty * l.price, 0) * rate;
       if (outstanding + orderTotal > customer.credit_limit) {
         throw new AppError('Müşteri kredi limiti aşılıyor / Customer credit limit exceeded', 400, {

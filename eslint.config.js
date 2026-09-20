@@ -33,7 +33,7 @@ module.exports = [
     languageOptions: { ecmaVersion: 2022, sourceType: 'commonjs', globals: { ...globals.node } }
   },
   {
-    files: ['server/**/*.js', 'test/**/*.js'],
+    files: ['server/**/*.js', 'test/**/*.js', 'docs/**/kanitlar/*.cjs'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'commonjs',

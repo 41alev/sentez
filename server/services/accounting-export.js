@@ -65,20 +65,21 @@ function generateJournalEntries({ from, to, companyId = 1 }) {
   `).all(from, to);
 
   sales.forEach(inv => {
+    const isReturn = inv.invoice_type === 'iade';
     const rate = inv.fx_rate || 1;
     const grossBase = Math.round(inv.amount * rate * 100) / 100;
     const vatBase = Math.round(inv.vat_total * rate * 100) / 100;
     const revenueBase = Math.round((grossBase - vatBase) * 100) / 100;
-    const desc = `Satış faturası ${inv.invoice_no} — ${inv.customer_name || ''}`;
+    const desc = `${isReturn ? 'Satış iade faturası' : 'Satış faturası'} ${inv.invoice_no} — ${inv.customer_name || ''}`;
     rows.push({ date: inv.invoice_date, docNo: inv.invoice_no, accountCode: map.accounts_receivable.code,
-      accountName: map.accounts_receivable.name, description: desc, debit: grossBase, credit: 0,
+      accountName: map.accounts_receivable.name, description: desc, debit: isReturn ? 0 : grossBase, credit: isReturn ? grossBase : 0,
       sourceType: 'customer_invoice', sourceId: inv.id });
     rows.push({ date: inv.invoice_date, docNo: inv.invoice_no, accountCode: map.sales_revenue.code,
-      accountName: map.sales_revenue.name, description: desc, debit: 0, credit: revenueBase,
+      accountName: map.sales_revenue.name, description: desc, debit: isReturn ? revenueBase : 0, credit: isReturn ? 0 : revenueBase,
       sourceType: 'customer_invoice', sourceId: inv.id });
     if (vatBase > 0) {
       rows.push({ date: inv.invoice_date, docNo: inv.invoice_no, accountCode: map.sales_vat.code,
-        accountName: map.sales_vat.name, description: desc, debit: 0, credit: vatBase,
+        accountName: map.sales_vat.name, description: desc, debit: isReturn ? vatBase : 0, credit: isReturn ? 0 : vatBase,
         sourceType: 'customer_invoice', sourceId: inv.id });
     }
   });

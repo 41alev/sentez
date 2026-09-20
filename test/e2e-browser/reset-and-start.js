@@ -1,13 +1,14 @@
 // @ts-nocheck
 /**
- * Playwright'ın webServer.command'ı bu dosyayı çalıştırır: globalSetup ile
- * webServer'ın başlatılma sırası garanti değil (bu ortamda webServer önce
- * başlayıp veritabanı dosyasını açık tuttuğu için globalSetup'ın rmSync'i
- * EPERM ile başarısız oldu) — bu yüzden silme işlemi, sunucuyu başlatan
- * AYNI process'in İÇİNDE, ondan hemen önce yapılıyor; sıralama garantili.
+ * Playwright starts its own server against an owned, temporary sandbox.
+ * Customer data, uploads and backups are never used or removed by this runner.
  */
-const fs = require('fs');
-const path = require('path');
-
-fs.rmSync(path.join(__dirname, '..', '..', 'data'), { recursive: true, force: true });
+const { createSandbox } = require('../helpers/sandbox');
+const sandbox = createSandbox();
+Object.assign(process.env, sandbox.env, { PORT: process.env.PLAYWRIGHT_PORT || '3301' });
+// Forced OS termination can leave disposable temp data, never customer data.
+process.on('exit', () => {
+  try { require('../../server/db').close(); sandbox.cleanup(); }
+  catch (err) { console.error('Test cleanup retained temporary data:', err.message); }
+});
 require('../../server/index.js');

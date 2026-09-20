@@ -150,6 +150,7 @@ const Api = (() => {
     deleteShipment: (id) => req('DELETE', '/sales/shipments/' + id),
     customerInvoices: (p) => req('GET', '/sales/invoices' + qs(p)),
     createCustomerInvoice: (d) => req('POST', '/sales/invoices', d),
+    customerInvoicePreview: (id) => req('GET', '/sales/orders/' + id + '/invoice-preview'),
     payInvoice: (id) => req('POST', `/sales/invoices/${id}/pay`),
     profitability: (p) => req('GET', '/sales/profitability' + qs(p)),
 

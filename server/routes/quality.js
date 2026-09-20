@@ -148,7 +148,7 @@ const resultSchema = z.object({
   })).default([]),
   result: z.enum(['accepted', 'rejected', 'conditional']),
   acceptedQty: z.coerce.number().min(0).optional(),
-  rejectedQty: z.coerce.number().min(0).default(0),
+  rejectedQty: z.coerce.number().min(0).optional(),
   notes: z.string().max(5000).optional(),
   signaturePassword: z.string().max(1000).optional()
 });
@@ -171,8 +171,20 @@ router.post('/inspections/:id/result', requirePermission('quality.write'), valid
 
       const lot = insp.lot_id ? db.prepare('SELECT * FROM stock_lots WHERE id = ?').get(insp.lot_id) : null;
       const totalQty = lot ? lot.qty : (insp.inspected_qty || 0);
-      const rejectedQty = b.rejectedQty || 0;
+      if (lot && (lot.qty <= 0 || Math.abs(lot.qty - insp.inspected_qty) > 1e-9)) {
+        throw new AppError('Parti miktarı değişti; yeni muayene oluşturun / Lot quantity changed; create a new inspection', 409);
+      }
+      const rejectedQty = b.rejectedQty ?? (b.result === 'rejected' ? totalQty : 0);
       const acceptedQty = b.acceptedQty != null ? b.acceptedQty : Math.max(0, totalQty - rejectedQty);
+      if (Math.abs(acceptedQty + rejectedQty - totalQty) > 1e-9 ||
+          (b.result === 'accepted' && rejectedQty > 0) ||
+          (b.result === 'rejected' && acceptedQty > 0)) {
+        throw new AppError('Kabul ve ret miktarları karar ve toplam miktarla uyuşmalı / Disposition quantities must match the decision and total', 422);
+      }
+      if (new Set(b.lines.map(l => l.id)).size !== b.lines.length || b.lines.some(l =>
+        !db.prepare('SELECT id FROM inspection_lines WHERE id=? AND inspection_id=?').get(l.id, insp.id))) {
+        throw new AppError('Muayene satırları geçersiz / Invalid inspection lines', 422);
+      }
 
       // Simple electronic signature: a tamper-evident hash of who signed what and when
       const signature = crypto.createHash('sha256')
@@ -184,22 +196,15 @@ router.post('/inspections/:id/result', requirePermission('quality.write'), valid
         b.notes || null, insp.id);
 
       let ncrId = null;
+      let rejectedLotId = insp.lot_id;
       if (lot) {
-        if (b.result === 'accepted' && lot.status === 'quarantine') {
-          stock.changeLotStatus({ lotId: lot.id, toStatus: 'available', note: `Muayene ${insp.inspection_no} · kabul`,
-            userId: req.user.id, refType: 'inspection', refId: insp.id });
-        } else if (b.result === 'rejected') {
-          stock.changeLotStatus({ lotId: lot.id, toStatus: 'rejected', note: `Muayene ${insp.inspection_no} · red`,
-            userId: req.user.id, refType: 'inspection', refId: insp.id });
-        } else if (b.result === 'conditional' && rejectedQty > 0 && rejectedQty < lot.qty) {
-          // Split: reject part, release the rest
-          stock.changeLotStatus({ lotId: lot.id, toStatus: 'rejected', qty: rejectedQty,
+        if (rejectedQty > 0) {
+          rejectedLotId = stock.changeLotStatus({ lotId: lot.id, toStatus: 'rejected', qty: rejectedQty,
             note: `Muayene ${insp.inspection_no} · kısmi red`, userId: req.user.id, refType: 'inspection', refId: insp.id });
-          const remaining = db.prepare('SELECT * FROM stock_lots WHERE id = ?').get(lot.id);
-          if (remaining && remaining.status === 'quarantine' && remaining.qty > 0) {
-            stock.changeLotStatus({ lotId: lot.id, toStatus: 'available', note: `Muayene ${insp.inspection_no} · kısmi kabul`,
-              userId: req.user.id, refType: 'inspection', refId: insp.id });
-          }
+        }
+        if (acceptedQty > 0 && lot.status === 'quarantine') {
+          stock.changeLotStatus({ lotId: lot.id, toStatus: 'available', qty: acceptedQty,
+            note: `Muayene ${insp.inspection_no} · kabul`, userId: req.user.id, refType: 'inspection', refId: insp.id });
         }
       }
 
@@ -209,7 +214,7 @@ router.post('/inspections/:id/result', requirePermission('quality.write'), valid
         db.prepare(`INSERT INTO ncrs (id,ncr_no,source,item_id,item_name,lot_id,lot_no,supplier_id,inspection_id,
           qty_affected,severity,description,disposition,status,opened_by,opened_at)
           VALUES (?,?,?,?,?,?,?,?,?,?,?,?, 'pending','open',?,?)`).run(
-          ncrId, ncrNo, insp.type, insp.item_id, insp.item_name, insp.lot_id, insp.lot_no, insp.supplier_id,
+          ncrId, ncrNo, insp.type, insp.item_id, insp.item_name, rejectedLotId, insp.lot_no, insp.supplier_id,
           insp.id, rejectedQty || insp.inspected_qty, b.result === 'rejected' ? 'major' : 'minor',
           `Muayene ${insp.inspection_no} sonucu: ${b.result}. ${b.notes || ''}`, req.user.id, Date.now());
       }

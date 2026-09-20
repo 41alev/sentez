@@ -14,7 +14,7 @@
  * sürüm numarası artırılmalı — aksi halde kullanıcılar eski önbellekten
  * servis edilmeye devam eder (activate aşamasında eski sürümler silinir).
  */
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2-20260919';
 const CACHE_NAME = `depo-terminal-${CACHE_VERSION}`;
 
 const SHELL_URLS = [
@@ -39,14 +39,15 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
       .then((names) => Promise.all(
-        names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n))
+        names.filter((n) => n.startsWith('depo-terminal-') && n !== CACHE_NAME).map((n) => caches.delete(n))
       ))
       .then(() => self.clients.claim())
   );
 });
 
 async function cacheFirst(request) {
-  const cached = await caches.match(request);
+  const currentCache = await caches.open(CACHE_NAME);
+  const cached = await currentCache.match(request);
   if (cached) return cached;
   const response = await fetch(request);
   if (response.ok) {

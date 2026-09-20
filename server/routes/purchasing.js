@@ -6,7 +6,7 @@ const { toLocalDateStr } = require('../lib/dates');
 const { companyIdOf } = require('../lib/tenant');
 const { requireAuth, requirePermission, requireRole } = require('../middleware/auth');
 const kvkk = require('../lib/kvkk');
-const { validate, validateQuery, z, pageQuery, currency } = require('../middleware/validate');
+const { validate, validatePartial, validateQuery, z, pageQuery, currency } = require('../middleware/validate');
 const stock = require('../services/stock');
 const costing = require('../services/costing');
 const { dispatchEvent } = require('../lib/webhooks');
@@ -108,7 +108,7 @@ router.post('/suppliers', requirePermission('purchase.write'), validate(supplier
   } catch (e) { next(e); }
 });
 
-router.put('/suppliers/:id', requirePermission('purchase.write'), validate(supplierSchema.partial()), (req, res, next) => {
+router.put('/suppliers/:id', requirePermission('purchase.write'), validatePartial(supplierSchema), (req, res, next) => {
   try {
     const existing = db.prepare('SELECT * FROM suppliers WHERE id = ?').get(req.params.id);
     if (!existing) throw new AppError('Tedarikçi bulunamadı / Supplier not found', 404);
@@ -325,7 +325,7 @@ function serializePO(r) {
     .all(r.id).map(x => ({
       id: x.id, itemId: x.item_id, itemName: x.item_name, unit: x.unit, qty: x.qty,
       receivedQty: x.received_qty, rejectedQty: x.rejected_qty, remainingQty: x.qty - x.received_qty,
-      price: x.price, currency: x.currency, tolerancePct: x.over_delivery_tolerance_pct
+      price: x.price, currency: x.currency, fxRate: x.fx_rate, tolerancePct: x.over_delivery_tolerance_pct
     }));
   const wh = r.warehouse_id ? db.prepare('SELECT name FROM warehouses WHERE id = ?').get(r.warehouse_id) : null;
   const receipts = db.prepare(`SELECT id, receipt_no, received_at, waybill_no FROM po_receipts WHERE po_id = ? ORDER BY received_at`).all(r.id);
@@ -411,13 +411,14 @@ router.post('/orders', requirePermission('purchase.write'), validate(poSchema), 
         needsApproval ? 'pending' : 'not_required',
         totalBase, b.notes || '', req.user.id, Date.now());
 
-      const ins = db.prepare(`INSERT INTO po_items (po_id,item_id,item_name,qty,price,currency,over_delivery_tolerance_pct)
-        VALUES (?,?,?,?,?,?,?)`);
+      const ins = db.prepare(`INSERT INTO po_items (po_id,item_id,item_name,qty,price,currency,over_delivery_tolerance_pct,fx_rate)
+        VALUES (?,?,?,?,?,?,?,?)`);
       const insHist = db.prepare(`INSERT INTO supplier_price_history (supplier_id,item_id,price,currency,source,source_id,recorded_at)
         VALUES (?,?,?,?,'po',?,?)`);
       b.items.forEach(l => {
         const item = db.prepare('SELECT name FROM items WHERE id = ?').get(l.itemId);
-        ins.run(poId, l.itemId, item ? item.name : '—', l.qty, l.price, l.currency || b.currency, l.tolerancePct);
+        ins.run(poId, l.itemId, item ? item.name : '—', l.qty, l.price, l.currency || b.currency, l.tolerancePct,
+          fxRate(l.currency || b.currency, date));
         insHist.run(supplier.id, l.itemId, l.price, l.currency || b.currency, poId, Date.now());
       });
 
@@ -445,6 +446,10 @@ router.post('/orders/:id/approve', requirePermission('purchase.approve'), (req, 
 
     // Approver must personally be authorised for this amount, not just hold the role
     const approver = db.prepare('SELECT approval_limit, role FROM users WHERE id = ?').get(req.user.id);
+    const rule = approvalRequired(po.total_base);
+    if (rule && approver.role !== 'admin' && approver.role !== rule.required_role) {
+      throw new AppError('Onay kuralının gerektirdiği role sahip değilsiniz / Required approval role missing', 403);
+    }
     if (approver.role !== 'admin' && approver.approval_limit > 0 && po.total_base > approver.approval_limit) {
       throw new AppError(`Onay limitiniz (${approver.approval_limit}) bu tutar için yetersiz / Approval limit exceeded`, 403);
     }
@@ -494,6 +499,7 @@ router.post('/orders/:id/receipts', requirePermission('purchase.write'), validat
     if (!['approved', 'partially_received'].includes(po.status)) {
       throw new AppError('Sipariş teslim alınabilir durumda değil (onaylı olmalı) / Order must be approved', 400);
     }
+    if (!po.warehouse_id) throw new AppError('Teslim alma için siparişte depo seçilmeli / Receiving requires an order warehouse', 422);
 
     const result = db.txImmediate(() => {
       const receiptId = uuid();
@@ -515,7 +521,10 @@ router.post('/orders/:id/receipts', requirePermission('purchase.write'), validat
         }
 
         const item = db.prepare('SELECT * FROM items WHERE id = ?').get(poItem.item_id);
-        const rate = fxRate(poItem.currency, po.date);
+        const rate = poItem.fx_rate;
+        if (!Number.isFinite(rate) || rate <= 0) {
+          throw new AppError('Eski sipariş satırında sabit kur yok; kur mutabakatı gerekli / Historical order line requires FX reconciliation', 409);
+        }
         const unitCostBase = poItem.price * rate;
         const toQuarantine = item && item.requires_incoming_inspection ? 1 : 0;
 
@@ -527,16 +536,16 @@ router.post('/orders/:id/receipts', requirePermission('purchase.write'), validat
           note: `${po.po_no} · ${receiptNo}`, userId: req.user.id
         });
 
-        db.prepare(`INSERT INTO po_receipt_lines (receipt_id,po_item_id,item_id,item_name,qty,lot_no,expiry_date,lot_id,to_quarantine)
-          VALUES (?,?,?,?,?,?,?,?,?)`).run(receiptId, poItem.id, poItem.item_id, poItem.item_name, line.qty,
-          line.lotNo || null, line.expiryDate || null, lotId, toQuarantine);
+        db.prepare(`INSERT INTO po_receipt_lines (receipt_id,po_item_id,item_id,item_name,qty,lot_no,expiry_date,lot_id,to_quarantine,base_unit_cost)
+          VALUES (?,?,?,?,?,?,?,?,?,?)`).run(receiptId, poItem.id, poItem.item_id, poItem.item_name, line.qty,
+          line.lotNo || null, line.expiryDate || null, lotId, toQuarantine, unitCostBase);
 
         db.prepare('UPDATE po_items SET received_qty = received_qty + ? WHERE id = ?').run(line.qty, poItem.id);
         created.push({ itemName: poItem.item_name, qty: line.qty, lotId, quarantined: !!toQuarantine });
       }
 
       // Fully vs partially received
-      const remaining = db.prepare('SELECT COALESCE(SUM(qty - received_qty),0) r FROM po_items WHERE po_id = ?').get(po.id).r;
+      const remaining = db.prepare('SELECT COALESCE(SUM(MAX(0, qty - received_qty)),0) r FROM po_items WHERE po_id = ?').get(po.id).r;
       db.prepare('UPDATE purchase_orders SET status = ? WHERE id = ?')
         .run(remaining <= 1e-9 ? 'received' : 'partially_received', po.id);
 
@@ -671,6 +680,7 @@ router.post('/returns', requirePermission('purchase.write'), validate(returnSche
     const lot = db.prepare('SELECT * FROM stock_lots WHERE id = ?').get(b.lotId);
     if (!lot) throw new AppError('Parti bulunamadı / Lot not found', 404);
     if (lot.qty < b.qty) throw new AppError('İade miktarı parti miktarından fazla / Return qty exceeds lot qty');
+    if (lot.supplier_id != null && lot.supplier_id !== b.supplierId) throw new AppError('Lot bu tedarikçiye ait değil / Lot supplier mismatch', 422);
 
     const id = db.txImmediate(() => {
       const retId = uuid();
@@ -679,13 +689,14 @@ router.post('/returns', requirePermission('purchase.write'), validate(returnSche
         VALUES (?,?,?,?,?,?,?,?, 'open',?,?)`).run(retId, no, b.supplierId, b.lotId, lot.item_id, b.qty,
         b.reason || '', b.ncrId || null, Date.now(), req.user.id);
 
-      stock.issueStock({
-        itemId: lot.item_id, qty: b.qty, warehouseId: lot.warehouse_id,
-        refType: 'supplier_return', refId: retId, note: `Tedarikçi iadesi ${no}`, userId: req.user.id, allowPartial: true
+      stock.consume([{ lotId: lot.id, qty: b.qty }], {
+        itemId: lot.item_id, itemName: null, warehouseId: lot.warehouse_id,
+        allowedStatuses: ['available', 'quarantine', 'blocked', 'rejected'],
+        refType: 'supplier_return', refId: retId, note: `Tedarikçi iadesi ${no}`, userId: req.user.id
       });
 
-      db.prepare('UPDATE po_items SET rejected_qty = rejected_qty + ? WHERE item_id = ? AND po_id IN (SELECT po_id FROM po_receipts WHERE id = ?)')
-        .run(b.qty, lot.item_id, lot.source_id || '');
+      db.prepare('UPDATE po_items SET rejected_qty = rejected_qty + ? WHERE id IN (SELECT po_item_id FROM po_receipt_lines WHERE lot_id = ?)')
+        .run(b.qty, lot.id);
 
       logAudit(req, 'auditSupplierReturn', { entityType: 'supplier_return', entityId: retId, detail: no });
       return retId;

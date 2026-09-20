@@ -17,6 +17,23 @@ function validate(schema) {
   };
 }
 
+/** Updates preserve omitted fields, including fields with create-time defaults.
+ * Zod's partial() alone still applies inner defaults to absent properties.
+ */
+function validatePartial(schema) {
+  const partial = schema.partial();
+  return (req, res, next) => {
+    const supplied = req.body;
+    return validate(partial)(req, res, () => {
+      const data = Object.fromEntries(Object.entries(req.body)
+        .filter(([key]) => Object.prototype.hasOwnProperty.call(supplied, key)));
+      req.body = data;
+      req.valid = data;
+      next();
+    });
+  };
+}
+
 function validateQuery(schema) {
   return (req, res, next) => {
     const result = schema.safeParse(req.query);
@@ -54,4 +71,4 @@ const shortText = limitedText(200);
 const mediumText = limitedText(1000);
 const longText = limitedText(5000);
 
-module.exports = { limitedText, shortText, mediumText, longText, validate, validateQuery, z, currency, nonEmpty, posNum, nonNegNum, dateStr, pageQuery };
+module.exports = { limitedText, shortText, mediumText, longText, validate, validatePartial, validateQuery, z, currency, nonEmpty, posNum, nonNegNum, dateStr, pageQuery };

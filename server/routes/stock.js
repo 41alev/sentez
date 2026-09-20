@@ -242,13 +242,7 @@ router.put('/counts/:id/lines', requirePermission('count.write'), validate(count
   try {
     const c = db.prepare('SELECT * FROM stock_counts WHERE id = ?').get(req.params.id);
     if (!c) throw new AppError('Sayım bulunamadı / Count not found', 404);
-    if (c.status !== 'open') throw new AppError('Sayım kapalı / Count is not open');
-
-    db.txImmediate(() => {
-      const upd = db.prepare('UPDATE stock_count_lines SET counted_qty = ?, difference = ? - system_qty, reason = ? WHERE id = ? AND count_id = ?');
-      req.body.lines.forEach(l => upd.run(l.countedQty, l.countedQty, l.reason || null, l.id, c.id));
-      db.prepare(`UPDATE stock_counts SET status = 'counted' WHERE id = ?`).run(c.id);
-    });
+    require('../services/counts').saveCountLines(c.id, req.body.lines);
     res.json({ ok: true });
   } catch (e) { next(e); }
 });
@@ -258,10 +252,18 @@ router.post('/counts/:id/approve', requirePermission('count.approve'), (req, res
   try {
     const c = db.prepare('SELECT * FROM stock_counts WHERE id = ?').get(req.params.id);
     if (!c) throw new AppError('Sayım bulunamadı / Count not found', 404);
-    if (c.status === 'approved') throw new AppError('Sayım zaten onaylanmış / Count already approved');
+    if (!['open', 'counted'].includes(c.status)) throw new AppError('Sayım kapalı / Count is closed', 409);
 
     const summary = db.txImmediate(() => {
       const lines = db.prepare('SELECT * FROM stock_count_lines WHERE count_id = ? AND counted_qty IS NOT NULL').all(c.id);
+      if (!lines.length) throw new AppError('Önce sayım miktarlarını girin / Enter count quantities first', 422);
+      for (const line of lines) {
+        const lot = db.prepare('SELECT qty FROM stock_lots WHERE id=?').get(line.lot_id);
+        const movement = db.prepare('SELECT id FROM movements WHERE lot_id=? AND ts>=? LIMIT 1').get(line.lot_id, c.started_at);
+        if (!lot || Math.abs(lot.qty - line.system_qty) > 1e-9 || movement) {
+          throw new AppError('Sayım açıldıktan sonra stok hareketi var. Güncel stokla yeni sayım başlatın / Stock changed since count opened; recount required', 409);
+        }
+      }
       let adjusted = 0, totalDiff = 0;
       lines.forEach(l => {
         if (l.counted_qty == null || !l.lot_id) return;

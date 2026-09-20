@@ -62,6 +62,11 @@ function requireAuth(req, res, next) {
     // companyId: çok şirketlilik altyapı hazırlığı (bkz. server/lib/tenant.js) —
     // henüz hiçbir route bunu okuyup filtrelemiyor.
     req.user = { id: user.id, username: user.username, role: user.role, companyId: user.company_id, jti: payload.jti, mustChangePassword: !!user.must_change_password };
+    const passwordRoutes = new Set(['GET /api/auth/me', 'POST /api/auth/change-password', 'POST /api/auth/logout']);
+    const route = `${req.method} ${req.originalUrl.split('?')[0]}`;
+    if (user.must_change_password && !passwordRoutes.has(route)) {
+      return res.status(403).json({ code: 'PASSWORD_CHANGE_REQUIRED', error: 'Devam etmeden önce şifrenizi değiştirin / Password change required' });
+    }
     next();
   } catch (e) {
     return res.status(401).json({ error: 'Geçersiz veya süresi dolmuş oturum / Invalid or expired session' });

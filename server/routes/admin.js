@@ -14,7 +14,6 @@ router.use(requireAuth);
 
 const ADMIN = requireRole('admin');
 const MANAGER = requireRole('admin', 'manager');
-const ROLES = ['admin', 'manager', 'operator', 'quality', 'viewer'];
 
 /* ============================ USERS ============================ */
 
@@ -60,41 +59,50 @@ router.post('/users', ADMIN, validate(userCreateSchema), (req, res) => {
   res.status(201).json({ id: info.lastInsertRowid, username: b.username, role: b.role });
 });
 
-router.put('/users/:id', ADMIN, (req, res) => {
+const userUpdateSchema = z.object({
+  role: z.enum(['admin', 'manager', 'operator', 'quality', 'viewer']).optional(),
+  password: z.string().min(8).max(200).optional(),
+  fullName: z.string().max(1000).optional(),
+  email: z.string().email().or(z.literal('')).optional(),
+  approvalLimit: z.number().finite().min(0).optional(),
+  isActive: z.boolean().optional()
+});
+
+router.put('/users/:id', ADMIN, validate(userUpdateSchema), (req, res) => {
   const id = Number(req.params.id);
+  const { role, password, fullName, email, approvalLimit, isActive } = req.valid;
+  // All validation and expensive hashing happen before any write.
+  if (password !== undefined) assertPasswordStrength(password);
+  const passwordHash = password === undefined ? null : bcrypt.hashSync(password, 12);
+  const after = db.txImmediate(() => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   if (!user) throw new AppError('Kullanıcı bulunamadı / User not found', 404);
-  const { role, password, fullName, email, approvalLimit, isActive } = req.body || {};
-
+  if (user.role === 'admin' && user.is_active &&
+      ((role !== undefined && role !== 'admin') || isActive === false)) {
+    const admins = db.prepare("SELECT COUNT(*) c FROM users WHERE role='admin' AND is_active=1").get().c;
+    if (admins <= 1) throw new AppError('Son yönetici hesabı korunmalıdır / Cannot remove the last active admin');
+  }
   if (role !== undefined) {
-    if (!ROLES.includes(role)) throw new AppError('Geçersiz rol / Invalid role');
-    if (user.role === 'admin' && role !== 'admin') {
-      const admins = db.prepare("SELECT COUNT(*) c FROM users WHERE role='admin' AND is_active=1").get().c;
-      if (admins <= 1) throw new AppError('Son yönetici hesabının rolü değiştirilemez / Cannot demote the last admin');
-    }
     db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id);
   }
-  if (password) {
-    assertPasswordStrength(password);
+  if (passwordHash) {
     db.prepare('UPDATE users SET password_hash = ?, must_change_password = 1, failed_attempts = 0, locked_until = NULL WHERE id = ?')
-      .run(bcrypt.hashSync(password, 12), id);
+      .run(passwordHash, id);
     // Force re-login everywhere after an admin password reset
     db.prepare('UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL').run(Date.now(), id);
   }
   if (fullName !== undefined) db.prepare('UPDATE users SET full_name = ? WHERE id = ?').run(fullName, id);
   if (email !== undefined) db.prepare('UPDATE users SET email = ? WHERE id = ?').run(email, id);
-  if (approvalLimit !== undefined) db.prepare('UPDATE users SET approval_limit = ? WHERE id = ?').run(Number(approvalLimit) || 0, id);
+  if (approvalLimit !== undefined) db.prepare('UPDATE users SET approval_limit = ? WHERE id = ?').run(approvalLimit, id);
   if (isActive !== undefined) {
-    if (!isActive && user.role === 'admin') {
-      const admins = db.prepare("SELECT COUNT(*) c FROM users WHERE role='admin' AND is_active=1").get().c;
-      if (admins <= 1) throw new AppError('Son yönetici hesabı pasifleştirilemez / Cannot deactivate the last admin');
-    }
     db.prepare('UPDATE users SET is_active = ? WHERE id = ?').run(isActive ? 1 : 0, id);
     if (!isActive) db.prepare('UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL').run(Date.now(), id);
   }
   const after = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   const d = diff(user, after, ['role', 'full_name', 'email', 'approval_limit', 'is_active']);
   logAudit(req, 'auditUserEdit', { entityType: 'user', entityId: id, ...(d || {}), detail: user.username + (password ? ' (şifre sıfırlandı)' : '') });
+  return after;
+  });
   res.json({ id: after.id, username: after.username, role: after.role, isActive: !!after.is_active });
 });
 

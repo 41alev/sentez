@@ -4,7 +4,7 @@ const db = require('../db');
 const { AppError, uuid, logAudit, diff } = require('../lib/core');
 const { companyIdOf } = require('../lib/tenant');
 const { requireAuth, requirePermission } = require('../middleware/auth');
-const { validate, validateQuery, z, pageQuery, currency } = require('../middleware/validate');
+const { validate, validatePartial, validateQuery, z, pageQuery, currency } = require('../middleware/validate');
 const stock = require('../services/stock');
 
 const router = express.Router();
@@ -228,7 +228,7 @@ router.post('/', requirePermission('stock.write'), validate(itemSchema), (req, r
   } catch (e) { next(e); }
 });
 
-router.put('/:id', requirePermission('stock.write'), validate(itemSchema.partial()), (req, res, next) => {
+router.put('/:id', requirePermission('stock.write'), validatePartial(itemSchema), (req, res, next) => {
   try {
     const existing = db.prepare('SELECT * FROM items WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
     if (!existing) throw new AppError('Ürün bulunamadı / Item not found', 404);

@@ -16,7 +16,7 @@
 <!-- ============ GİRİŞ ============ -->
 <div id="mLogin" class="m-login">
   <div class="m-login-box">
-    <div class="m-logo">SENTEZ<span>TERMİNAL</span></div>
+    <div class="m-logo">DREAM PLUS<span>TERMİNAL</span></div>
     <input type="text" id="mUser" placeholder="Kullanıcı adı" autocomplete="username"
            autocapitalize="off" autocorrect="off" spellcheck="false">
     <input type="password" id="mPass" placeholder="Şifre" autocomplete="current-password">
@@ -24,6 +24,22 @@
     <div class="m-login-err" id="mLoginErr"></div>
     <a class="m-link" href="/">Masaüstü arayüze geç</a>
   </div>
+</div>
+
+<div id="mPasswordChange" class="m-login" hidden>
+  <form id="mPasswordForm" class="m-login-box">
+    <h1>Şifrenizi değiştirin</h1>
+    <p>Devam etmek için size verilen geçici şifreyi değiştirin.</p>
+    <label for="mCurrentPassword">Mevcut şifre</label>
+    <input id="mCurrentPassword" type="password" autocomplete="current-password" required>
+    <label for="mNewPassword">Yeni şifre (en az 8 karakter, harf ve rakam)</label>
+    <input id="mNewPassword" type="password" autocomplete="new-password" minlength="8" required>
+    <label for="mRepeatPassword">Yeni şifre tekrar</label>
+    <input id="mRepeatPassword" type="password" autocomplete="new-password" minlength="8" required>
+    <button id="mPasswordSave" class="m-btn m-btn-primary" type="submit">Şifreyi değiştir</button>
+    <div id="mPasswordError" class="m-login-err" role="alert"></div>
+    <button id="mPasswordLogout" class="m-btn" type="button">Çıkış</button>
+  </form>
 </div>
 
 <!-- ============ UYGULAMA ============ -->

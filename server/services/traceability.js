@@ -6,7 +6,8 @@ const { AppError } = require('../lib/core');
  * genealogy to every component lot that went into it, recursively.
  */
 function traceBackward(lotId, depth = 0, seen = new Set()) {
-  if (seen.has(lotId) || depth > 10) return null;
+  if (depth > 100) throw new AppError('İzlenebilirlik ağacı çok derin; kapsamlı inceleme gerekli / Trace depth limit reached', 409);
+  if (seen.has(lotId)) return null;
   seen.add(lotId);
 
   const lot = db.prepare(`SELECT sl.*, i.name AS item_name, i.unit FROM stock_lots sl
@@ -26,7 +27,12 @@ function traceBackward(lotId, depth = 0, seen = new Set()) {
     if (receipt) node.purchase = { receiptNo: receipt.receipt_no, poNo: receipt.po_no, supplier: receipt.supplier_name, waybillNo: receipt.waybill_no };
   }
 
-  if (lot.source_type === 'production' && lot.source_id) {
+  if (lot.parent_lot_id) {
+    const parent = traceBackward(lot.parent_lot_id, depth + 1, seen);
+    node.components.push({ itemName: parent ? parent.itemName : lot.item_name, lotNo: parent ? parent.lotNo : null,
+      qty: lot.parent_qty, unitCost: lot.unit_cost, relationship: 'lot_split_or_return', child: parent });
+  }
+  if (!lot.parent_lot_id && lot.source_type === 'production' && lot.source_id) {
     const po = db.prepare('SELECT * FROM production_orders WHERE id = ?').get(lot.source_id);
     if (po) {
       node.production = { orderNo: po.order_no, qty: po.qty, producedQty: po.produced_qty, scrapQty: po.scrap_qty, date: po.date };
@@ -47,7 +53,8 @@ function traceBackward(lotId, depth = 0, seen = new Set()) {
  * shipment/customer that received those outputs.
  */
 function traceForward(lotId, depth = 0, seen = new Set()) {
-  if (seen.has(lotId) || depth > 10) return null;
+  if (depth > 100) throw new AppError('İzlenebilirlik ağacı çok derin; kapsamlı inceleme gerekli / Trace depth limit reached', 409);
+  if (seen.has(lotId)) return null;
   seen.add(lotId);
 
   const lot = db.prepare(`SELECT sl.*, i.name AS item_name, i.unit FROM stock_lots sl
@@ -56,8 +63,10 @@ function traceForward(lotId, depth = 0, seen = new Set()) {
 
   const node = {
     lotId: lot.id, itemName: lot.item_name, lotNo: lot.lot_no, qty: lot.qty, unit: lot.unit,
-    status: lot.status, usedIn: [], shippedTo: []
+    status: lot.status, usedIn: [], shippedTo: [], splits: []
   };
+  const splits = db.prepare('SELECT id,parent_qty FROM stock_lots WHERE parent_lot_id=?').all(lotId);
+  node.splits = splits.map(split => ({ qty: split.parent_qty, output: traceForward(split.id, depth + 1, seen) }));
 
   const consumptions = db.prepare(`SELECT pc.*, po.id AS po_id, po.order_no, po.item_name AS output_item,
       po.output_lot_id, po.date, po.status
@@ -76,7 +85,7 @@ function traceForward(lotId, depth = 0, seen = new Set()) {
     FROM shipment_items si JOIN shipments sh ON sh.id = si.shipment_id
     LEFT JOIN customers c ON c.id = sh.customer_id
     LEFT JOIN sales_orders so ON so.id = sh.so_id
-    WHERE si.lot_id = ?`).all(lotId);
+    WHERE si.lot_id = ? AND sh.cancelled_at IS NULL`).all(lotId);
 
   node.shippedTo = shipments.map(s => ({
     shipmentNo: s.shipment_no, soNo: s.so_no, customerId: s.customer_id, customer: s.customer_name,
@@ -104,10 +113,15 @@ function recallReport(lotId) {
       entry.shipments.push(s.shipmentNo);
     });
     node.usedIn.forEach(u => walk(u.output));
+    node.splits.forEach(split => walk(split.output));
   })(tree);
 
   const remaining = db.prepare(
-    `SELECT COALESCE(SUM(qty),0) q FROM stock_lots WHERE id = ? AND status IN ('available','quarantine','blocked')`
+    `WITH RECURSIVE family(id) AS (
+      SELECT id FROM stock_lots WHERE id=?
+      UNION SELECT child.id FROM stock_lots child JOIN family parent ON child.parent_lot_id=parent.id
+    ) SELECT COALESCE(SUM(qty),0) q FROM stock_lots WHERE id IN (SELECT id FROM family)
+      AND status IN ('available','quarantine','blocked')`
   ).get(lotId).q;
 
   return {

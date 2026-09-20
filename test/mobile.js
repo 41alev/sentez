@@ -51,6 +51,7 @@ function makeFakeIndexedDB() {
     clear() { const req = new FakeRequest(); this.def.rows.length = 0; req._succeed(undefined); return req; }
   }
   class FakeDB {
+    close() { this.closed = true; }
     constructor() {
       this.stores = new Map();
       this.objectStoreNames = { contains: (n) => this.stores.has(n) };
@@ -340,9 +341,8 @@ async function api(method, p, { token, body } = {}) {
       /Mal Kabul|Toplama/.test(w.document.getElementById('mMain').textContent),
       w.document.getElementById('mMain').textContent.slice(0, 80));
     ok('giriş sonrası JS hatası yok', errors.length === 0, errors.slice(0, 2).join(' | '));
-    ok('taşınan işlem kuyruk rozetinde görünüyor (kaybolmadı)',
-      w.document.getElementById('mQueue').textContent === '1',
-      w.document.getElementById('mQueue').textContent);
+    ok('sahibi bilinmeyen eski işlem korunuyor ve yeni kullanıcıya atanmıyor',
+      (await w.MobileDB.getAll()).length === 1 && w.document.getElementById('mQueue').hidden);
 
     const tiles = [...w.document.querySelectorAll('[data-go]')];
     ok('ana ekranda beş akış var', tiles.length >= 5, `${tiles.length} kutucuk`);

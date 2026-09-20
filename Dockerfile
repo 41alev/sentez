@@ -30,7 +30,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-COPY . .
+COPY server/ ./server/
+COPY public/ ./public/
 COPY --from=builder /app/public/dist ./public/dist
 
 # Veritabanı ve yüklenen dosyalar kalıcı olmalı

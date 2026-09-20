@@ -292,54 +292,15 @@ router.post('/sync', requireRole('admin', 'manager', 'operator', 'quality'), asy
   if (!ops.length) throw new AppError('İşlem listesi boş / No operations', 400);
   if (ops.length > 200) throw new AppError('Tek seferde en fazla 200 işlem / Max 200 operations', 400);
 
-  const stock = require('../services/stock');
-  const results = [];
-
-  for (const op of ops) {
-    try {
-      // Kalite rolü masaüstünde de yalnızca sayım kaydedebilir (count.write) —
-      // stok girişi/transfer stock.write gerektirir, kalitede yok (bkz.
-      // PERMISSIONS, server/middleware/auth.js). Aynı ayrım burada da
-      // uygulanmazsa kalite kullanıcısı mobil terminalde HİÇBİR işlem
-      // yapamaz hale gelirdi (route seviyesinde tamamen dışlanıyordu) —
-      // rol taraması bulgusu.
-      if (req.user.role === 'quality' && op.type !== 'count_line') {
-        results.push({ clientId: op.clientId, ok: false, error: 'Bu işlem için yetkiniz yok / Not authorized for this operation' });
-        continue;
-      }
-
-      if (op.type === 'move') {
-        const r = db.txImmediate(() => stock.receiveLot({
-          itemId: op.itemId, warehouseId: op.warehouseId, qty: op.qty,
-          lotNo: op.lotNo || null, unitCostBase: op.unitCost || 0,
-          expiryDate: op.expiryDate || null, status: op.status || 'available',
-          sourceType: 'mobile', note: op.note || 'El terminali', userId: req.user.id
-        }));
-        results.push({ clientId: op.clientId, ok: true, id: typeof r === 'string' ? r : (r && r.id) || null });
-
-      } else if (op.type === 'transfer') {
-        db.txImmediate(() => stock.transferLot({
-          lotId: op.lotId, targetWarehouseId: op.toWarehouseId, qty: op.qty,
-          note: op.note || 'El terminali', userId: req.user.id
-        }));
-        results.push({ clientId: op.clientId, ok: true });
-
-      } else if (op.type === 'count_line') {
-        // stock_count_lines'ta counted_at diye bir sütun hiç yok (001_initial_schema.js) -
-        // bu satır her zaman "no such column: counted_at" ile patlıyordu. Masaüstünün
-        // PUT /counts/:id/lines'taki (server/routes/stock.js:248) ile aynı deseni kullan.
-        db.prepare('UPDATE stock_count_lines SET counted_qty = ?, difference = ? - system_qty WHERE id = ?')
-          .run(op.countedQty, op.countedQty, op.lineId);
-        results.push({ clientId: op.clientId, ok: true });
-
-      } else {
-        results.push({ clientId: op.clientId, ok: false, error: `Bilinmeyen işlem tipi: ${op.type}` });
-      }
-    } catch (e) {
-      // Hata mesajı kullanıcıya döner; kuyrukta kalan işlem elle düzeltilebilmeli
-      results.push({ clientId: op.clientId, ok: false, error: e.message });
+  const { executeMobileOperation } = require('../services/mobile-sync');
+  const results = ops.map(op => {
+    try { return executeMobileOperation(op, req.user); }
+    catch (err) {
+      const known = err instanceof AppError;
+      return { clientId: op && op.clientId, ok: false, status: known ? err.status : 500,
+        error: known ? err.message : 'İşlem kaydedilemedi / Operation could not be saved' };
     }
-  }
+  });
 
   res.json({
     total: results.length,

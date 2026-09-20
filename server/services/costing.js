@@ -1,5 +1,5 @@
 const db = require('../db');
-const { AppError, toBase } = require('../lib/core');
+const { AppError } = require('../lib/core');
 
 /**
  * Landed cost: freight, customs, insurance and handling are NOT overheads — they are
@@ -7,37 +7,60 @@ const { AppError, toBase } = require('../lib/core');
  * by a receipt so an imported item's cost reflects reality, not just the invoice price.
  */
 function applyLandedCosts(receiptId, userId) {
+  return db.txImmediate(() => allocateLandedCosts(receiptId, userId));
+}
+
+function allocateLandedCosts(receiptId, _userId) {
   const receipt = db.prepare('SELECT * FROM po_receipts WHERE id = ?').get(receiptId);
   if (!receipt) throw new AppError('İrsaliye bulunamadı / Receipt not found', 404);
 
-  const costs = db.prepare('SELECT * FROM landed_costs WHERE receipt_id = ?').all(receiptId);
+  if (db.prepare('SELECT id FROM landed_costs WHERE receipt_id=? AND requires_reconciliation=1 LIMIT 1').get(receiptId)) {
+    throw new AppError('Önceki ek maliyetlerin mutabakatı gerekli / Historical landed costs require reconciliation', 409);
+  }
+  const costs = db.prepare('SELECT * FROM landed_costs WHERE receipt_id = ? AND applied_at IS NULL ORDER BY id').all(receiptId);
   if (costs.length === 0) return { allocated: 0, lines: 0 };
 
-  const lines = db.prepare(`SELECT rl.*, sl.qty AS lot_qty, sl.unit_cost AS lot_unit_cost
-    FROM po_receipt_lines rl LEFT JOIN stock_lots sl ON sl.id = rl.lot_id
+  const lines = db.prepare(`SELECT rl.*
+    FROM po_receipt_lines rl
     WHERE rl.receipt_id = ? AND rl.lot_id IS NOT NULL`).all(receiptId);
-  if (lines.length === 0) return { allocated: 0, lines: 0 };
+  if (lines.length === 0) throw new AppError('Dağıtılabilir teslimat satırı yok / No receipt lines to allocate', 422);
+  const families = new Map();
+  for (const line of lines) {
+    const lots = db.prepare(`WITH RECURSIVE family(id) AS (
+      SELECT id FROM stock_lots WHERE id=? UNION
+      SELECT sl.id FROM stock_lots sl JOIN family f ON sl.parent_lot_id=f.id
+    ) SELECT sl.id,sl.qty FROM stock_lots sl JOIN family f ON sl.id=f.id WHERE sl.qty>0`).all(line.lot_id);
+    if (line.base_unit_cost == null || Math.abs(lots.reduce((sum, l) => sum + l.qty, 0) - line.qty) > 1e-9) {
+      throw new AppError('Tüketilmiş veya geçmiş maliyeti belirsiz teslimat için maliyet mutabakatı gerekli / Consumed or historical receipt requires cost reconciliation', 409);
+    }
+    families.set(line.id, lots);
+  }
 
   const totalQty = lines.reduce((s, l) => s + (l.qty || 0), 0);
-  const totalValue = lines.reduce((s, l) => s + (l.qty || 0) * (l.lot_unit_cost || 0), 0);
+  const totalValue = lines.reduce((s, l) => s + (l.qty || 0) * l.base_unit_cost, 0);
 
   let totalAllocated = 0;
   for (const cost of costs) {
     const amountBase = Number(cost.amount || 0) * Number(cost.fx_rate || 1);
-    if (amountBase <= 0) continue;
+    if (!Number.isFinite(amountBase) || amountBase < 0) throw new AppError('Geçersiz maliyet / Invalid cost', 422);
     for (const line of lines) {
       let share;
       if (cost.allocation_method === 'qty') {
         share = totalQty > 0 ? (line.qty / totalQty) * amountBase : 0;
       } else {
-        const lineValue = (line.qty || 0) * (line.lot_unit_cost || 0);
+        const lineValue = (line.qty || 0) * line.base_unit_cost;
         share = totalValue > 0 ? (lineValue / totalValue) * amountBase : (amountBase / lines.length);
       }
       if (share <= 0 || !line.qty) continue;
       const perUnit = share / line.qty;
-      db.prepare('UPDATE stock_lots SET unit_cost = unit_cost + ? WHERE id = ?').run(perUnit, line.lot_id);
+      for (const lot of families.get(line.id)) {
+        db.prepare('UPDATE stock_lots SET unit_cost = unit_cost + ? WHERE id = ?').run(perUnit, lot.id);
+        db.prepare('INSERT INTO landed_cost_allocations(cost_id,receipt_line_id,lot_id,qty,amount_base) VALUES(?,?,?,?,?)')
+          .run(cost.id, line.id, lot.id, lot.qty, perUnit * lot.qty);
+      }
       totalAllocated += share;
     }
+    db.prepare('UPDATE landed_costs SET applied_at=? WHERE id=?').run(Date.now(), cost.id);
   }
 
   // Refresh moving-average cost for every affected item after allocation

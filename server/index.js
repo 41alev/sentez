@@ -260,7 +260,9 @@ if (process.env.DISABLE_JOBS !== '1') {
 
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, () => {
-  logger.info(`Dream Plus çalışıyor / running at http://localhost:${PORT}`);
+  const port = server.address().port;
+  logger.info(`Dream Plus çalışıyor / running at http://localhost:${port}`);
+  if (process.send) process.send({ type: 'listening', port });
 });
 
 function shutdown(signal) {

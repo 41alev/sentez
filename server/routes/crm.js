@@ -14,7 +14,7 @@
 const express = require('express');
 const db = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
-const { validate, z } = require('../middleware/validate');
+const { validate, validatePartial, z } = require('../middleware/validate');
 const { AppError, uuid, nextNumber, logAudit, diff, paginate } = require('../lib/core');
 const { companyIdOf } = require('../lib/tenant');
 const { dispatchEvent } = require('../lib/webhooks');
@@ -119,9 +119,9 @@ router.post('/opportunities', WRITE, validate(oppSchema), (req, res) => {
   res.status(201).json(serialize(result));
 });
 
-const oppUpdateSchema = oppSchema.omit({ lines: true }).partial();
+const oppUpdateSchema = oppSchema.omit({ lines: true });
 
-router.put('/opportunities/:id', WRITE, validate(oppUpdateSchema), (req, res) => {
+router.put('/opportunities/:id', WRITE, validatePartial(oppUpdateSchema), (req, res) => {
   const before = db.prepare('SELECT * FROM opportunities WHERE id = ?').get(req.params.id);
   if (!before) throw new AppError('Fırsat bulunamadı / Opportunity not found', 404);
   if (CLOSED_STAGES.includes(before.stage)) throw new AppError('Kapanmış fırsat düzenlenemez / A closed opportunity cannot be edited', 409);

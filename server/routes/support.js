@@ -16,7 +16,7 @@
 const express = require('express');
 const db = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
-const { validate, z } = require('../middleware/validate');
+const { validate, validatePartial, z } = require('../middleware/validate');
 const { AppError, uuid, nextNumber, logAudit, diff, paginate } = require('../lib/core');
 const { companyIdOf } = require('../lib/tenant');
 
@@ -108,9 +108,9 @@ router.post('/', WRITE, validate(ticketSchema), (req, res) => {
   res.status(201).json(serialize(result));
 });
 
-const ticketUpdateSchema = ticketSchema.omit({ customerId: true }).partial();
+const ticketUpdateSchema = ticketSchema.omit({ customerId: true });
 
-router.put('/:id', WRITE, validate(ticketUpdateSchema), (req, res) => {
+router.put('/:id', WRITE, validatePartial(ticketUpdateSchema), (req, res) => {
   const before = db.prepare('SELECT * FROM support_tickets WHERE id = ?').get(req.params.id);
   if (!before) throw new AppError('Talep bulunamadı / Ticket not found', 404);
   if (before.status === 'closed') throw new AppError('Kapanmış talep düzenlenemez / A closed ticket cannot be edited', 409);

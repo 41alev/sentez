@@ -13,6 +13,7 @@
  * globalSetup ile webServer arasındaki başlatma sırası garanti değil.
  */
 const { defineConfig, devices } = require('@playwright/test');
+const baseURL = `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT || '3301'}`;
 
 module.exports = defineConfig({
   testDir: './test/e2e-browser',
@@ -22,14 +23,14 @@ module.exports = defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: [['list']],
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure'
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
     command: 'node test/e2e-browser/reset-and-start.js',
-    url: 'http://localhost:3000/health',
+    url: `${baseURL}/health`,
     reuseExistingServer: false,
     // Bu paket büyüdükçe (33+ test, her biri login + birden çok API çağrısı
     // tetikliyor) tüm koşu genel `apiLimiter`ın dakikalık 300 istek

@@ -45,7 +45,7 @@
     });
     let data = null;
     try { data = await res.json(); } catch {}
-    if (res.status === 401) { logout(); throw new Error('Oturum sona erdi'); }
+    if (res.status === 401) { logout(false); throw new Error('Oturum sona erdi'); }
     if (!res.ok) {
       const err = new Error((data && data.error) || `Hata ${res.status}`);
       err.status = res.status; err.data = data;
@@ -66,12 +66,19 @@
     let legacy;
     try { legacy = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); } catch { legacy = []; }
     if (!Array.isArray(legacy) || !legacy.length) return;
-    for (const op of legacy) { try { await MobileDB.add(op); } catch { /* bozuk kayıt atlanır */ } }
-    localStorage.removeItem(QUEUE_KEY);
+    try {
+      for (const op of legacy) await MobileDB.add(op);
+      localStorage.removeItem(QUEUE_KEY);
+    } catch { /* Keep the source until every record has been persisted. */ }
+  }
+
+  async function ownQueue() {
+    const all = await MobileDB.getAll();
+    return user ? all.filter(op => op.ownerId === user.id) : [];
   }
 
   async function paintQueue() {
-    const q = await MobileDB.getAll();
+    const q = await ownQueue();
     const el = $('mQueue');
     if (!el) return;
     el.hidden = q.length === 0;
@@ -85,52 +92,71 @@
    * açısından olmuştur — sorumluluğu sistem üstlenir, kişi işine devam eder.
    */
   async function submit(op) {
-    if (!navigator.onLine) {
-      await MobileDB.add({ ...op, clientId: 'c' + Date.now() + Math.random().toString(36).slice(2, 7), queuedAt: Date.now() });
+    if (!user) throw new Error('Önce giriş yapın');
+    const sessionToken = token;
+    const pending = { ...op, clientId: crypto.randomUUID(), ownerId: user.id, queuedAt: Date.now() };
+    // Persist before network I/O: closing the browser after the server commits
+    // must still leave the same id available for a safe retry.
+    await MobileDB.add(pending);
+    if (!navigator.onLine || token !== sessionToken) {
       await paintQueue();
       toast('Çevrimdışı — kuyruğa alındı', 'info');
       return { queued: true };
     }
     try {
-      const r = await api('POST', '/mobile/sync', { operations: [{ ...op, clientId: 'direct' }] });
+      const r = await api('POST', '/mobile/sync', { operations: [pending] });
       const first = r.results[0];
-      if (!first.ok) throw new Error(first.error);
+      const sent = (await MobileDB.getAll()).filter(record => record.clientId === pending.clientId && record.ownerId === pending.ownerId);
+      await MobileDB.acknowledge(sent, r.results);
+      await paintQueue();
+      if (!first.ok) {
+        const error = new Error(first.error); error.status = first.status || 422; throw error;
+      }
       return { queued: false, id: first.id };
     } catch (e) {
       // Ağ hatası kuyruğa gider; iş kuralı hatası gitmez — o tekrar denense de geçmez.
       if (e.status && e.status < 500) throw e;
-      await MobileDB.add({ ...op, clientId: 'c' + Date.now(), queuedAt: Date.now() });
       await paintQueue();
       toast('Bağlantı yok — kuyruğa alındı', 'info');
       return { queued: true };
     }
   }
 
+  let flushing = false;
   async function flushQueue(silent) {
-    const q = await MobileDB.getAll();
-    if (!q.length || !navigator.onLine || !token) return;
+    if (flushing || !navigator.onLine || !token || !user || user.mustChangePassword) return;
+    flushing = true;
+    const sessionToken = token;
     try {
-      const r = await api('POST', '/mobile/sync', { operations: q });
-      const failed = r.results.filter(x => !x.ok);
-      // Başarısızlar kuyrukta kalmaz: tekrar denense de aynı hatayı verecekler.
-      // Kullanıcıya bildirilir ve elle düzeltilir; sessizce birikmeleri daha kötüdür.
-      await MobileDB.clear();
+      const q = (await ownQueue()).filter(op => !silent || !op.lastError);
+      const failed = [];
+      let succeeded = 0;
+      for (let offset = 0; offset < q.length; offset += 200) {
+        if (token !== sessionToken) break;
+        const batch = q.slice(offset, offset + 200);
+        const r = await api('POST', '/mobile/sync', { operations: batch });
+        await MobileDB.acknowledge(batch, r.results);
+        failed.push(...r.results.filter(result => !result.ok));
+        succeeded += r.succeeded;
+      }
       await paintQueue();
+      if (token !== sessionToken || !q.length) return;
       if (!silent || failed.length) {
         if (failed.length) {
-          toast(`${r.succeeded} gönderildi, ${failed.length} başarısız`, 'err');
+          toast(`${succeeded} gönderildi, ${failed.length} kuyrukta kaldı`, 'err');
           sheet({
             title: 'Gönderilemeyen işlemler',
-            sub: 'Bu işlemler tekrar denense de aynı hatayı verir; elle düzeltilmeli.',
+            sub: 'Başarısız işlemler hata nedeniyle birlikte kuyrukta saklandı. Stok ve sayım durumunu kontrol ederek yeniden deneyin.',
             body: failed.map(f => `<div class="m-note crit">${esc(f.error)}</div>`).join(''),
             actions: [{ label: 'Anladım', kind: 'primary', onClick: closeSheet }]
           });
         } else {
-          toast(`${r.succeeded} işlem gönderildi`, 'ok');
+          toast(`${succeeded} işlem gönderildi`, 'ok');
         }
       }
       if (screen === 'home') render();
-    } catch { /* bağlantı yine yok; kuyruk duruyor */ }
+    } catch { /* connection lost; exact pending records remain durable */ }
+    finally { flushing = false; }
   }
 
   window.addEventListener('online', async () => { await paintQueue(); flushQueue(true); });
@@ -335,7 +361,7 @@
       const t = await api('GET', '/mobile/tasks');
       screenState.tasks = t;
       const c = t.counts_summary;
-      const q = await MobileDB.getAll();
+      const q = await ownQueue();
 
       main.innerHTML = `
         <div class="m-note">Okuyucuyu her an kullanabilirsiniz — ürün, parti, belge veya raf
@@ -753,7 +779,8 @@
 
     /* ---------- Kuyruk ---------- */
     async queue(main) {
-      const q = await MobileDB.getAll();
+      const q = await ownQueue();
+      const legacy = (await MobileDB.getAll()).filter(op => op.ownerId == null);
       main.innerHTML = q.length ? `
         <div class="m-note warn">Bu işlemler henüz sunucuya gönderilmedi.
           Bağlantı geldiğinde otomatik gönderilir.</div>
@@ -761,22 +788,43 @@
           <div class="m-card-title">${esc({ move: 'Stok girişi', transfer: 'Yer değiştirme', count_line: 'Sayım' }[op.type] || op.type)}</div>
           <div class="m-card-sub">Miktar: ${num(op.qty ?? op.countedQty, 2)}</div>
           <div class="m-card-meta">${new Date(op.queuedAt).toLocaleString('tr-TR')}</div>
+          ${op.lastError ? `<div class="m-note crit">${esc(op.lastError)}</div>` : ''}
         </div>`).join('')}
         <button class="m-btn m-btn-primary m-btn-lg" id="qFlush">ŞİMDİ GÖNDER</button>
         <button class="m-btn m-btn-danger" id="qClear" style="margin-top:10px">KUYRUĞU TEMİZLE</button>`
         : '<div class="m-empty">Bekleyen işlem yok</div>';
 
-      $('qFlush')?.addEventListener('click', async () => { await flushQueue(false); render(); });
+      $('qFlush')?.addEventListener('click', async event => {
+        event.currentTarget.disabled = true;
+        await flushQueue(false);
+        render();
+      });
       $('qClear')?.addEventListener('click', () => {
         sheet({
           title: 'Kuyruk silinecek',
           sub: 'Gönderilmemiş işlemler kalıcı olarak kaybolur. Bu geri alınamaz.',
           actions: [
             { label: 'Vazgeç', onClick: closeSheet },
-            { label: 'SİL', kind: 'danger', onClick: async () => { await MobileDB.clear(); await paintQueue(); closeSheet(); render(); } }
+            { label: 'SİL', kind: 'danger', onClick: async () => { await MobileDB.remove(q); await paintQueue(); closeSheet(); render(); } }
           ]
         });
       });
+      if (legacy.length) {
+        const note = document.createElement('div');
+        note.className = 'm-note warn';
+        note.textContent = `${legacy.length} eski işlemin kullanıcı bilgisi yok. Otomatik gönderilmedi; yönetici incelemesi gerekiyor.`;
+        main.appendChild(note);
+        if (user.role === 'admin') {
+          const exportBtn = document.createElement('button');
+          exportBtn.className = 'm-btn'; exportBtn.textContent = 'Eski işlemleri incelemek için indir';
+          exportBtn.onclick = () => {
+            const url = URL.createObjectURL(new Blob([JSON.stringify(legacy, null, 2)], { type: 'application/json' }));
+            const link = document.createElement('a'); link.href = url; link.download = 'eski-terminal-islemleri.json'; link.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          };
+          main.appendChild(exportBtn);
+        }
+      }
     }
   };
 
@@ -847,19 +895,37 @@
     }
   }
 
-  function logout() {
+  function logout(revoke = true) {
+    const previousToken = token;
     token = '';
+    user = null;
     localStorage.removeItem(TOKEN_KEY);
+    $('mPass').value = '';
+    $('mPasswordForm').reset();
+    $('mPasswordChange').hidden = true;
     $('mApp').hidden = true;
     $('mLogin').style.display = '';
+    if (revoke && previousToken) {
+      fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + previousToken } })
+        .catch(() => { $('mLoginErr').textContent = 'Cihazdan çıkıldı. Bağlantı yok; sunucu oturumu süre sonunda kapanacak.'; });
+    }
   }
 
   async function start() {
     try {
-      user = await api('GET', '/auth/me');
+      const session = await api('GET', '/auth/me');
+      user = session.user;
+      if (user.mustChangePassword) {
+        $('mLogin').style.display = 'none';
+        $('mApp').hidden = true;
+        $('mPasswordChange').hidden = false;
+        $('mCurrentPassword').focus();
+        return;
+      }
       warehouses = await api('GET', '/warehouses');
     } catch { logout(); return; }
     $('mLogin').style.display = 'none';
+    $('mPasswordChange').hidden = true;
     $('mApp').hidden = false;
     await paintQueue();
     flushQueue(true);
@@ -880,12 +946,30 @@
 
     initScanner();
     $('mLoginBtn').onclick = login;
+    $('mPasswordLogout').onclick = () => logout();
+    $('mPasswordForm').onsubmit = async event => {
+      event.preventDefault();
+      const btn = $('mPasswordSave');
+      const error = $('mPasswordError');
+      error.textContent = '';
+      if ($('mNewPassword').value !== $('mRepeatPassword').value) {
+        error.textContent = 'Yeni şifreler eşleşmiyor.'; return;
+      }
+      btn.disabled = true;
+      try {
+        await api('POST', '/auth/change-password', { currentPassword: $('mCurrentPassword').value, newPassword: $('mNewPassword').value });
+        $('mPasswordForm').reset();
+        $('mPass').value = '';
+        await start();
+      } catch (err) { error.textContent = err.message; }
+      finally { btn.disabled = false; }
+    };
     $('mPass').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
     $('mBack').onclick = back;
     $('mCamBtn').onclick = openCamera;
     $('mCamClose').onclick = closeCamera;
     $('mMenu').onclick = async () => {
-      const qCount = (await MobileDB.getAll()).length;
+      const qCount = (await ownQueue()).length;
       sheet({
         title: user ? user.username : 'Menü',
         sub: user ? `${user.role} · ${qCount} bekleyen işlem` : '',

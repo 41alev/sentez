@@ -1,19 +1,24 @@
 # Dream Plus
 
 Fabrika ölçeğinde depo, üretim, satın alma, satış ve kalite yönetimi. Node.js + Express + SQLite backend,
-bağımlılıksız çok modüllü frontend. Türkçe/İngilizce arayüz.
+React ekranları ve ayrı mobil/PWA terminali. Türkçe/İngilizce arayüz.
 
 ---
 
 ## Hızlı başlangıç
 
 ```bash
-npm install
+npm ci
 cp .env.example .env      # JWT_SECRET'i mutlaka değiştirin
+npm run build
+npm run setup             # Firma ve kendi yönetici hesabınızı oluşturun
 npm start                 # http://localhost:3000
 ```
 
-İlk açılışta veritabanı şeması kurulur ve örnek fabrika verisi yüklenir.
+Windows PowerShell'de kopyalama için `Copy-Item .env.example .env` kullanın.
+Kurulum gerçek müşteri verisi için boştur; demo otomatik yüklenmez.
+Yalnızca ayrı bir deneme klasöründe `npm run demo` ile örnek fabrika kurulabilir.
+Aşağıdaki hesaplar yalnız demo verisine aittir:
 
 | Kullanıcı | Şifre | Yetki |
 |---|---|---|
@@ -23,14 +28,12 @@ npm start                 # http://localhost:3000
 | `kalite` | `Kalite123!` | Kalite |
 | `viewer` | `Viewer123!` | Görüntüleyici |
 
-**Bu şifreleri üretime almadan önce değiştirin.**
+**Demo verisini ve bu hesapları müşteri kurulumuna taşımayın.**
 
 Testler:
 
 ```bash
-npm install --no-save jsdom   # arayüz ve barkod testleri için (dev bağımlılığı)
-
-# Sunucu ayaktayken:
+# Her npm test komutu gerektiğinde kendi izole sunucusunu açar:
 npm test                # 77 — iş kuralları, yetki matrisi, uçtan uca akışlar
 npm run test:contract   # 58 — API alan adları arayüzün okuduklarıyla eşleşiyor mu
 npm run test:planning   # 78 — kapasite, çizelgeleme, MRP, OEE
@@ -45,7 +48,8 @@ npm run test:email      # 28 — süreç içi SMTP sunucusuna gerçek teslimat
 npm run test:barcode    # 21 — USB okuyucu algılama ve kamera yedeği
 ```
 
-Toplam **572 kontrol**. Her paket farklı bir soruyu cevaplar:
+Tam koşu: `npm run test:all`; tarayıcı testleri: `npm run test:e2e-browser`
+(önce `npx playwright install chromium`). Her paket farklı bir soruyu cevaplar:
 
 | Paket | Neyi kanıtlar | Yakaladığı hata türü |
 |---|---|---|
@@ -57,7 +61,11 @@ Toplam **572 kontrol**. Her paket farklı bir soruyu cevaplar:
 | `load` | Yük altında **doğru kalıyor** | Kayıp güncelleme, yarış durumu, kuyruk gecikmesi |
 | `backup` | Felaketten **geri dönülebiliyor** | Alınamayan veya geri yüklenemeyen yedek |
 
-Test paketleri durum değiştiren gerçek işlemler yapar; temiz sonuç için `rm -rf data` sonrası çalıştırın.
+Testler durum değiştiren gerçek işlemleri kendilerine ait OS geçici dizinlerinde
+yapar. Çalışma verisini silmeyin. Tek bir paket için
+`node test/run-all.js release-hardening` kullanın. Eski test dosyalarını doğrudan
+canlı sunucuya bağlayarak çalıştırmayın. Playwright ayrı 3301 portunu kullanır;
+gerekirse `PLAYWRIGHT_PORT` ile değiştirilebilir ve mevcut sunucu yeniden kullanılmaz.
 
 ---
 
