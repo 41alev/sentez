@@ -137,13 +137,13 @@ export default function CountsView() {
         });
 
         box.querySelector('#cntApprove')?.addEventListener('click', () => {
+          const lines = [];
+          box.querySelectorAll('.cnt-q').forEach(inp => {
+            if (inp.value === '') return;
+            const reason = box.querySelector(`.cnt-r[data-id="${inp.dataset.id}"]`)?.value || '';
+            lines.push({ id: Number(inp.dataset.id), countedQty: Number(inp.value), reason });
+          });
           UI.confirmDialog(t('countWarning'), async () => {
-            const lines = [];
-            box.querySelectorAll('.cnt-q').forEach(inp => {
-              if (inp.value === '') return;
-              const reason = box.querySelector(`.cnt-r[data-id="${inp.dataset.id}"]`)?.value || '';
-              lines.push({ id: Number(inp.dataset.id), countedQty: Number(inp.value), reason });
-            });
             try {
               if (lines.length) await Api.saveCountLines(c.id, lines);
               await Api.approveCount(c.id);

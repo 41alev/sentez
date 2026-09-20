@@ -200,25 +200,30 @@ NODE_ENV=production JWT_SECRET=... node server/index.js
 systemd, pm2 veya benzeri bir süreç yöneticisi ile çalıştırın.
 
 ### Yedekleme ve geri yükleme
-Sunucu 24 saatte bir SQLite'ın online backup API'si ile tutarlı yedek alır ve son 14 kopyayı saklar
-(dosya kopyalamaz — çalışan veritabanının yarım yedeği alınmaz).
+Sunucu 24 saatte bir veritabanı ve yüklenmiş belgelerden tam bir `.bundle`
+dizini oluşturur; son 14 rutin paketi saklar. SQLite anlık görüntüsü online
+backup API'siyle alınır. Manifest, dosya boyutları ve SHA-256 karmaları geri
+yükleme öncesi doğrulanır. Uzak yedekleme bu dizini tüm içeriğiyle kopyalamalıdır.
 
 ```bash
-npm run backup                      # elle yedek
-npm run restore -- --list           # yedekleri listele
-npm run restore -- --verify --latest  # yazmadan doğrula
-npm run restore -- --latest         # en son yedeğe dön
+npm run backup                                           # elle tam yedek
+npm run backup:full -- --verify data/backups/<paket>.bundle
+# Önce sunucuyu durdurun; sonra doğrulanan paketi geri yükleyin:
+npm run restore:full -- data/backups/<paket>.bundle
 ```
 
-Geri yükleme, yedeği önce doğrular (SQLite başlığı, `integrity_check`, yabancı anahtar tutarlılığı,
-tablo ve kayıt varlığı), mevcut veritabanını `.pre-restore-<zaman>` olarak saklar, sonra üzerine yazar.
-Yazma sonrası doğrulama başarısız olursa eski veritabanı otomatik geri alınır. Bozuk veya boş bir
-yedek hiçbir koşulda yüklenmez.
+Geri yükleme SQLite bütünlüğünü, yabancı anahtarları, belge referanslarını ve
+paket karmalarını denetler. Mevcut veritabanı ve belgeler `.pre-restore-<zaman>`
+olarak saklanır; yer değiştirme yarıda kalırsa eski çift geri alınır. Eski yalnız
+SQLite yedekleri için `npm run restore -- <dosya.sqlite>` hâlâ vardır; bu komut
+yüklenmiş belgeleri geri getirmez.
 
-**Sunucuyu durdurmadan geri yükleme yapmayın.** Script WAL dosyasına bakıp uyarır.
+**Sunucuyu durdurmadan geri yükleme yapmayın.** Bakım kilidi ve dolu WAL kontrolü
+çalışan veritabanına geri yüklemeyi engeller.
 
-Geri yükleme yolu `npm run test:backup` ile gerçekten denenmiştir: veri silinir, geri yüklenir,
-stok değeri kuruşuna kadar karşılaştırılır.
+`npm run test:backup` izole geçici dizinde veritabanı ve belge geri yüklemesini,
+bozuk paket reddini ve yarıda kesilen geri yüklemede eski verinin korunmasını sınar.
+Müşteri ortamında ayrıca ayrı makinede gerçek geri yükleme provası gerekir.
 
 ---
 

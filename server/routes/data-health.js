@@ -86,6 +86,43 @@ const MERGE_PLANS = {
   }
 };
 
+/** Şema geliştikçe yeni FK bağları gözden kaçmasın; sabit listeye ekle. */
+function mergePlan(type) {
+  const base = MERGE_PLANS[type];
+  if (!base) return null;
+  const refs = base.refs.map(ref => [...ref]);
+  const seen = new Set(refs.map(([table, column]) => `${table}.${column}`));
+  for (const { name: table } of db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all()) {
+    if (!/^[a-z_][a-z0-9_]*$/i.test(table)) continue;
+    for (const fk of db.prepare(`PRAGMA foreign_key_list(${table})`).all()) {
+      const key = `${table}.${fk.from}`;
+      if (fk.table !== base.table || fk.to !== 'id' || seen.has(key) ||
+          !/^[a-z_][a-z0-9_]*$/i.test(fk.from)) continue;
+      refs.push([table, fk.from, `${table}.${fk.from}`]);
+      seen.add(key);
+    }
+  }
+  return { ...base, refs };
+}
+
+function mergeConflict(type, source, target) {
+  if (type !== 'item') return null;
+  if (source.deleted_at || target.deleted_at) return 'Silinmiş ürün birleştirilemez / Deleted item cannot be merged';
+  if (source.unit !== target.unit) return 'Farklı birimdeki ürünler birleştirilemez / Item units differ';
+  const bom = db.prepare('SELECT item_id, component_item_id FROM item_bom WHERE item_id IN (?,?) OR component_item_id IN (?,?)')
+    .all(source.id, target.id, source.id, target.id);
+  const projected = new Set();
+  for (const row of bom) {
+    const item = row.item_id === source.id ? target.id : row.item_id;
+    const component = row.component_item_id === source.id ? target.id : row.component_item_id;
+    if (item === component) return 'Birleştirme kendi kendine reçete oluşturur / Self-referencing BOM';
+    const key = `${item}\u0000${component}`;
+    if (projected.has(key)) return 'Reçete satırları çakışıyor; miktarlar elle uzlaştırılmalı / BOM conflict';
+    projected.add(key);
+  }
+  return null;
+}
+
 /** Tablo/sütun gerçekten var mı? Şema sürüme göre değişebilir. */
 function refExists(table, column) {
   try {
@@ -105,7 +142,7 @@ function countRefs(plan, id) {
 }
 
 router.get('/merge/:type/preview', MANAGER, (req, res) => {
-  const plan = MERGE_PLANS[req.params.type];
+  const plan = mergePlan(req.params.type);
   if (!plan) throw new AppError('Bilinmeyen kayıt tipi / Unknown record type', 400);
   const { sourceId, targetId } = req.query;
   if (!sourceId || !targetId) throw new AppError('Kaynak ve hedef kayıt gerekli / Source and target required', 400);
@@ -116,12 +153,15 @@ router.get('/merge/:type/preview', MANAGER, (req, res) => {
   const target = db.prepare(`SELECT * FROM ${plan.table} WHERE ${idCol} = ?`).get(targetId);
   if (!source || !target) throw new AppError('Kayıt bulunamadı / Record not found', 404);
 
+  const conflict = mergeConflict(req.params.type, source, target);
+  const references = countRefs(plan, sourceId);
+
   res.json({
     type: req.params.type, label: plan.label,
     source: { id: source.id, name: source.name, code: source.code },
     target: { id: target.id, name: target.name, code: target.code },
-    references: countRefs(plan, sourceId),
-    totalReferences: countRefs(plan, sourceId).reduce((s, r) => s + r.count, 0),
+    references, totalReferences: references.reduce((s, r) => s + r.count, 0),
+    canMerge: !conflict, conflict,
     warning: 'Bu işlem geri alınamaz. Kaynak kayıt silinir, tüm bağları hedefe taşınır.'
   });
 });
@@ -131,31 +171,23 @@ router.post('/merge/:type', MANAGER, validate(z.object({
   targetId: z.union([z.string().max(60), z.number()]),
   confirm: z.literal(true)
 })), (req, res) => {
-  const plan = MERGE_PLANS[req.params.type];
+  const plan = mergePlan(req.params.type);
   if (!plan) throw new AppError('Bilinmeyen kayıt tipi / Unknown record type', 400);
   const { sourceId, targetId } = req.valid;
   if (String(sourceId) === String(targetId)) throw new AppError('Kaynak ve hedef aynı olamaz', 400);
 
-  const source = db.prepare(`SELECT * FROM ${plan.table} WHERE id = ?`).get(sourceId);
-  const target = db.prepare(`SELECT * FROM ${plan.table} WHERE id = ?`).get(targetId);
-  if (!source || !target) throw new AppError('Kayıt bulunamadı / Record not found', 404);
-
   const moved = [];
-
+  let source, target;
   db.txImmediate(() => {
+    source = db.prepare(`SELECT * FROM ${plan.table} WHERE id = ?`).get(sourceId);
+    target = db.prepare(`SELECT * FROM ${plan.table} WHERE id = ?`).get(targetId);
+    if (!source || !target) throw new AppError('Kayıt bulunamadı / Record not found', 404);
+    const conflict = mergeConflict(req.params.type, source, target);
+    if (conflict) throw new AppError(conflict, 409);
     for (const [table, column, label] of plan.refs) {
       if (!refExists(table, column)) continue;
       const info = db.prepare(`UPDATE ${table} SET ${column} = ? WHERE ${column} = ?`).run(targetId, sourceId);
       if (info.changes > 0) moved.push({ table, column, label, count: info.changes });
-    }
-
-    // Reçetede oluşabilecek kendi kendine referansı temizle: A ile B birleşince
-    // "A'nın bileşeni B" satırı "A'nın bileşeni A" haline gelir.
-    if (req.params.type === 'item') {
-      db.prepare('DELETE FROM item_bom WHERE item_id = component_item_id').run();
-      // Aynı bileşen iki kez kalırsa miktarlar toplanmalı, yoksa tüketim eksik hesaplanır
-      db.prepare(`DELETE FROM item_bom WHERE id NOT IN (
-        SELECT MIN(id) FROM item_bom GROUP BY item_id, component_item_id)`).run();
     }
 
     // Ürün birleşmesinde stok özeti yeniden hesaplanmalı
@@ -166,7 +198,7 @@ router.post('/merge/:type', MANAGER, validate(z.object({
       db.prepare(`UPDATE items SET avg_cost = COALESCE(
         (SELECT SUM(sl.qty*sl.unit_cost)/NULLIF(SUM(sl.qty),0) FROM stock_lots sl
          WHERE sl.item_id = items.id AND sl.status='available'), avg_cost) WHERE id = ?`).run(targetId);
-      db.prepare("UPDATE items SET deleted_at = ? WHERE id = ?").run(Date.now(), sourceId);
+      db.prepare("UPDATE items SET qty_cache=0, deleted_at = ? WHERE id = ?").run(Date.now(), sourceId);
     } else {
       db.prepare(`DELETE FROM ${plan.table} WHERE id = ?`).run(sourceId);
     }

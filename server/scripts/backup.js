@@ -19,7 +19,7 @@ const db = require('../db');
 function runOffsiteSync(file) {
   const cmdTemplate = process.env.BACKUP_OFFSITE_CMD;
   if (!cmdTemplate) return Promise.resolve({ attempted: false });
-  const cmd = cmdTemplate.replace(/\{file\}/g, file);
+  const cmd = cmdTemplate.replace(/\{file\}/g, file).replace(/\{name\}/g, path.basename(file));
   return new Promise((resolve) => {
     exec(cmd, { timeout: 5 * 60 * 1000 }, (err, stdout, stderr) => {
       if (err) {
@@ -74,9 +74,9 @@ async function runBackup({ keep = Number(process.env.BACKUP_KEEP || 14), dir, la
 function startBackupScheduler() {
   const hours = Number(process.env.BACKUP_INTERVAL_HOURS || 24);
   if (!hours || hours <= 0) return null;
-  const run = () => runBackup().then(
+  const run = () => require('./full-backup').runFullBackup().then(
     r => {
-      console.log(`[backup] ${path.basename(r.file)} (${Math.round(r.sizeBytes / 1024)} KB)`);
+      console.log(`[backup] ${path.basename(r.file)} (DB + ${r.manifest.uploads.length} uploads)`);
       if (r.offsite.attempted) console.log(`[backup] off-site: ${r.offsite.ok ? 'ok' : 'BAŞARISIZ / FAILED — ' + r.offsite.error}`);
     },
     e => console.error('[backup] failed:', e.message)
@@ -87,11 +87,10 @@ function startBackupScheduler() {
 }
 
 if (require.main === module) {
-  runBackup()
+  require('./full-backup').runFullBackup()
     .then(r => {
       console.log(`Yedek alındı / Backup created: ${r.file}`);
-      console.log(`Boyut / Size: ${Math.round(r.sizeBytes / 1024)} KB · Saklanan / kept: ${r.kept}` +
-        (r.removed.length ? ` · Silinen / removed: ${r.removed.length}` : ''));
+      console.log(`Veritabanı + ${r.manifest.uploads.length} dosya · Silinen / removed: ${r.removed.length}`);
       if (r.offsite.attempted) {
         console.log(r.offsite.ok
           ? 'Off-site senkronizasyon / sync: OK'
@@ -101,4 +100,4 @@ if (require.main === module) {
     .catch(e => { console.error('Yedekleme hatası / Backup failed:', e.message); process.exit(1); });
 }
 
-module.exports = { runBackup, startBackupScheduler };
+module.exports = { runBackup, runOffsiteSync, startBackupScheduler };

@@ -148,7 +148,7 @@ Linux'ta).
 - [ ] Her çalışana kendi kullanıcı hesabı açıldı (ortak hesap kullanma —
       denetim kaydı işe yaramaz hale gelir)
 - [ ] İlk yedek alındı: `npm run backup`
-- [ ] O yedek **geri yüklenerek** bir kez test edildi: `npm run restore -- --verify --latest`
+- [ ] Tam `.bundle` paketi `npm run backup:full -- --verify <paket-yolu>` ile doğrulandı; test makinesinde sunucu kapalıyken `npm run restore:full -- <paket-yolu>` çalıştırılıp veritabanı ve belgeler açıldı (doğrulama komutu tek başına geri yükleme değildir)
 - [ ] Yönetim > Veri Sağlığı'nda kırmızı/uyarı yok
 
 ---

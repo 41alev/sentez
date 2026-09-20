@@ -1,0 +1,89 @@
+
+[SHIP] sevkiyat
+  ✓ SHIP-01 otomatik dağıtımda yetersiz stok reddedilir, hiçbir şey değişmez
+  ✓ SHIP-02 aynı lot iki satırda toplamda aşılamaz (60+60 / 100)
+  ✓ SHIP-03 geçersiz miktarlar (0, negatif, metin) reddedilir
+  ✓ SHIP-04 uygun olmayan lot durumları (quarantine/blocked/rejected/consumed) sevk edilemez
+  ✓ SHIP-06 sipariş başka müşteriye aitse reddedilir
+  ✓ SHIP-07 siparişte olmayan ürün sessizce eklenmez
+  ✓ SHIP-08 sipariş durumu open/partially_shipped dışındaysa (closed/invoiced/draft/shipped) sevk reddedilir
+  ✓ SHIP-09 aynı ürün iki sipariş satırında: belirsizlik reddedilir, satır bazlı sınır uygulanır
+  ✓ SHIP-10 eşzamanlı sevkiyat: stok aşılamaz, negatif parti oluşmaz
+  ✓ SHIP-11 rol yetkisi: viewer ve quality sevkiyat oluşturamaz
+  ✓ SHIP-12 olmayan sipariş/ürün/lot için 4xx (500 değil)
+  ✓ SHIP-13 depo filtresi: yalnızca seçilen depodaki stok kullanılır
+  i INFO SHIP-14b 'Teslim Edildi' sonrası PATCH => {"status":200,"body":"Teslim Edildi"}
+  ✓ SHIP-14 durum ilerletme: Hazırlanıyor→Yolda→Teslim Edildi→409; viewer 403
+  i INFO SHIP-15b sevkiyat date="abc" => {"status":201,"date":"abc"}
+  ✗ FAIL SHIP-15 geçersiz tarih metni sevkiyatta 4xx vermeli (S16 sınıfı)
+       geçersiz tarih kabul edildi: 201
+  ✓ SHIP-16 sevkiyat: miktar ondalık/çok büyük değerlerde 500 üretmez
+
+[CANCEL] sevkiyat iptali
+  ✓ CAN-01 yola çıkmış ('Yolda') sevkiyat iptal edilemez
+  ✓ CAN-02 faturaya bağlı sevkiyat iptal edilemez
+  ✓ CAN-03 iptal → aynı miktarı yeniden sevk: sipariş/COGS/stok tutarlı
+  ✓ CAN-04 lotun kalanı başka depoya taşındıktan sonra iptal: stok doğru depoya döner
+  ✓ CAN-05 iptal yetkisi: yalnız admin (manager/operator 403)
+  ✓ CAN-06 olmayan sevkiyat 404; ikinci iptal etkisiz
+  ✓ CAN-07 lot sonradan reddedildiyse iptalde stok reddedilmiş durumda geri gelir (kullanılabilir olmaz)
+  ✓ CAN-08 FEFO ile iki lottan çıkan sevkiyat iptalinde ikisi de geri gelir
+
+[ORDER] sipariş
+  i INFO ORD-01b kısmi sevkli sipariş iptal => {"status":200}
+  i INFO ORD-01c iptal siparişin mevcut sevkiyatı ilerletilebilir mi => {"status":200}
+  ✓ ORD-01 kısmen sevk edilmiş sipariş iptali: mevcut davranış
+  ✗ FAIL ORD-02 olmayan ürünle sipariş 4xx (FK/500 değil)
+       status 500 {"error":"Sunucu hatası / Server error","requestId":"6c1369cc-be2b-4f67-8dfb-b9a4c77309dd"}
+  i INFO ORD-03b pasif müşteriye sipariş => {"status":201}
+  ✓ ORD-03 olmayan müşteri 404; pasif müşteri için sipariş: mevcut davranış
+  ✓ ORD-04 kredi limiti sınırı: limit aşımı 400, eşit tutar kabul
+  ✓ ORD-05 geçersiz miktar/fiyat/boş satır reddedilir
+  i INFO ORD-06b sipariş date="abc" => {"status":201}
+  ✗ FAIL ORD-06 sipariş tarihi geçersiz metin 4xx vermeli
+       geçersiz tarih kabul edildi/500: 201
+
+[INVOICE] fatura
+  i INFO INV-01b invoiceDate="abc" => {"status":500}
+  i INFO INV-01b invoiceDate="2026-02-30" => {"status":201,"saved":"2026-02-30","due":"2026-04-01"}
+  i INFO INV-01b invoiceDate="2026-13-01" => {"status":500}
+  i INFO INV-01b invoiceDate="99999-01-01" => {"status":201,"saved":"99999-01-01","due":"+099999-01"}
+  i INFO INV-01b invoiceDate="" => {"status":201,"saved":"2026-09-20","due":"2026-10-20"}
+  i INFO INV-01b invoiceDate="2026/09/20" => {"status":201,"saved":"2026/09/20","due":"2026-10-19"}
+  i INFO INV-01b invoiceDate="20.09.2026" => {"status":500}
+  ✗ FAIL INV-01 geçersiz fatura tarihi 4xx vermeli, 500 vermemeli
+       500 dönen tarihler: "abc" -> 500, "2026-13-01" -> 500, "20.09.2026" -> 500
+
+       3 !== 0
+
+  i INFO INV-02b iade faturasını öde => {"status":200,"bakiyeSonra":100}
+  ✗ FAIL INV-02 ödeme: iade (kredi) faturası "ödendi" yapılamamalı, ödenmiş/iptal faturaya tekrar ödeme etkisiz
+       iade faturası ödendi olarak işaretlenince müşteri bakiyesi 100 oldu (60 kalmalıydı)
+  i INFO INV-03b ödenmiş faturayı tekrar öde => {"status":200}
+  ✓ INV-03 ödeme uç noktası: olmayan fatura 404; viewer 403; ödenmiş faturayı tekrar ödeme
+  ✓ INV-04 iade: tam tutara kadar kabul, +0.01 red; ödenmiş faturanın iadesi
+  i INFO INV-05b siparişe bağlı iade => {"status":201}
+  ✓ INV-05 iade faturası siparişe bağlı: yeni tahsis oluşturmaz, sevk faturalamayı bozmaz
+  ✓ INV-06 geçersiz tutar/tür: negatif, 0 (kalemsiz), bilinmeyen tür reddedilir
+  i INFO INV-07b 1 x 1.005 (KDV 0) => {"amount":1,"beklenenYarimYukari":1.01}
+  i INFO INV-07c 10 x 0.10 (KDV %18): kalem başına yuvarlama toplamı 1.20, toplamdan yuvarlama 1.18 verir — politika kararı => {"amount":1.2}
+  ✓ INV-07 kuruş yuvarlama: KDV ve iskontolu kalem hesabı bağımsız hesapla eşleşir
+  ✓ INV-08 siparişsiz/sevksiz fatura tutarı yalnız amount ile: serbest fatura kabul
+  ✓ INV-09 sevk edilmemiş siparişin faturası 409
+  i INFO INV-10b sipariş fiyatı 100, faturaya 1 yazıldı => {"status":201,"amount":2.4}
+  ✓ INV-10 faturada fiyat: sipariş fiyatından farklı manuel kalem fiyatı kabul edilir mi (bilgi)
+
+[INVARIANTS]
+  ✓ INV-ALL küresel değişmezler (defter, önbellek, negatif parti, tahsis, FK, bütünlük)
+
+=== b1a-sales: 35 geçti, 5 BAŞARISIZ, 0 HATA (toplam 59) ===
+FATAL Error: EPERM: operation not permitted, open 'C:\Projelerim\Dream\dream-plus\test\faz0-verify\results\b1a-sales.json'
+    at Object.writeFileSync (node:fs:2483:20)
+    at finish (C:\Projelerim\Dream\dream-plus\test\faz0-verify\lib.js:102:6)
+    at C:\Projelerim\Dream\dream-plus\test\faz0-verify\b1a-sales.js:294:9
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5) {
+  errno: -4048,
+  code: 'EPERM',
+  syscall: 'open',
+  path: 'C:\\Projelerim\\Dream\\dream-plus\\test\\faz0-verify\\results\\b1a-sales.json'
+}

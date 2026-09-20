@@ -1,0 +1,155 @@
+
+[COUNT] sayım
+  ✓ CNT-01 sayılmış satır yoksa onay 422
+  ✓ CNT-02 temel akış: eksik/fazla sayım stok ve defteri doğru düzeltir; ikinci onay 409
+  i INFO CNT-03b countedQty=-1 => {"status":422,"saklanan":null}
+  i INFO CNT-03b countedQty="abc" => {"status":422,"saklanan":null}
+  i INFO CNT-03b countedQty=null => {"status":200,"saklanan":0}
+  i INFO CNT-03b countedQty="" => {"status":200,"saklanan":0}
+  i INFO CNT-03b countedQty=" " => {"status":200,"saklanan":0}
+  i INFO CNT-03b countedQty=false => {"status":200,"saklanan":0}
+  i INFO CNT-03b countedQty=[] => {"status":200,"saklanan":0}
+  i INFO CNT-03b countedQty=true => {"status":200,"saklanan":1}
+  ✗ FAIL CNT-03 satır doğrulaması: başka sayımın satırı, tekrar, negatif, NaN/metin, sonsuz
+       boş/geçersiz girdi sayım miktarı olarak KABUL edildi: null→0, ""→0, " "→0, false→0, []→0, true→1
+
+       6 !== 0
+
+  ✓ CNT-04 sayım açıldıktan sonra sayılan lotta hareket varsa onay 409
+  ✓ CNT-05 0 sayılırsa parti tükenmiş olur, negatif oluşmaz
+  i INFO CNT-06b sayım rol matrisi (create/save/approve HTTP kodu) => {"viewer":{"create":403,"save":403,"approve":403},"operator":{"create":201,"save":200,"approve":403},"quality":{"create":201,"save":200,"approve":403},"manager":{"create":201,"save":200,"approve":200}}
+  ✓ CNT-06 rol matrisi (kayıt): viewer sayım açamaz/kaydedemez/onaylayamaz
+  ✓ CNT-07 kapalı/olmayan sayımda kayıt: 409/404
+  ✓ CNT-08 karantina lot sayımı kullanılabilir stok önbelleğini değiştirmez
+  ✓ CNT-09 eşzamanlı iki onay: yalnız biri başarılı olur, çift düzeltme olmaz
+  i INFO CNT-10b başka lottaki hareket sonrası onay => {"status":200}
+  ✓ CNT-10 sayım: sayılmayan lotlarda hareket onayı engellemez (yalnız sayılan satırlar)
+
+[RETURN] tedarikçi iadesi
+  i INFO RET-01b tedarikçisi olmayan lot, rastgele tedarikçiye iade => {"status":201}
+  ✓ RET-01 lot tedarikçisi farklıysa 422; tedarikçisiz lot için mevcut davranış
+  i INFO RET-02b olmayan tedarikçi id => {"status":500}
+  ✗ FAIL RET-02 geçersiz miktar/lot/tedarikçi: 4xx (500 değil)
+       olmayan tedarikçi 500 verdi
+  i INFO RET-03b available lottan tedarikçi iadesi => {"status":201}
+  ✓ RET-03 kullanılabilir (kalite onaylı) lottan iade kabul: mevcut davranış
+  i INFO RET-04b GET /purchasing/returns => {"status":404}
+  i INFO RET-04c PATCH .../status => {"status":404}
+  i INFO RET-04d iade hareketinde ürün adı => {"itemName":null}
+  ✓ RET-04 iade kayıtlarını listeleme/ilerletme uçları var mı
+  ✓ RET-05 eşzamanlı iadeler lot miktarını aşamaz
+  i INFO RET-06b iade rol matrisi => {"viewer":403,"quality":403,"operator":201}
+  ✓ RET-06 rol: viewer/quality iade yapamaz mı (kayıt), viewer kesin 403
+
+[QUALITY] kalite
+  ✓ Q-01 tam kabul: karantina → kullanılabilir; ikinci sonuç 4xx
+  ✓ Q-02 negatif/ondalık/fazla miktar reddedilir
+  ✓ Q-03 tam ret: lot rejected + NCR açılır
+  ✓ Q-04 rol: viewer/operator kalite sonucu giremez
+  ✓ Q-05 lot miktarı muayeneden sonra değiştiyse sonuç 409
+  i INFO Q-06b ölçüm 9.9 (spec 1.9–2.1), satır=fail, genel=accepted => {"status":200,"lot":"available"}
+  ✓ Q-06 ölçüm satırı FAIL iken genel sonuç ACCEPTED kabul ediliyor mu (bilgi)
+  i INFO Q-07b partisiz muayene 8 kabul / 2 ret => {"status":422,"body":{"error":"Kabul ve ret miktarları karar ve toplam miktarla uyuşmalı / Disposition quantities must match the decision and total","requestId":"67ff2986-6ec6-4c0a-ac54-99835051f4a5"}}
+  i INFO Q-07c partisiz muayene accepted (adetsiz) => {"status":200}
+  ✓ Q-07 partisiz (final/in_process) muayenede kabul/ret adedi girilebiliyor mu
+  ✓ Q-08 eşzamanlı iki sonuç girişi: biri başarılı
+  ✓ Q-09 geçersiz tip/olmayan lot 4xx
+
+[MOVE] stok hareketleri, durum, transfer
+  ✓ MV-01 manuel çıkış: stoğu aşan 400, tam çıkış lotu tüketir, olmayan ürün 404, geçersiz miktar 4xx
+  i INFO MV-02b {"warehouseId":999999} => {"status":500}
+  i INFO MV-02b {"unitCost":-1} => {"status":422}
+  i INFO MV-02b {"expiryDate":"abc"} => {"status":200}
+  i INFO MV-02b {"expiryDate":"2026-02-30"} => {"status":200}
+  ✗ FAIL MV-02 giriş: olmayan depo, negatif maliyet, geçersiz son kullanma tarihi 4xx
+       sorunlu: {"warehouseId":999999} -> 500; {"expiryDate":"abc"} -> 200; {"expiryDate":"2026-02-30"} -> 200
+
+       3 !== 0
+
+  i INFO MV-03b lot-status rol matrisi => {"viewer":403,"operator":403,"quality":200,"manager":403}
+  ✓ MV-03 lot durum değişimi: fazla miktar, tükenmiş lot, kısmi bölme, yetkisiz rol
+  ✓ MV-04 transfer: fazla miktar, aynı depo, olmayan depo, tükenmiş lot
+  ✓ MV-05 eşzamanlı manuel çıkışlar stoğu aşamaz
+  i INFO MV-06b movements pageSize=100000,page=-3 => {"status":422}
+  ✓ MV-06 pasif (soft-delete) depo ve hareket listeleri sayfalama sınırı
+
+[PROD] üretim
+  ✓ PR-01 üretim tamamlama: hammadde tüketimi (fire dahil), çıktı lotu, maliyet
+  ✓ PR-02 yetersiz hammaddede tamamlama 400 ve kısmi tüketim yok
+  ✓ PR-03 iki kez tamamlama reddedilir; eşzamanlı iki tamamlama tek etki
+  ✓ PR-04 üretilen 0 + fire > 0: çıktı lotu yok, tüketim var
+  i INFO PR-05b operasyon planlama => {"status":200,"ops":1}
+  i INFO PR-05c planlı (operasyonlu) emir sil => {"status":204,"body":null}
+  ✓ PR-05 silme: tamamlanan 400; planlı 204; operasyonu planlanmış emir silinince (FK) 500 olmamalı
+  i INFO PR-06b bileşen override: olmayan ürün id => {"status":500}
+  ✓ PR-06 reçetesiz ürün 400; bileşen override ile olmayan ürün
+  ✓ PR-07 karantinadaki hammadde tüketilmez
+  ✓ PR-08 geçersiz üretim miktarları reddedilir
+  ✓ PR-09 rol: viewer üretim oluşturamaz/tamamlayamaz
+
+[ITEM] ürün kartı
+  i INFO IT-01b silinmiş ürüne: sipariş / stok girişi / üretim => {"siparis":201,"giris":404,"uretim":404}
+  ✓ IT-01 stoklu ürün silinemez; silinen ürünün kullanımı tutarlı mı (bilgi)
+  i INFO IT-02b reçete bileşeni ürünü sil => {"status":204}
+  i INFO IT-02c mükerrer kod/barkod => {"ilk":201,"ikinci":201}
+  ✓ IT-02 reçetede kullanılan ürün silinebiliyor mu (bilgi); mükerrer kod/barkod 4xx
+  i INFO IT-03b A→B sonra B→A => {"status":200}
+  i INFO IT-03c mükerrer bileşen satırı => {"status":200}
+  i INFO IT-03d olmayan bileşen id => {"status":200,"bom":[]}
+  ✗ FAIL IT-03 BOM: dolaylı döngü (A→B→A) reddedilmeli; mükerrer/olmayan bileşen davranışı
+       dolaylı BOM döngüsü kabul edildi
+  i INFO IT-04b olmayan depo id => {"status":500}
+  ✗ FAIL IT-04 olmayan depo ile ürün oluşturma 4xx
+       500
+  ✓ IT-05 ürün alan sınırları: çok uzun ad/negatif/NaN/eksik
+
+[COERCE] boş/null/false değerlerin sayıya sessizce 0 olarak dönüşmesi (girdi doğrulama)
+  i INFO CO-01b price="" => {"status":201}
+  i INFO CO-01b price=null => {"status":201}
+  i INFO CO-01b price=false => {"status":201}
+  i INFO CO-01b price=[] => {"status":201}
+  ✗ FAIL CO-01 satış siparişi satır fiyatı ''/null/false → 0 olarak KABUL edilmemeli
+       fiyatı boş/geçersiz sipariş kabul edildi: "", null, false, []
+
+       4 !== 0
+
+  i INFO CO-02b unitCost="" => {"status":200,"ortMaliyet":45.45454545454545}
+  i INFO CO-02b unitCost=null => {"status":200,"ortMaliyet":41.666666666666664}
+  i INFO CO-02b unitCost=false => {"status":200,"ortMaliyet":38.46153846153846}
+  ✗ FAIL CO-02 stok girişinde unitCost ''/null → 0 maliyetli parti oluşmamalı
+       boş maliyet 0 olarak kabul edildi: "", null, false
+
+       3 !== 0
+
+  i INFO CO-03b creditLimit='' gönderildi => {"sonuc":0}
+  ✗ FAIL CO-03 müşteri PUT creditLimit ''/null → kredi limiti sessizce kaldırılmamalı
+       kredi limiti 500 iken boş girdiyle 0 oldu (0 = limitsiz)
+
+       0 !== 500
+
+  i INFO CO-04b minStock="" => {"status":201}
+  i INFO CO-04b minStock=null => {"status":201}
+  i INFO CO-04b salePrice="" => {"status":201}
+  i INFO CO-04b salePrice=null => {"status":201}
+  i INFO CO-04b reorderQty="" => {"status":201}
+  i INFO CO-04b reorderQty=null => {"status":201}
+  ✗ FAIL CO-04 ürün minStock/salePrice ''/null → 0'a dönüşmemeli
+       kabul edilenler: minStock="", minStock=null, salePrice="", salePrice=null, reorderQty="", reorderQty=null
+
+       6 !== 0
+
+  i INFO CO-05b isLotTracked='false' => {"saklanan":true}
+  ✗ FAIL CO-05 boolean alanlar: 'false' metni true olmamalı (isLotTracked)
+       Expected values to be strictly equal:
+
+       true !== false
+
+  i INFO CO-06b yalnız olmayan bileşenli BOM gönderildi => {"status":200,"kalanBomSatiri":0}
+  ✗ FAIL CO-06 BOM güncellemesinde olmayan bileşen id, mevcut reçeteyi sessizce silmemeli
+       HTTP 200: mevcut reçete (1 satır) sessizce 0 satıra düştü
+
+[INVARIANTS]
+  ✓ INV-ALL küresel değişmezler
+
+=== b1b-stock: 41 geçti, 11 BAŞARISIZ, 0 HATA (toplam 104) ===
+(sonuçlar: C:\Projelerim\Dream\dream-plus\test\faz0-verify\results\b1b-stock.json )

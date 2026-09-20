@@ -9,6 +9,12 @@
  *   node test/import.js   (sunucu ayakta olmalı)
  */
 const ExcelJS = require('exceljs');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+assert(process.env.DATA_DIR && fs.existsSync(path.join(process.env.DATA_DIR, '.test-owner')),
+  'Run node test/run-all.js import; destructive trigger tests require an isolated database');
+const db = require('../server/db');
 
 const BASE = process.env.BASE || 'http://localhost:3000';
 let pass = 0, fail = 0;
@@ -310,6 +316,39 @@ async function uploadPreview(token, importType, buffer, fileName = 'test.xlsx', 
   ok('stok aktarımı geri alındı', stockRevert.status === 200, JSON.stringify(stockRevert.data).slice(0, 120));
   const impItemAfter = (await api('GET', `/api/items/${impItem.id}`, { token: admin })).data;
   ok('geri alma sonrası stok sıfırlandı', impItemAfter.qty === 0, String(impItemAfter.qty));
+
+  console.log('\n=== SATIR ATOMİKLİĞİ / ROW ATOMICITY ===');
+  const atomicFile = await makeXlsx(['Ürün Kodu', 'Miktar', 'Birim Maliyet', 'Parti No'],
+    [['IMP-A', 7, 1, 'ATOMIC-LOT']]);
+  const failedPreview = await uploadPreview(manager, 'opening_stock', atomicFile, 'atomic-fail.xlsx');
+  const stockCountBefore = db.prepare('SELECT COUNT(*) c FROM stock_lots WHERE item_id=?').get(impItem.id).c;
+  db.exec(`CREATE TRIGGER test_import_movement_failure BEFORE INSERT ON movements
+    WHEN NEW.ref_type='import' BEGIN SELECT RAISE(ABORT, 'test movement failure'); END`);
+  try {
+    const failedCommit = await api('POST', `/api/import/batches/${failedPreview.data.batchId}/commit`, { token: manager });
+    ok('hareket eklemesi başarısız olan satır failed olarak kaydediliyor',
+      failedCommit.status === 200 && failedCommit.data.failed === 1 && failedCommit.data.created === 0,
+      JSON.stringify(failedCommit.data));
+    ok('başarısız satırın önceden eklenen lotu geri alınıyor',
+      db.prepare('SELECT COUNT(*) c FROM stock_lots WHERE item_id=?').get(impItem.id).c === stockCountBefore);
+  } finally { db.exec('DROP TRIGGER test_import_movement_failure'); }
+
+  const keptPreview = await uploadPreview(manager, 'opening_stock', atomicFile, 'atomic-revert.xlsx');
+  const keptCommit = await api('POST', `/api/import/batches/${keptPreview.data.batchId}/commit`, { token: manager });
+  ok('geri alma denemesi için lot oluşturuldu', keptCommit.status === 200 && keptCommit.data.created === 1,
+    JSON.stringify(keptCommit.data));
+  const keptLot = db.prepare('SELECT id,qty FROM stock_lots WHERE import_batch_id=?').get(keptPreview.data.batchId);
+  db.exec(`CREATE TRIGGER test_import_lot_delete_failure BEFORE DELETE ON stock_lots
+    WHEN OLD.import_batch_id IS NOT NULL BEGIN SELECT RAISE(ABORT, 'test lot deletion failure'); END`);
+  try {
+    const reverted = await api('POST', `/api/import/batches/${keptPreview.data.batchId}/revert`, { token: manager });
+    ok('silme hatası olan lot korunmuş sayılıyor', reverted.status === 200 && reverted.data.kept === 1,
+      JSON.stringify(reverted.data));
+    ok('lot silinemezse giriş hareketi ve kullanılabilir miktarı birlikte korunuyor',
+      db.prepare('SELECT COUNT(*) c FROM movements WHERE lot_id=? AND type=?').get(keptLot.id, 'in').c === 1 &&
+      db.prepare('SELECT qty FROM stock_lots WHERE id=?').get(keptLot.id)?.qty === keptLot.qty &&
+      db.prepare('SELECT qty_cache FROM items WHERE id=?').get(impItem.id).qty_cache === keptLot.qty);
+  } finally { db.exec('DROP TRIGGER test_import_lot_delete_failure'); }
 
   console.log('\n=== GEÇMİŞ / HISTORY ===');
   const batches = (await api('GET', '/api/import/batches?pageSize=50', { token: admin })).data;

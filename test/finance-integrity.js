@@ -19,6 +19,12 @@ async function success(method, route, body) {
 async function main() {
   token = (await success('POST', '/auth/login', { username: 'admin', password: 'Admin123!' })).token;
   const customer = await success('POST', '/sales/customers', { name: 'Return test', creditLimit: 200 });
+  assert.equal((await api('POST', '/sales/orders', { customerId: customer.id,
+    lines: [{ itemId: 'missing-item', qty: 1, price: 1 }] })).status, 404);
+  assert.equal((await api('POST', '/sales/orders', { customerId: customer.id, date: '2026-02-30',
+    lines: [{ itemId: 'unused', qty: 1, price: 1 }] })).status, 422);
+  assert.equal((await api('POST', '/sales/shipments', { destination: 'Date check', date: '2026-13-01', items: [] })).status, 422);
+  assert.equal((await api('POST', '/sales/invoices', { customerId: customer.id, invoiceDate: 'abc', amount: 1 })).status, 422);
   const original = await success('POST', '/sales/invoices', { customerId: customer.id, amount: 100 });
   const credit = await success('POST', '/sales/invoices', { customerId: customer.id, amount: 40, invoiceType: 'iade', originalInvoiceId: original.id });
   assert.equal((await success('GET', '/sales/customers/' + customer.id)).openBalanceBase, 60);
@@ -35,6 +41,12 @@ async function main() {
   assert.equal(rows.find(row => row.accountCode === '600').debit, 40);
   assert.equal(rows.reduce((sum, row) => sum + row.debit - row.credit, 0), 0);
   console.log('✓ F12/F22: return reduces receivables and reverses balanced journal; over-return blocked');
+  assert.equal((await api('POST', `/sales/invoices/${credit.id}/pay`)).status, 409);
+  assert.equal((await success('GET', '/sales/customers/' + customer.id)).openBalanceBase, 60);
+  assert.equal((await success('POST', `/sales/invoices/${original.id}/pay`)).ok, true);
+  assert.equal((await success('POST', `/sales/invoices/${original.id}/pay`)).alreadyPaid, true);
+  assert.equal(db.prepare('SELECT status FROM customer_invoices WHERE id=?').get(original.id).status, 'paid');
+  assert.equal(db.prepare('SELECT status FROM customer_invoices WHERE id=?').get(credit.id).status, 'issued');
   const taxOriginal = await success('POST', '/sales/invoices', { customerId: customer.id,
     lines: [{ itemName: 'Tax test', qty: 1, unitPrice: 100, vatRate: 20 }] });
   const taxReturn = await success('POST', '/sales/invoices', { customerId: customer.id, invoiceType: 'iade', originalInvoiceId: taxOriginal.id,
@@ -52,6 +64,14 @@ async function main() {
   console.log('✓ F15: missing historical or unknown FX never silently becomes latest rate or 1');
   const supplier = db.prepare('SELECT id FROM suppliers WHERE is_approved=1 LIMIT 1').get().id;
   const warehouse = db.prepare('SELECT id FROM warehouses LIMIT 1').get().id;
+  const poBody = { supplierId: supplier, warehouseId: warehouse,
+    items: [{ itemId: item, qty: 1, price: 1 }] };
+  assert.equal((await api('POST', '/purchasing/orders', { ...poBody,
+    items: [{ itemId: 'missing-item', qty: 1, price: 1 }] })).status, 404);
+  assert.equal((await api('POST', '/purchasing/orders', { ...poBody, warehouseId: 999999 })).status, 404);
+  assert.equal((await api('POST', '/purchasing/orders', { ...poBody,
+    items: [{ itemId: item, qty: 1, price: '' }] })).status, 422);
+  assert.equal((await api('POST', '/purchasing/orders', { ...poBody, date: '2026-02-30' })).status, 422);
   const datedRate = db.prepare('INSERT INTO exchange_rates(currency,rate,rate_date,created_at) VALUES (?,?,?,?)');
   datedRate.run('USD', 30, '2001-01-01', Date.now());
   datedRate.run('EUR', 40, '2001-01-01', Date.now());
@@ -62,16 +82,71 @@ async function main() {
     ] });
   const po = await success('GET', '/purchasing/orders/' + order.id);
   assert.deepEqual(po.items.map(l => l.fxRate), [30, 40]);
+  assert.equal((await api('POST', `/purchasing/orders/${order.id}/receipts`,
+    { lines: [{ poItemId: po.items[0].id, qty: 1, expiryDate: '2026-02-30' }] })).status, 422);
   db.prepare("UPDATE exchange_rates SET rate=99 WHERE rate_date='2001-01-01'").run();
   const first = await success('POST', `/purchasing/orders/${order.id}/receipts`,
     { lines: po.items.map(l => ({ poItemId: l.id, qty: 1 })) });
+  assert.equal((await api('POST', `/purchasing/orders/${order.id}/reject`, { reason: 'late' })).status, 409);
+  assert.equal(db.prepare('SELECT status FROM purchase_orders WHERE id=?').get(order.id).status, 'partially_received');
   const costs = receiptId => db.prepare(`SELECT sl.unit_cost FROM po_receipt_lines rl
     JOIN stock_lots sl ON sl.id=rl.lot_id WHERE rl.receipt_id=? ORDER BY rl.id`).all(receiptId).map(r => r.unit_cost);
   assert.deepEqual(costs(first.receiptId), [30, 40]);
+  const matchedReceipt = await success('POST', '/purchasing/invoices', {
+    invoiceNo: 'FX-MIX-1', poId: order.id, receiptId: first.receiptId,
+    invoiceDate: '2001-01-01', amount: 70, currency: 'TRY'
+  });
+  assert.equal(matchedReceipt.receivedBase, 70);
+  assert.equal(matchedReceipt.matchStatus, 'matched');
+  assert.equal((await api('POST', '/purchasing/invoices', {
+    invoiceNo: 'FX-MIX-1', poId: order.id, amount: 70, currency: 'TRY'
+  })).status, 409);
+  const otherPo = db.prepare('SELECT id FROM purchase_orders WHERE id<>? LIMIT 1').get(order.id).id;
+  assert.equal((await api('POST', '/purchasing/invoices', {
+    invoiceNo: 'FX-WRONG-RECEIPT', poId: otherPo, receiptId: first.receiptId,
+    amount: 70, currency: 'TRY'
+  })).status, 422);
+  assert.equal((await api('POST', '/purchasing/invoices', {
+    invoiceNo: 'FX-BAD-DATE', poId: order.id, invoiceDate: '2026-02-31', amount: 70
+  })).status, 422);
   const second = await success('POST', `/purchasing/orders/${order.id}/receipts`,
     { lines: po.items.map(l => ({ poItemId: l.id, qty: 1 })) });
   assert.deepEqual(costs(second.receiptId), [30, 40]);
   assert.equal((await success('GET', '/purchasing/orders/' + order.id)).totalBase, 140);
+  const secondLines = db.prepare('SELECT id FROM po_receipt_lines WHERE receipt_id=? ORDER BY id').all(second.receiptId);
+  const partial = await success('POST', '/purchasing/invoices', {
+    invoiceNo: 'FX-PART-1', poId: order.id, receiptId: second.receiptId,
+    invoiceDate: '2001-01-01', amount: 12, currency: 'TRY',
+    lines: [{ receiptLineId: secondLines[0].id, qty: 0.4, vatRate: 18 }]
+  });
+  assert.equal(partial.matchStatus, 'matched');
+  assert.equal(partial.receivedBase, 12);
+  assert.equal(db.prepare('SELECT qty FROM supplier_invoice_allocations WHERE invoice_id=?').get(partial.id).qty, 0.4);
+  const receivable = await success('GET', `/purchasing/invoices/receivable-lines?poId=${order.id}`);
+  assert.equal(receivable.lines.find(line => line.receiptLineId === secondLines[0].id).availableQty, 0.6);
+  assert.equal((await api('POST', '/purchasing/invoices', {
+    invoiceNo: 'FX-PART-OVER', poId: order.id, receiptId: second.receiptId, amount: 21,
+    lines: [{ receiptLineId: secondLines[0].id, qty: 0.7 }]
+  })).status, 409);
+  assert.equal((await api('POST', '/purchasing/invoices', {
+    invoiceNo: 'FX-PART-WRONG', poId: otherPo, amount: 1,
+    lines: [{ receiptLineId: secondLines[0].id, qty: 0.1 }]
+  })).status, 422);
+  const remainder = await success('POST', '/purchasing/invoices', {
+    invoiceNo: 'FX-PART-2', poId: order.id, receiptId: second.receiptId,
+    invoiceDate: '2001-01-01', amount: 58, currency: 'TRY'
+  });
+  assert.equal(remainder.receivedBase, 58);
+  assert.equal(remainder.matchStatus, 'matched');
+  assert.equal((await api('POST', '/purchasing/invoices', {
+    invoiceNo: 'FX-PART-REPEAT', poId: order.id, receiptId: second.receiptId, amount: 58
+  })).status, 409);
+  db.prepare('UPDATE items SET vat_rate=8 WHERE id=?').run(item);
+  const purchaseJournal = await success('GET', '/accounting/export?from=2001-01-01&to=2001-01-01');
+  assert.equal(purchaseJournal.rows.find(row => row.sourceId === partial.id && row.accountCode === '191').debit, 2.16);
+  assert.throws(() => db.prepare(`INSERT INTO supplier_invoice_allocations
+    (invoice_id,receipt_line_id,qty,unit_price,currency,fx_rate,vat_rate) VALUES (?,?,?,?,?,?,?)`)
+    .run(remainder.id, secondLines[0].id, 0.7, 1, 'USD', 30, 20), /Receipt quantity already invoiced/);
   console.log('✓ F20: mixed-currency and partial receipts retain order-date FX after rate edits');
   const addCost = body => api('POST', `/purchasing/receipts/${first.receiptId}/landed-costs`, body);
   assert.equal((await addCost({ costType: 'freight', amount: 14, allocationMethod: 'qty' })).status, 201);

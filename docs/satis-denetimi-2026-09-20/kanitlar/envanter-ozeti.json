@@ -1,0 +1,42 @@
+{
+  "project": "C:\\Projelerim\\Dream\\dream-plus",
+  "files": 254,
+  "text_files_scanned": 247,
+  "lines_scanned": 60107,
+  "ts_nocheck_occurrences": 154,
+  "scope_counts": {
+    "full-file inventory/static scan; not a line-by-line correctness proof": 247,
+    "private: metadata only; contents not read": 3,
+    "binary/other: metadata only": 4
+  },
+  "excluded_directories": [
+    {
+      "path": ".git",
+      "reason": "generated/dependency/private data/audit output"
+    },
+    {
+      "path": "data",
+      "reason": "generated/dependency/private data/audit output"
+    },
+    {
+      "path": "docs/satis-denetimi-2026-09-20",
+      "reason": "generated/dependency/private data/audit output"
+    },
+    {
+      "path": "node_modules",
+      "reason": "generated/dependency/private data/audit output"
+    },
+    {
+      "path": "public/dist",
+      "reason": "generated/dependency/private data/audit output"
+    },
+    {
+      "path": "test/faz0-verify/results",
+      "reason": "generated/dependency/private data/audit output"
+    },
+    {
+      "path": "test-results",
+      "reason": "generated/dependency/private data/audit output"
+    }
+  ]
+}

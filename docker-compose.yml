@@ -11,12 +11,14 @@ services:
       TOKEN_TTL_HOURS: 12
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       FORCE_HTTPS: ${FORCE_HTTPS:-0}
+      # Only the internal reverse proxy can reach the app container; nginx overwrites X-Forwarded-For.
+      TRUST_PROXY: uniquelocal
       BACKUP_INTERVAL_HOURS: 24
       BACKUP_KEEP: 14
     volumes:
       - depo-data:/app/data
-    ports:
-      - "127.0.0.1:3000:3000"
+    expose:
+      - "3000"
 
   # TLS sonlandırma ve statik dosya önbelleği için ters vekil
   nginx:

@@ -414,6 +414,17 @@ async function api(method, p, { token, body, headers = {}, raw } = {}) {
     JSON.stringify(wrongUser.data) === JSON.stringify(wrongPass.data),
     'farklı mesajlar kullanıcı adı taramasına izin verir');
 
+  console.log('\n=== DOĞRUDAN BAĞLANTI GİRİŞ SINIRI / DIRECT-IP RATE LIMIT ===');
+  const attempts = [];
+  for (let i = 0; i < Number(process.env.LOGIN_RATE_LIMIT || 10) + 2; i++) {
+    attempts.push((await api('POST', '/api/auth/login', {
+      headers: { 'X-Forwarded-For': `203.0.113.${i + 1}` },
+      body: { username: 'olmayan', password: 'yanlis' }
+    })).status);
+  }
+  ok('doğrudan portta sahte X-Forwarded-For giriş sınırını aşamıyor',
+    attempts.at(-1) === 429 && attempts.includes(429), attempts.join(','));
+
   console.log(`\n${'='.repeat(56)}`);
   console.log(`GEÇTİ / PASSED: ${pass}   UYARI / WARN: ${warn}   AÇIK / FAIL: ${fail}`);
   if (findings.length) {

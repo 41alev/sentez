@@ -11,6 +11,8 @@
     "migrate": "node server/migrate.js",
     "seed": "node server/seed.js",
     "backup": "node server/scripts/backup.js",
+    "backup:full": "node server/scripts/full-backup.js",
+    "restore:full": "node server/scripts/full-backup.js --restore",
     "test": "node test/e2e.js",
     "dev": "NODE_ENV=development node server/index.js",
     "test:contract": "node test/run-all.js contract",

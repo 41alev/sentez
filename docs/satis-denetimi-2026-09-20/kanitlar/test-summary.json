@@ -1,0 +1,61 @@
+{
+  "faz0": [
+    {
+      "name": "b1a-sales",
+      "passed": 35,
+      "failed": 5,
+      "errors": 0,
+      "total": 59,
+      "report_write_error": true
+    },
+    {
+      "name": "b1b-stock",
+      "passed": 41,
+      "failed": 11,
+      "errors": 0,
+      "total": 104,
+      "report_write_error": false
+    },
+    {
+      "name": "b2-purch-auth",
+      "passed": 20,
+      "failed": 23,
+      "errors": 0,
+      "total": 88,
+      "report_write_error": false
+    },
+    {
+      "name": "b3-sweep",
+      "passed": 11,
+      "failed": 1,
+      "errors": 0,
+      "total": 21,
+      "report_write_error": false
+    },
+    {
+      "name": "b4a-misc",
+      "passed": 14,
+      "failed": 10,
+      "errors": 0,
+      "total": 44,
+      "report_write_error": false
+    },
+    {
+      "name": "b4b-crm",
+      "passed": 7,
+      "failed": 7,
+      "errors": 0,
+      "total": 38,
+      "report_write_error": false
+    },
+    {
+      "name": "b4c-ops",
+      "passed": 13,
+      "failed": 18,
+      "errors": 1,
+      "total": 78,
+      "report_write_error": false
+    }
+  ],
+  "type_errors": 266
+}

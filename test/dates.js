@@ -9,7 +9,7 @@
  *
  *   node test/dates.js
  */
-const { toLocalDateStr, today, addDays, isoWeekday, daysBetween, DAY_MS } = require('../server/lib/dates');
+const { toLocalDateStr, today, isValidLocalDate, addDays, isoWeekday, daysBetween, DAY_MS } = require('../server/lib/dates');
 
 let pass = 0, fail = 0;
 const failures = [];
@@ -27,6 +27,9 @@ ok('today() YYYY-MM-DD biçiminde', /^\d{4}-\d{2}-\d{2}$/.test(today()));
 }
 ok('toLocalDateStr belirli bir zaman damgasını doğru çeviriyor',
   toLocalDateStr(new Date(2026, 0, 15, 3, 0, 0).getTime()) === '2026-01-15');
+ok('artık yıl günü geçerli', isValidLocalDate('2028-02-29'));
+ok('olmayan takvim günü reddediliyor', !isValidLocalDate('2026-02-30'));
+ok('yanlış biçim reddediliyor', !isValidLocalDate('20.09.2026'));
 
 console.log('\n=== addDays — gün/ay/yıl sınırları ===');
 ok('bir gün ekleme', addDays('2026-09-12', 1) === '2026-09-13');

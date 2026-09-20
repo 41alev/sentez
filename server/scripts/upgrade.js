@@ -109,19 +109,15 @@ async function main() {
   db.close();
 
   delete require.cache[require.resolve('../db')];
-  const backup = require('./backup');
+  const fullBackup = require('./full-backup');
   const restore = require('./restore');
 
   let backupFile;
   try {
-    const b = await backup.runBackup({ keep: 30, label: 'pre-upgrade' });
+    const b = await fullBackup.runFullBackup({ keep: 30, label: 'pre-upgrade' });
     backupFile = b.file;
-    console.log(`  ${path.basename(backupFile)} (${Math.round(b.sizeBytes / 1024)} KB)`);
-    // backup.js kendi üst seviyesinde `require('../db')` ile bağlantıyı açık tutar
-    // ve hiç kapatmaz. Bu bağlantı kapanmadan bırakılırsa, aşağıda migrate.js
-    // kendi bağlantısını açtığında dosyada iki açık tanıtıcı birden olur; migration
-    // başarısız olup geri dönüş rename'i denendiğinde Windows'ta EBUSY ile başarısız
-    // olur (POSIX'te sorun çıkmaz, bu yüzden Linux/Mac'te fark edilmemiş olabilir).
+    console.log(`  ${path.basename(backupFile)} (DB + ${b.manifest.uploads.length} dosya)`);
+    // Snapshot bağlantısı kapanmadan Windows'ta geri yükleme rename'i EBUSY olur.
     try { require('../db').close(); } catch {}
   } catch (e) {
     console.error(`\n✗ Yedek alınamadı: ${e.message}`);
@@ -129,10 +125,10 @@ async function main() {
     process.exit(1);
   }
 
-  const verified = restore.verifyBackup(backupFile);
+  const verified = fullBackup.verifyFullBackup(backupFile);
   if (!verified.ok) {
     console.error('\n✗ Alınan yedek doğrulamayı geçemedi. Yükseltme durduruldu.');
-    verified.checks.filter(c => !c.ok).forEach(c => console.error(`  - ${c.name} ${c.detail}`));
+    console.error(`  - ${verified.error}`);
     console.error('');
     process.exit(1);
   }
@@ -172,13 +168,13 @@ async function main() {
       // yapmaya çalıştığında EBUSY ile başarısız olur ve geri dönüş de başarısız
       // görünür. Geri dönüşten önce bağlantıyı kapatmak bunu önler.
       try { require('../db').close(); } catch {}
-      restore.restore(backupFile, { force: true });
-      console.error('  ✓ Veritabanı yükseltme öncesi haline döndürüldü.');
+      fullBackup.restoreFullBackup(backupFile);
+      console.error('  ✓ Veritabanı ve belgeler yükseltme öncesi haline döndürüldü.');
       console.error('    Sistem eski sürümle çalışmaya devam edebilir.\n');
     } catch (e) {
       console.error(`  ✗ Geri dönüş de başarısız: ${e.message}`);
       console.error(`    Yedek dosyası: ${backupFile}`);
-      console.error('    Bu dosyayla elle geri yükleme yapın: npm run restore -- ' + backupFile + '\n');
+      console.error('    Bu paketle elle geri yükleme yapın: npm run restore:full -- ' + backupFile + '\n');
     }
     process.exit(1);
   }
@@ -186,7 +182,7 @@ async function main() {
   console.log('\n✓ Yükseltme tamamlandı.\n');
   console.log(`  Yükseltme öncesi yedek: ${path.basename(backupFile)}`);
   console.log('  Bir sorun görürseniz geri dönebilirsiniz:');
-  console.log(`    npm run restore -- ${backupFile}\n`);
+  console.log(`    npm run restore:full -- ${backupFile}\n`);
   console.log('  Sunucuyu başlatabilirsiniz: npm start\n');
 }
 

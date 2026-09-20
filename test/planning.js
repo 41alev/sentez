@@ -46,6 +46,22 @@ function lastWeekdayStr(startOffset = -1) {
   const operator = await login('operator', 'Operator123!');
   const viewer = await login('viewer', 'Viewer123!');
 
+  console.log('\n=== ÜRÜN TEDARİK YÖNTEMİ / PROCUREMENT TYPE ===');
+  const makeItem = await api('POST', '/api/items', { token: admin,
+    body: { name: 'MRP Make Test', code: 'MRP-MAKE-TEST', itemType: 'finished', procurementType: 'make' } });
+  ok('oluşturulan mamul make olarak dönüyor', makeItem.status === 201 && makeItem.data.procurementType === 'make',
+    JSON.stringify(makeItem.data).slice(0, 180));
+  const partialEdit = await api('PUT', `/api/items/${makeItem.data.id}`, { token: admin,
+    body: { name: 'MRP Make Test Düzenlendi' } });
+  ok('kısmi ürün güncellemesi make seçimini koruyor', partialEdit.status === 200 &&
+    partialEdit.data.procurementType === 'make');
+  const buyEdit = await api('PUT', `/api/items/${makeItem.data.id}`, { token: admin,
+    body: { procurementType: 'buy' } });
+  ok('tedarik yöntemi PUT ile değiştirilebiliyor', buyEdit.status === 200 && buyEdit.data.procurementType === 'buy');
+  ok('geçersiz tedarik yöntemi reddediliyor',
+    (await api('PUT', `/api/items/${makeItem.data.id}`, { token: admin,
+      body: { procurementType: 'unknown' } })).status === 422);
+
   console.log('\n=== İŞ MERKEZLERİ / WORK CENTRES ===');
   const wcs = (await api('GET', '/api/planning/work-centers', { token: admin })).data;
   ok('iş merkezleri listeleniyor', Array.isArray(wcs) && wcs.length === 4, `${wcs.length} merkez`);

@@ -38,3 +38,29 @@ test.describe('Sayım — Kalite rolü gerçekten sayım oluşturup kaydedebiliy
     await expect(page.locator('.toast.ok, .toast.show')).toBeVisible({ timeout: 10000 });
   });
 });
+
+test('yönetici kaydetmeden onayladığında ekrandaki miktar ve gerekçe işlenir', async ({ page }) => {
+  await login(page);
+  await goToView(page, 'counts');
+  await page.getByRole('button', { name: 'Yeni Sayım' }).click();
+  const createdResponse = page.waitForResponse(r => r.url().endsWith('/api/stock/counts') && r.request().method() === 'POST');
+  await page.click('#nGo');
+  const countIdValue = (await (await createdResponse).json()).id;
+  await page.waitForSelector('.cnt-q');
+  const first = page.locator('.cnt-q').first();
+  const lineId = await first.getAttribute('data-id');
+  await first.fill('210');
+  await page.locator(`.cnt-r[data-id="${lineId}"]`).fill('Tarayıcı testi');
+  await page.click('#cntApprove');
+  const approvedResponse = page.waitForResponse(r =>
+    r.url().endsWith(`/api/stock/counts/${countIdValue}/approve`) && r.request().method() === 'POST');
+  await page.click('#cfmYes');
+  expect((await approvedResponse).status()).toBe(200);
+  const token = await page.evaluate(() => localStorage.getItem('dt_token'));
+  const persisted = await (await page.request.get(`/api/stock/counts/${countIdValue}`,
+    { headers: { Authorization: `Bearer ${token}` } })).json();
+  const line = persisted.lines.find(row => String(row.id) === lineId);
+  expect(persisted.status).toBe('approved');
+  expect(line.countedQty).toBe(210);
+  expect(line.reason).toBe('Tarayıcı testi');
+});

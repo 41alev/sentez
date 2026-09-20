@@ -9,6 +9,12 @@
  *
  *   node test/data-health.js   (sunucu ayakta olmalı)
  */
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+assert(process.env.DATA_DIR && fs.existsSync(path.join(process.env.DATA_DIR, '.test-owner')),
+  'Run node test/run-all.js data-health; direct DB assertions require an isolated database');
+const db = require('../server/db');
 const BASE = process.env.BASE || 'http://localhost:3000';
 let pass = 0, fail = 0;
 const failures = [];
@@ -209,6 +215,8 @@ const findCheck = (report, id) => report.checks.find(c => c.id === id);
   // Kaynağa stok girip birleşmede taşındığını doğrula
   await api('POST', '/api/stock/move', {
     token: operator, body: { itemId: dupe2.data.id, type: 'in', qty: 7, warehouseId: 1, lotNo: 'DH-MERGE', unitCost: 5 } });
+  const raw = db.prepare('INSERT INTO raw_materials(item_id,name,qty) VALUES (?,?,?)')
+    .run(dupe2.data.id, 'Merge reference', 2);
 
   const noConfirm = await api('POST', '/api/data-health/merge/item', {
     token: manager, body: { sourceId: dupe2.data.id, targetId: dupe1.data.id } });
@@ -222,6 +230,10 @@ const findCheck = (report, id) => report.checks.find(c => c.id === id);
   const targetAfter = (await api('GET', `/api/items/${dupe1.data.id}`, { token: admin })).data;
   ok('stok hedefe geçti', targetAfter.qty === 7, `${targetAfter.qty}`);
   ok('hedefin maliyeti yeniden hesaplandı', targetAfter.avgCost > 0, String(targetAfter.avgCost));
+  ok('sabit listede olmayan FK de hedefe taşındı',
+    db.prepare('SELECT item_id FROM raw_materials WHERE id=?').get(raw.lastInsertRowid).item_id === dupe1.data.id);
+  ok('silinen kaynak stok önbelleği sıfırlandı',
+    db.prepare('SELECT qty_cache FROM items WHERE id=?').get(dupe2.data.id).qty_cache === 0);
   const sourceAfter = await api('GET', `/api/items/${dupe2.data.id}`, { token: admin });
   ok('kaynak kayıt kaldırıldı', sourceAfter.status === 404, `got ${sourceAfter.status}`);
 
@@ -229,6 +241,30 @@ const findCheck = (report, id) => report.checks.find(c => c.id === id);
   ok('birleştirme sonrası tekrarlayan barkod bulgusu düştü',
     !dupAfter.data.rows.some(r => r.label === '9990001112223'),
     JSON.stringify(dupAfter.data.rows.map(r => r.label)));
+
+  const otherUnit = await api('POST', '/api/items', {
+    token: admin, body: { name: 'Farklı Birim', code: 'DH-KG', unit: 'kg' } });
+  const unitMerge = await api('POST', '/api/data-health/merge/item', {
+    token: manager, body: { sourceId: otherUnit.data.id, targetId: dupe1.data.id, confirm: true } });
+  ok('farklı birimler stok miktarlarını karıştırmıyor', unitMerge.status === 409,
+    JSON.stringify(unitMerge.data));
+  const bomSource = await api('POST', '/api/items', {
+    token: admin, body: { name: 'Reçete Kaynak', code: 'DH-BOM-SRC', unit: 'adet' } });
+  const bomTarget = await api('POST', '/api/items', {
+    token: admin, body: { name: 'Reçete Hedef', code: 'DH-BOM-DST', unit: 'adet' } });
+  db.prepare('INSERT INTO item_bom(item_id,component_item_id,qty_per_unit,unit) VALUES (?,?,?,?)')
+    .run(bomSource.data.id, otherUnit.data.id, 3, 'kg');
+  db.prepare('INSERT INTO item_bom(item_id,component_item_id,qty_per_unit,unit) VALUES (?,?,?,?)')
+    .run(bomTarget.data.id, otherUnit.data.id, 2, 'kg');
+  const conflictPreview = await api('GET',
+    `/api/data-health/merge/item/preview?sourceId=${bomSource.data.id}&targetId=${bomTarget.data.id}`, { token: manager });
+  ok('çakışan reçete önizlemede gösteriliyor', conflictPreview.status === 200 &&
+    conflictPreview.data.canMerge === false && /Reçete/.test(conflictPreview.data.conflict));
+  const bomMerge = await api('POST', '/api/data-health/merge/item', {
+    token: manager, body: { sourceId: bomSource.data.id, targetId: bomTarget.data.id, confirm: true } });
+  ok('reçete çakışması veri silmeden reddediliyor', bomMerge.status === 409 &&
+    db.prepare('SELECT SUM(qty_per_unit) qty FROM item_bom WHERE item_id IN (?,?)')
+      .get(bomSource.data.id, bomTarget.data.id).qty === 5);
 
   const opMerge = await api('POST', '/api/data-health/merge/item', {
     token: operator, body: { sourceId: 'a', targetId: 'b', confirm: true } });

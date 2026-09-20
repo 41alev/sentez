@@ -103,6 +103,7 @@ Sırayla:
 | `PORT` | Varsayılan 3000 |
 | `DATA_DIR` | Veritabanı ve yedeklerin yeri (varsayılan `./data`) |
 | `BACKUP_KEEP` | Saklanacak rutin yedek sayısı (varsayılan 14) |
+| `TRUST_PROXY` | Doğrudan kurulumda boş; yalnız ters vekilin güvenilir IP/CIDR aralığı. Docker Compose uygulama portunu host'a açmaz, `uniquelocal` kullanır ve nginx istemcinin X-Forwarded-For başlığını yeniden yazar. |
 | `LOGIN_RATE_LIMIT` | 15 dakikada izin verilen **başarısız** giriş (varsayılan 10) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | E-posta bildirimleri için |
 | `NODE_ENV` | Üretimde `production` |
@@ -116,15 +117,19 @@ Sunucu 24 saatte bir otomatik yedek alır ve son 14 kopyayı saklar.
 
 ```bash
 npm run backup                        # elle yedek
-npm run restore -- --list             # yedekleri listele
-npm run restore -- --verify --latest  # yazmadan doğrula
-npm run restore -- --latest           # en son yedeğe dön
+npm run backup:full                   # aynı tam yedek işlemi
+npm run backup:full -- --verify data/backups/<paket>.bundle
+# Sunucuyu durdurun; doğruladığınız tam paketten DB + belgeleri geri yükleyin:
+npm run restore:full -- data/backups/<paket>.bundle
 ```
 
-Geri yükleme, yedeği önce doğrular (SQLite başlığı, bütünlük, yabancı anahtarlar,
-çekirdek tablolar), mevcut veritabanını `.pre-restore-<zaman>` olarak saklar,
-sonra üzerine yazar. Yazma sonrası doğrulama başarısız olursa eski veritabanı
-otomatik geri alınır.
+Tam yedek `.bundle` dizinidir: `database.sqlite`, `uploads/` ve SHA-256
+manifesti içerir. Paketi **dizin olarak, tüm içeriğiyle** taşıyın. Geri yükleme
+veritabanı bütünlüğünü, belge referanslarını ve her dosyanın karmasını doğrular;
+bozuk veya eksik paketi reddeder. Mevcut DB ve yüklemeler `.pre-restore-<zaman>`
+güvenlik kopyalarında tutulur; yer değiştirme yarıda kesilirse eski çift geri
+alınır. Eski yalnız-DB `.sqlite` yedekleri için `npm run restore -- ...` komutu
+desteklenir; bu komut belgeleri geri getirmez.
 
 > **Sunucuyu durdurmadan geri yükleme yapmayın.** Sunucu, yükseltme ve geri yükleme aynı bakım kilidini kullanır. Çalışan sunucuda geri yükleme/yükseltme `--force` ile bile engellenir. Geri yükleme ayrıca boş olmayan WAL dosyasını reddeder. Beklenmedik kapanıştan sonra önce aynı sürüm sunucuyu açıp normal şekilde kapatarak WAL kurtarmasını tamamlayın. `.maintenance-lock.sqlite` dosyasını çalışan süreç varken silmeyin; süreç kapandığında kilit otomatik bırakılır.
 
@@ -134,25 +139,26 @@ arızasında, yangında veya hırsızlıkta işe yaramaz.
 ### Off-site senkronizasyon (otomatik)
 
 `.env` içinde `BACKUP_OFFSITE_CMD` tanımlanırsa, her başarılı yerel yedekten
-hemen sonra bu komut otomatik çalışır (`{file}` yedek dosyasının tam yoluyla
+hemen sonra bu komut otomatik çalışır (`{file}` paket dizininin tam yoluyla,
+`{name}` paket dizininin adıyla
 değiştirilir). Başarısız olursa sunucu loguna **açıkça** yazılır — sessizce
 yutulmaz (bkz. e-posta bildirimlerinde daha önce bulunan aynı sınıf hata).
 
 ```bash
 # rclone ile S3-uyumlu depolamaya (Backblaze B2, S3, vb.)
-BACKUP_OFFSITE_CMD=rclone copy "{file}" remote:depo-takip-yedek/
+BACKUP_OFFSITE_CMD=rclone copy "{file}" remote:depo-takip-yedek/{name}/
 
 # Windows ağ paylaşımına
 BACKUP_OFFSITE_CMD=robocopy /* önce dosyayı kopyalayacak bir .bat/.ps1 script'e yönlendirin */
 
 # Basit rsync (Linux/Mac, SSH anahtarı önceden kurulmuş olmalı)
-BACKUP_OFFSITE_CMD=rsync -az "{file}" yedek-sunucu:/var/backups/depo-takip/
+BACKUP_OFFSITE_CMD=rsync -az "{file}/" yedek-sunucu:/var/backups/depo-takip/{name}/
 ```
 
 Bu, yerel yedeğin YERİNE geçmez — geri yükleme hâlâ yerel `data/backups/`
-klasöründen yapılır (`npm run restore`). Off-site kopya yalnızca "sunucunun
+klasöründen yapılır (`npm run restore:full`). Off-site kopya yalnızca "sunucunun
 kendisi kaybolursa" senaryosu içindir; o durumda dosyayı uzak depodan geri
-indirip `npm run restore -- <indirilen-dosya>` ile geri yüklersiniz.
+indirip tam paket dizinini `npm run restore:full -- <indirilen-paket>` ile geri yüklersiniz.
 
 ---
 
@@ -190,10 +196,11 @@ npm run upgrade -- --yes         # onay sormaz (otomasyon için)
 ### Yükseltme başarısız olursa
 
 Script otomatik geri döner ve eski sürümle çalışmaya devam edebilirsiniz.
-Otomatik geri dönüş de başarısız olursa yedek dosyasının adını yazar:
+Otomatik geri dönüş de başarısız olursa tam yedek paketinin yolunu yazar.
+Sunucu kapalıyken aynı paketi elle geri yükleyin:
 
 ```bash
-npm run restore -- data/backups/depo-takip-...-pre-upgrade.sqlite
+npm run restore:full -- data/backups/depo-takip-...-pre-upgrade.bundle
 ```
 
 ---

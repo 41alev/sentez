@@ -4,8 +4,8 @@
  * Okuma/doğrulama (`import.js`) ile yazma bilinçli olarak ayrıldı: doğrulama
  * hiçbir şeye dokunmaz, yazma yalnızca doğrulanmış satırlarla çalışır.
  *
- * Yazma tek transaction içindedir. Yarım aktarım, hiç aktarım yapmamaktan kötüdür:
- * hangi satırın girdiğini kimse bilemez.
+ * Parti tek transaction içindedir; satır hatası kendi savepoint'ine geri alınır.
+ * Başarılı ve başarısız satırlar import_rows üzerinde ayrı ayrı izlenir.
  */
 const ExcelJS = require('exceljs');
 const db = require('../db');
@@ -221,10 +221,12 @@ function commit(batchId, { userId }) {
   // Tek transaction: yarım aktarım, hiç aktarım yapmamaktan kötüdür.
   db.txImmediate(() => {
     const upd = db.prepare('UPDATE import_rows SET target_table=?, target_id=?, action=?, errors=COALESCE(?,errors) WHERE id=?');
+    // better-sqlite3 iç içe transaction için SAVEPOINT kullanır. Bir satırın
+    // ikinci yazması başarısız olursa ilk yazması dış transaction'da kalmaz.
+    const writeRow = db.transaction(data => writer(data, batchId, batch.duplicate_mode));
     for (const r of rows) {
-      const data = JSON.parse(r.parsed_data || '{}');
       try {
-        const res = writer(data, batchId, batch.duplicate_mode);
+        const res = writeRow(JSON.parse(r.parsed_data || '{}'));
         upd.run(res.table, res.id != null ? String(res.id) : null, res.action, null, r.id);
         if (res.action === 'created') created++;
         else if (res.action === 'updated') updated++;
@@ -276,19 +278,18 @@ function revert(batchId, { userId }) {
     const createdRows = db.prepare(
       "SELECT * FROM import_rows WHERE batch_id = ? AND action = 'created' AND target_id IS NOT NULL").all(batchId);
 
-    for (const r of createdRows) {
+    const revertRow = db.transaction(r => {
       const id = r.target_id;
-      try {
         if (r.target_table === 'stock_lots') {
           const lot = db.prepare('SELECT * FROM stock_lots WHERE id = ?').get(id);
-          if (!lot) { result.kept++; continue; }
+          if (!lot) { result.kept++; return; }
           // Partiden mal çıkmışsa silmek stoğu tutarsız bırakır
           const used = db.prepare(
             "SELECT COUNT(*) c FROM movements WHERE lot_id = ? AND type != 'in'").get(id).c;
           if (used > 0) {
             result.kept++;
             result.reasons.push(`Parti ${lot.lot_no || id.slice(0, 8)}: hareket görmüş, silinmedi`);
-            continue;
+            return;
           }
           db.prepare('DELETE FROM movements WHERE lot_id = ?').run(id);
           db.prepare('DELETE FROM stock_lots WHERE id = ?').run(id);
@@ -300,7 +301,7 @@ function revert(batchId, { userId }) {
           if (hasStock || hasMove) {
             result.kept++;
             result.reasons.push(`Ürün ${id.slice(0, 8)}: stok/hareket var, silinmedi`);
-            continue;
+            return;
           }
           db.prepare('DELETE FROM item_bom WHERE item_id = ? OR component_item_id = ?').run(id, id);
           db.prepare('DELETE FROM items WHERE id = ?').run(id);
@@ -314,14 +315,14 @@ function revert(batchId, { userId }) {
           if (used > 0) {
             result.kept++;
             result.reasons.push(`${table === 'suppliers' ? 'Tedarikçi' : 'Müşteri'} ${id}: siparişi var, silinmedi`);
-            continue;
+            return;
           }
           db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
           result.deleted++;
 
         } else if (r.target_table === 'work_centers') {
           const used = db.prepare('SELECT COUNT(*) c FROM routings WHERE work_center_id = ?').get(id).c;
-          if (used > 0) { result.kept++; result.reasons.push(`İş merkezi ${id}: rotada kullanılıyor`); continue; }
+          if (used > 0) { result.kept++; result.reasons.push(`İş merkezi ${id}: rotada kullanılıyor`); return; }
           db.prepare('DELETE FROM work_center_shifts WHERE work_center_id = ?').run(id);
           db.prepare('DELETE FROM work_centers WHERE id = ?').run(id);
           result.deleted++;
@@ -330,9 +331,13 @@ function revert(batchId, { userId }) {
           db.prepare(`DELETE FROM ${r.target_table} WHERE id = ?`).run(id);
           result.deleted++;
         }
+    });
+    for (const r of createdRows) {
+      try {
+        revertRow(r);
       } catch (e) {
         result.kept++;
-        result.reasons.push(`${r.target_table} ${id}: ${e.message}`);
+        result.reasons.push(`${r.target_table} ${r.target_id}: ${e.message}`);
       }
     }
 

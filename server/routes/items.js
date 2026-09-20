@@ -12,7 +12,7 @@ router.use(requireAuth);
 
 const AUDIT_FIELDS = ['name','code','barcode','category','item_type','origin','unit','min_stock','reorder_qty',
   'costing_method','standard_cost','sale_price','sale_currency','is_lot_tracked','is_serial_tracked',
-  'shelf_life_days','requires_incoming_inspection','hs_code','supplier','description','location'];
+  'shelf_life_days','requires_incoming_inspection','hs_code','supplier','description','location','procurement_type'];
 
 function serializeItem(row, { withBom = true, withLots = false } = {}) {
   const out = {
@@ -25,7 +25,8 @@ function serializeItem(row, { withBom = true, withLots = false } = {}) {
     isLotTracked: !!row.is_lot_tracked, isSerialTracked: !!row.is_serial_tracked,
     shelfLifeDays: row.shelf_life_days, requiresIncomingInspection: !!row.requires_incoming_inspection,
     hsCode: row.hs_code, defaultSupplierId: row.default_supplier_id, imagePath: row.image_path,
-    supplier: row.supplier, description: row.description, isActive: !!row.is_active
+    supplier: row.supplier, description: row.description, isActive: !!row.is_active,
+    procurementType: row.procurement_type
   };
   if (withBom) {
     out.bom = db.prepare(`SELECT b.component_item_id AS componentItemId, i.name AS componentName,
@@ -126,6 +127,7 @@ const itemSchema = z.object({
   barcode: z.string().trim().optional(),
   category: z.string().trim().optional(),
   itemType: z.enum(['raw','semi','finished','consumable']).default('raw'),
+  procurementType: z.enum(['make','buy']).default('buy'),
   origin: z.string().default('Yurt İçi'),
   warehouse: z.string().max(1000).optional(),
   warehouseId: z.coerce.number().optional(),
@@ -193,10 +195,10 @@ router.post('/', requirePermission('stock.write'), validate(itemSchema), (req, r
       const warehouseId = resolveWarehouseId(b);
       db.prepare(`INSERT INTO items (id,name,code,barcode,category,item_type,origin,default_warehouse_id,location,unit,
         min_stock,reorder_qty,costing_method,standard_cost,sale_price,sale_currency,is_lot_tracked,is_serial_tracked,
-        shelf_life_days,requires_incoming_inspection,hs_code,default_supplier_id,supplier,description,created_at,company_id)
+        shelf_life_days,requires_incoming_inspection,hs_code,default_supplier_id,supplier,description,procurement_type,created_at,company_id)
         VALUES (@id,@name,@code,@barcode,@category,@item_type,@origin,@wh,@location,@unit,
         @min_stock,@reorder_qty,@costing_method,@standard_cost,@sale_price,@sale_currency,@lot,@serial,
-        @shelf,@insp,@hs,@sup_id,@supplier,@description,@created,@company_id)`).run({
+        @shelf,@insp,@hs,@sup_id,@supplier,@description,@procurement_type,@created,@company_id)`).run({
         id, name: b.name, code: b.code || '', barcode: b.barcode || '', category: b.category || 'Genel',
         item_type: b.itemType, origin: b.origin, wh: warehouseId, location: b.location || '', unit: b.unit,
         min_stock: b.minStock, reorder_qty: b.reorderQty, costing_method: b.costingMethod,
@@ -204,7 +206,8 @@ router.post('/', requirePermission('stock.write'), validate(itemSchema), (req, r
         lot: b.isLotTracked ? 1 : 0, serial: b.isSerialTracked ? 1 : 0,
         shelf: b.shelfLifeDays ?? null, insp: b.requiresIncomingInspection ? 1 : 0,
         hs: b.hsCode || null, sup_id: b.defaultSupplierId ?? null, supplier: b.supplier || '',
-        description: b.description || '', created: Date.now(), company_id: companyIdOf(req)
+        description: b.description || '', procurement_type: b.procurementType,
+        created: Date.now(), company_id: companyIdOf(req)
       });
 
       writeBom(id, b.bom);
@@ -241,7 +244,7 @@ router.put('/:id', requirePermission('stock.write'), validatePartial(itemSchema)
         reorder_qty=@reorder_qty, costing_method=@costing_method, standard_cost=@standard_cost, sale_price=@sale_price,
         sale_currency=@sale_currency, is_lot_tracked=@lot, is_serial_tracked=@serial, shelf_life_days=@shelf,
         requires_incoming_inspection=@insp, hs_code=@hs, default_supplier_id=@sup_id, supplier=@supplier,
-        description=@description WHERE id=@id`).run({
+        description=@description, procurement_type=@procurement_type WHERE id=@id`).run({
         id: existing.id,
         name: b.name ?? existing.name, code: b.code ?? existing.code, barcode: b.barcode ?? existing.barcode,
         category: b.category ?? existing.category, item_type: b.itemType ?? existing.item_type,
@@ -255,7 +258,8 @@ router.put('/:id', requirePermission('stock.write'), validatePartial(itemSchema)
         shelf: b.shelfLifeDays !== undefined ? b.shelfLifeDays : existing.shelf_life_days,
         insp: b.requiresIncomingInspection != null ? (b.requiresIncomingInspection ? 1 : 0) : existing.requires_incoming_inspection,
         hs: b.hsCode ?? existing.hs_code, sup_id: b.defaultSupplierId !== undefined ? b.defaultSupplierId : existing.default_supplier_id,
-        supplier: b.supplier ?? existing.supplier, description: b.description ?? existing.description
+        supplier: b.supplier ?? existing.supplier, description: b.description ?? existing.description,
+        procurement_type: b.procurementType ?? existing.procurement_type
       });
 
       if (b.bom) writeBom(existing.id, b.bom);

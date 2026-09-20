@@ -1,0 +1,109 @@
+
+> dream-plus@2.0.0 lint
+> eslint .
+
+
+C:\Projelerim\Dream\dream-plus\docs\analiz-2026-09-19\kanitlar\reproduce.cjs
+  84:9  warning  'rule' is assigned a value but never used   no-unused-vars
+  96:9  warning  'again' is assigned a value but never used  no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\frontend-react\CountsView.jsx
+  15:28  warning  'card' is assigned a value but never used  no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\frontend-react\ItemsView.jsx
+  28:24  warning  'card' is assigned a value but never used  no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\frontend-react\LotsView.jsx
+  137:11  warning  'card' is assigned a value but never used  no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\frontend-react\ProductionView.jsx
+  11:28  warning  'card' is assigned a value but never used  no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\frontend-react\SalesView.jsx
+  10:40  warning  'ts' is assigned a value but never used  no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\public\js\api.js
+  2:7  warning  'Api' is assigned a value but never used  no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\public\js\app.js
+  2:7  warning  'App' is assigned a value but never used  no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\public\js\i18n.js
+  2:7  warning  'I18N' is assigned a value but never used  no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\public\js\ui.js
+  2:7  warning  'UI' is assigned a value but never used  no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\server\middleware\auth.js
+  4:9  warning  'AppError' is assigned a value but never used  no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\server\routes\documents.js
+   8:9   warning  'validate' is assigned a value but never used       no-unused-vars
+   8:19  warning  'z' is assigned a value but never used              no-unused-vars
+  10:7   warning  'notifications' is assigned a value but never used  no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\server\routes\reports.js
+  15:10  warning  'daysAgoStr' is defined but never used  no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\server\routes\sales.js
+  6:53  warning  'toBase' is assigned a value but never used  no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\server\seed.js
+   77:11  warning  'cusEge' is assigned a value but never used     no-unused-vars
+  147:11  warning  'lotSomun2' is assigned a value but never used  no-unused-vars
+  150:11  warning  'lotSac1' is assigned a value but never used    no-unused-vars
+  152:11  warning  'lotYag' is assigned a value but never used     no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\server\services\import-commit.js
+  12:25  warning  'logAudit' is assigned a value but never used  no-unused-vars
+  17:7   warning  'lower' is assigned a value but never used     no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\server\services\mrp.js
+   19:7   warning  'DAY' is assigned a value but never used    no-unused-vars
+  116:13  warning  'gross' is assigned a value but never used  no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\server\services\notifications.js
+  2:15  warning  'getSetting' is assigned a value but never used  no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\test\data-health.js
+  79:9  warning  'noSupplier' is assigned a value but never used  no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\test\dates.js
+  12:66  warning  'DAY_MS' is assigned a value but never used  no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\test\e2e.js
+  276:9  warning  'beforeName' is assigned a value but never used  no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\test\faz0-verify\b1a-sales.js
+  118:49  error  This number literal will lose precision at runtime  no-loss-of-precision
+
+C:\Projelerim\Dream\dream-plus\test\faz0-verify\b1b-stock.js
+   40:11  warning  'a' is assigned a value but never used       no-unused-vars
+   49:13  warning  'before' is assigned a value but never used  no-unused-vars
+   71:11  warning  'a' is assigned a value but never used       no-unused-vars
+  272:13  warning  'c1' is assigned a value but never used      no-unused-vars
+  277:18  warning  'c1' is assigned a value but never used      no-unused-vars
+  334:39  warning  'fin' is assigned a value but never used     no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\test\faz0-verify\b2-purch-auth.js
+  257:11  warning  'u' is assigned a value but never used   no-unused-vars
+  271:13  warning  'u2' is assigned a value but never used  no-unused-vars
+  356:11  warning  'it' is assigned a value but never used  no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\test\faz0-verify\b3-sweep.js
+   4:21  warning  'ok' is assigned a value but never used    no-unused-vars
+  98:9   warning  'seen' is assigned a value but never used  no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\test\faz0-verify\b4a-misc.js
+   6:25  warning  'snap' is assigned a value but never used    no-unused-vars
+  12:9   warning  'sups' is assigned a value but never used    no-unused-vars
+  38:11  warning  'before' is assigned a value but never used  no-unused-vars
+  48:11  warning  'p' is assigned a value but never used       no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\test\faz0-verify\b4c-ops.js
+  328:64  warning  'src' is assigned a value but never used  no-unused-vars
+
+C:\Projelerim\Dream\dream-plus\test\faz0-verify\lib.js
+  49:7  error  The value assigned to 'data' is not used in subsequent statements  no-useless-assignment
+
+✖ 47 problems (2 errors, 45 warnings)

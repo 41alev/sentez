@@ -706,12 +706,66 @@ export default function PurchasingView() {
             ${field(t('invoiceAmount'), input('ivAmt', { type: 'number', min: 0, step: '0.01' }))}
             ${field(t('currency'), select('ivCur', [{ v: 'TRY', l: 'TRY' }, { v: 'USD', l: 'USD' }, { v: 'EUR', l: 'EUR' }], 'TRY'))}
           </div>
-          ${field(t('date'), input('ivDate', { type: 'date', value: UI.today() }))}`,
+          ${field(t('date'), input('ivDate', { type: 'date', value: UI.today() }))}
+          <div id="ivReceiptLines" aria-live="polite"></div>`,
         footer: `<button class="btn btn-ghost" data-close>${t('cancel')}</button><button class="btn btn-primary" id="ivGo">${t('save')}</button>`,
         onOpen: (box) => {
+          let availableLines = [];
+          let loadVersion = 0;
+          const loadLines = async () => {
+            const version = ++loadVersion;
+            const host = box.querySelector('#ivReceiptLines');
+            const save = box.querySelector('#ivGo');
+            availableLines = [];
+            save.disabled = true;
+            host.textContent = UI.getLang() === 'tr' ? 'Teslim satırları yükleniyor…' : 'Loading receipt lines…';
+            try {
+              const result = await Api.supplierInvoiceReceivableLines(val('ivPo'));
+              if (version !== loadVersion) return;
+              availableLines = result.lines.filter(line => line.availableQty > 0);
+              if (result.legacy) {
+                host.textContent = UI.getLang() === 'tr'
+                  ? 'Bu siparişte eski eşleştirilmemiş faturalar var; yeni fatura öncesi mutabakat gerekir.'
+                  : 'Legacy invoices on this order require reconciliation before new billing.';
+                availableLines = [];
+                return;
+              }
+              if (!availableLines.length) {
+                host.textContent = UI.getLang() === 'tr'
+                  ? 'Faturalanmamış teslim satırı yok. Fatura fark olarak kaydedilir.'
+                  : 'No uninvoiced receipt lines. Invoice will be recorded as a discrepancy.';
+                save.disabled = false;
+                return;
+              }
+              host.innerHTML = `<p>${UI.getLang() === 'tr' ? 'Faturalandırılacak teslim miktarı' : 'Receipt quantity to invoice'}</p>
+                ${availableLines.map(line => `<label class="field" style="display:block">
+                  <span>${esc(line.receiptNo)} · ${esc(line.itemName)} (${num(line.availableQty, 3)} ${UI.getLang() === 'tr' ? 'kalan' : 'available'})</span>
+                  <input type="number" class="iv-line-qty" data-line-id="${line.receiptLineId}"
+                    min="0" max="${line.availableQty}" step="any" value="${line.availableQty}">
+                  <span>${UI.getLang() === 'tr' ? 'KDV oranı (%)' : 'VAT rate (%)'}</span>
+                  <input type="number" class="iv-line-vat" data-line-id="${line.receiptLineId}"
+                    min="0" max="100" step="any" value="${line.vatRate ?? ''}">
+                </label>`).join('')}`;
+              save.disabled = false;
+            } catch (e) { if (version === loadVersion) { availableLines = []; host.textContent = e.message; } }
+          };
+          box.querySelector('#ivPo').addEventListener('change', loadLines);
+          loadLines();
           box.querySelector('#ivGo').onclick = async () => {
             try {
-              await Api.createSupplierInvoice({ poId: val('ivPo'), invoiceNo: val('ivNo'), amount: numVal('ivAmt'), currency: val('ivCur'), invoiceDate: val('ivDate') });
+              const lines = availableLines.map(line => {
+                const qty = Number(box.querySelector(`.iv-line-qty[data-line-id="${line.receiptLineId}"]`)?.value || 0);
+                const vatInput = box.querySelector(`.iv-line-vat[data-line-id="${line.receiptLineId}"]`)?.value;
+                if (qty > 0 && (vatInput === '' || !Number.isFinite(Number(vatInput)) || Number(vatInput) < 0 || Number(vatInput) > 100)) {
+                  throw new Error(UI.getLang() === 'tr' ? 'Her satıra 0–100 arası KDV oranı girin.' : 'Enter a VAT rate from 0 to 100 for each line.');
+                }
+                return { receiptLineId: line.receiptLineId, qty, vatRate: Number(vatInput) };
+              })
+                .filter(line => line.qty > 0);
+              if (availableLines.length && !lines.length) throw new Error(UI.getLang() === 'tr'
+                ? 'En az bir teslim satırı miktarı girin.' : 'Enter a quantity for at least one receipt line.');
+              await Api.createSupplierInvoice({ poId: val('ivPo'), invoiceNo: val('ivNo'), amount: numVal('ivAmt'),
+                currency: val('ivCur'), invoiceDate: val('ivDate'), ...(lines.length ? { lines } : {}) });
               closeModal(); UI.ok(t('saved')); reload();
             } catch (e) { UI.err(e); }
           };

@@ -12,12 +12,9 @@
  *
  * Alış tarafı: supplier_invoices yalnızca KDV HARİÇ tek bir `amount` tutuyor
  * (bkz. routes/purchasing.js — 3'lü eşleştirme net tutar üzerinden yapılıyor).
- * KDV ayrı saklanmadığı için, faturanın bağlı olduğu satın alma siparişinin
- * kalemlerindeki ürünlerin `items.vat_rate` değeri, kalem tutarına göre
- * AĞIRLIKLI ORTALAMA alınarak KDV oranı türetilir. Bu bir varsayımdır —
- * KDV oranı satın alma faturasında ayrıca saklanmadığı sürece kesin değer
- * bilinemez; çoğu sipariş tek bir KDV oranı taşıdığı için pratikte doğru
- * sonuç verir.
+ * Yeni faturalar teslim satırlarının fatura anındaki fiyat/kur/KDV oranı
+ * snapshot'ını kullanır. Eski faturalar için satır eşleşmesi bilinmediğinden
+ * PO ürünlerinden ağırlıklı oran tahmini sürer; bu kesin vergi kaydı değildir.
  */
 const db = require('../db');
 const { AppError } = require('../lib/core');
@@ -94,7 +91,13 @@ function generateJournalEntries({ from, to, companyId = 1 }) {
   purchases.forEach(inv => {
     const rate = inv.fx_rate || 1;
     const netBase = Math.round(inv.amount * rate * 100) / 100;
-    const vatRate = purchaseVatRate(inv.po_id);
+    const snapshots = inv.allocation_state === 'recorded'
+      ? db.prepare(`SELECT qty,unit_price,fx_rate,vat_rate FROM supplier_invoice_allocations
+        WHERE invoice_id=?`).all(inv.id) : [];
+    const snapshotBase = snapshots.reduce((sum, line) => sum + line.qty * line.unit_price * line.fx_rate, 0);
+    const vatRate = snapshotBase > 0
+      ? snapshots.reduce((sum, line) => sum + line.qty * line.unit_price * line.fx_rate * line.vat_rate, 0) / snapshotBase
+      : purchaseVatRate(inv.po_id);
     const vatBase = Math.round(netBase * (vatRate / 100) * 100) / 100;
     const grossBase = Math.round((netBase + vatBase) * 100) / 100;
     const desc = `Alış faturası ${inv.invoice_no} — ${inv.supplier_name || ''}`;

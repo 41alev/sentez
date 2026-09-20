@@ -22,3 +22,23 @@ test.describe('Ürünler — stok girişi (uçtan uca gerçek sunucuya karşı)'
     await expect(page.locator('.toast.ok, .toast.show')).toBeVisible({ timeout: 10000 });
   });
 });
+
+test('ürün formunda üret/satın al seçimi API ve kartta korunuyor', async ({ page }) => {
+  await login(page);
+  await goToView(page, 'items');
+  await page.click('#itNew');
+  await page.fill('#iName', 'Tarayıcı MRP Mamulü');
+  await page.fill('#iCode', 'BROWSER-MRP-MAKE');
+  await page.selectOption('#iType', 'finished');
+  await page.selectOption('#iProcurement', 'make');
+  const created = page.waitForResponse(r => r.url().endsWith('/api/items') && r.request().method() === 'POST');
+  await page.click('#iSave');
+  const response = await created;
+  expect(response.status()).toBe(201);
+  const item = await response.json();
+  expect(item.procurementType).toBe('make');
+  const token = await page.evaluate(() => localStorage.getItem('dt_token'));
+  const persisted = await (await page.request.get(`/api/items/${item.id}`,
+    { headers: { Authorization: `Bearer ${token}` } })).json();
+  expect(persisted.procurementType).toBe('make');
+});

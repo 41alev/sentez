@@ -96,7 +96,9 @@ if (userCount === 0) {
 const app = express();
 // Sunucu teknolojisini duyurmak saldırgana bedava bilgi verir.
 app.disable('x-powered-by');
-app.set('trust proxy', 1);
+// Direct installations must not accept a client-supplied X-Forwarded-For as an IP.
+// When deployed behind a trusted reverse proxy, configure its network explicitly.
+app.set('trust proxy', process.env.TRUST_PROXY || false);
 app.use(express.json({ limit: '2mb' }));
 
 // CORS: locked to configured origins in production, permissive in development.

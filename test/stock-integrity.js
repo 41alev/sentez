@@ -160,5 +160,23 @@ async function main() {
   assert.equal(rejected.status, 'rejected');
   assert.equal(rejected.parent_lot_id, qlot.id);
   console.log('✓ F10: contradictory decisions roll back; partial acceptance links NCR to rejected stock');
+
+  const scrapped = await success('POST', `/quality/ncrs/${ncr.id}/disposition`, { disposition: 'scrap' });
+  assert.equal(scrapped.ok, true);
+  assert.equal(db.prepare('SELECT qty FROM stock_lots WHERE id=?').get(rejected.id).qty, 0);
+  assert.equal(db.prepare('SELECT qty FROM stock_lots WHERE id=?').get(qlot.id).qty, 1);
+  const scrapMove = db.prepare("SELECT lot_id,qty,from_status FROM movements WHERE ref_type='ncr' AND ref_id=? AND type='out'").get(ncr.id);
+  assert.deepEqual(scrapMove, { lot_id: rejected.id, qty: 9, from_status: 'rejected' });
+  const afterScrap = snapshot();
+  assert.equal((await api('POST', `/quality/ncrs/${ncr.id}/disposition`, { disposition: 'scrap' })).status, 409);
+  assert.deepEqual(snapshot(), afterScrap);
+  console.log('✓ NCR scrap consumes only its rejected lot, exactly once');
+
+  db.prepare('UPDATE stock_lots SET expiry_date=? WHERE id=?').run('2020-01-01', qlot.id);
+  assert.equal(db.prepare('SELECT qty_cache FROM items WHERE id=?').get(q.id).qty_cache, 1);
+  await success('POST', '/data-health/check/expired_available/fix', {});
+  assert.equal(db.prepare('SELECT status FROM stock_lots WHERE id=?').get(qlot.id).status, 'blocked');
+  assert.equal(db.prepare('SELECT qty_cache FROM items WHERE id=?').get(q.id).qty_cache, 0);
+  console.log('✓ Expired lot health fix blocks stock and recalculates available quantity');
 }
 main().catch(err => { console.error(err); process.exitCode = 1; }).finally(() => db.close());

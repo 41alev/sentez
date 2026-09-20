@@ -16,6 +16,7 @@
 const db = require('../db');
 const { AppError, uuid } = require('../lib/core');
 const { today, addDays } = require('../lib/dates');
+const stock = require('./stock');
 
 const CHECKS = [];
 const check = (def) => CHECKS.push(def);
@@ -120,13 +121,10 @@ check({
       JOIN items i ON i.id = sl.item_id
       WHERE sl.status = 'available' AND sl.qty > 0
         AND sl.expiry_date IS NOT NULL AND sl.expiry_date < ?`).all(cutoffToday);
-    const upd = db.prepare("UPDATE stock_lots SET status = 'blocked' WHERE id = ?");
-    const mv = db.prepare(`INSERT INTO movements (id,item_id,item_name,lot_id,lot_no,warehouse_id,type,qty,
-        from_status,to_status,note,ref_type,ts) VALUES (?,?,?,?,?,?,'status_change',?, 'available','blocked',?,'data_health',?)`);
     lots.forEach(l => {
-      upd.run(l.id);
-      mv.run(uuid(), l.item_id, l.item_name, l.id, l.lot_no, l.warehouse_id, l.qty,
-        `Süresi geçmiş (SKT ${l.expiry_date}) — veri denetimi ile bloke edildi`, Date.now());
+      stock.changeLotStatus({ lotId: l.id, toStatus: 'blocked', qty: l.qty,
+        note: `Süresi geçmiş (SKT ${l.expiry_date}) — veri denetimi ile bloke edildi`,
+        refType: 'data_health', refId: null, userId: null });
     });
     return { updated: lots.length };
   }

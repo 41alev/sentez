@@ -303,6 +303,9 @@ router.post('/ncrs/:id/disposition', requirePermission('quality.write'), validat
   try {
     const ncr = db.prepare('SELECT * FROM ncrs WHERE id = ?').get(req.params.id);
     if (!ncr) throw new AppError('Uygunsuzluk bulunamadı / NCR not found', 404);
+    if (ncr.status !== 'open' || ncr.disposition !== 'pending') {
+      throw new AppError('Uygunsuzluk kararı zaten verilmiş / NCR already has a disposition', 409);
+    }
     const b = req.body;
 
     db.txImmediate(() => {
@@ -312,13 +315,19 @@ router.post('/ncrs/:id/disposition', requirePermission('quality.write'), validat
           stock.changeLotStatus({ lotId: lot.id, toStatus: 'available', note: `${ncr.ncr_no} · şartlı kabul`,
             userId: req.user.id, refType: 'ncr', refId: ncr.id });
         } else if (b.disposition === 'scrap') {
-          stock.issueStock({ itemId: lot.item_id, qty: Math.min(lot.qty, ncr.qty_affected || lot.qty),
-            warehouseId: lot.warehouse_id, refType: 'ncr', refId: ncr.id,
-            note: `${ncr.ncr_no} · hurdaya ayrıldı`, userId: req.user.id, allowPartial: true });
+          const qty = ncr.qty_affected == null ? lot.qty : ncr.qty_affected;
+          stock.consume([{ lotId: lot.id, qty }], {
+            itemId: ncr.item_id, itemName: ncr.item_name, warehouseId: lot.warehouse_id,
+            allowedStatuses: ['available', 'quarantine', 'blocked', 'rejected'],
+            refType: 'ncr', refId: ncr.id, note: `${ncr.ncr_no} · hurdaya ayrıldı`, userId: req.user.id
+          });
         } else if (b.disposition === 'rework' || b.disposition === 'return_to_supplier') {
           stock.changeLotStatus({ lotId: lot.id, toStatus: 'blocked', note: `${ncr.ncr_no} · ${b.disposition}`,
             userId: req.user.id, refType: 'ncr', refId: ncr.id });
         }
+      }
+      if (!lot && b.disposition === 'scrap') {
+        throw new AppError('Hurdaya ayrılacak parti bulunamadı / NCR lot not found', 422);
       }
       db.prepare(`UPDATE ncrs SET disposition=?, status='in_progress' WHERE id=?`).run(b.disposition, ncr.id);
       logAudit(req, 'auditNcrDisposition', { entityType: 'ncr', entityId: ncr.id,

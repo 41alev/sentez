@@ -1,0 +1,101 @@
+
+[KVKK] anonimleştirme kalıntı taraması (tüm tablolar/sütunlar)
+  i INFO KV-01b anonimleştirme sonrası kimlik kalıntısı olan tablo.sütunlar => {"sales_orders.customer_name":["KvkkFirmaXyz×1"],"shipments.destination":["KvkkSokak 42 Kadikoy×1"],"audit_log.new_value":["KvkkFirmaXyz×4","Ayse KvkkKisi×1","+90 555 111 22 33×1","kvkk.kisi@example.org×1","KvkkSokak 42 Kadikoy×2","99887766554×1"],"audit_log.detail":["KvkkFirmaXyz×2"],"opportunities
+  ✗ FAIL KV-01 müşteri anonimleştirilince kimlik bilgisi hiçbir tabloda kalmamalı (F21)
+       kalıntı: sales_orders.customer_name [KvkkFirmaXyz×1] | shipments.destination [KvkkSokak 42 Kadikoy×1] | audit_log.new_value [KvkkFirmaXyz×4,Ayse KvkkKisi×1,+90 555 111 22 33×1,kvkk.kisi@example.org×1,KvkkSokak 42 Kadikoy×2,99887766554×1] | audit_log.detail [KvkkFirmaXyz×2] | opportunities.customer_name [KvkkFirmaXyz×1] | opportunities.contact_person [Ayse KvkkKisi×1] | opportunities.phone [+90 555 111 22 33×1] | opportunities.email [kvkk.kisi@example.org×1] | support_tickets.customer_name [KvkkFirmaXyz×1] | support_tickets.subject [KvkkFirmaXyz×1] | support_tickets.description [Ayse KvkkKisi×1] | customer_visits.notes [Ayse KvkkKisi×1]
+
+       12 !== 0
+
+  i INFO KV-02b tedarikçi kalıntıları => {"purchase_orders.supplier_name":["KvkkTedarikciAbc×1"],"audit_log.new_value":["KvkkTedarikciAbc×2"],"audit_log.detail":["KvkkTedarikciAbc×2"]}
+  ✗ FAIL KV-02 tedarikçi anonimleştirilince kimlik bilgisi kalmamalı
+       kalıntı: purchase_orders.supplier_name [KvkkTedarikciAbc×1] | audit_log.new_value [KvkkTedarikciAbc×2] | audit_log.detail [KvkkTedarikciAbc×2]
+
+       3 !== 0
+
+  i INFO KV-03b kullanıcı kalıntıları => {"audit_log.username":["kvkkuserxyz×1"],"audit_log.new_value":["kvkkuserxyz×1"],"audit_log.detail":["kvkkuserxyz×2"]}
+  ✗ FAIL KV-03 kullanıcı anonimleştirilince kullanıcı adı/ad/e-posta hiçbir tabloda kalmamalı
+       kalıntı: audit_log.username [kvkkuserxyz×1] | audit_log.new_value [kvkkuserxyz×1] | audit_log.detail [kvkkuserxyz×2]
+
+       3 !== 0
+
+  ✓ KV-04 veri dışa aktarım (m.11/b) yalnız ilgili kişiye ait veriyi içerir ve yönetici dışı erişemez
+  i INFO KV-05b anonim müşteriyi düzenle => {"status":200}
+  ✗ FAIL KV-05 anonimleştirme geri alınamaz/tekrarlanamaz: ikinci çağrı 409; anonim kayıt düzenlenemez
+       anonimleştirilmiş kayıt yeniden kişisel veriyle doldurulabildi
+
+[DOC] doküman
+  ✓ DOC-01 yükleme: izinli tür 201 ve aynı içerikle iner; izinsiz tür 415; 21MB 413; boş gövde
+  i INFO DOC-02b png diye yüklenen HTML => {"status":201}
+  i INFO DOC-02c indirme => {"ct":"image/png","cd":"inline; filename=\"evil.png\"","nosniff":"nosniff"}
+  ✓ DOC-02 içerik doğrulaması: MIME beyanı sahte (png diye html) — kabul mü (bilgi); indirme başlıkları güvenli mi
+  i INFO DOC-03b REV-1 için güncel (superseded_by boş) belge sayısı => {"r3":201,"guncel":2,"ayrinti":[{"id":3,"revision":"1","superseded_by":5},{"id":4,"revision":"2","superseded_by":null},{"id":5,"revision":"2","superseded_by":null}]}
+  ✗ FAIL DOC-03 revizyon zinciri: aynı belgeden iki kez revize edilince tek güncel sürüm kalmalı
+       aynı belge no için 2 güncel sürüm var (zincir dallandı)
+
+       2 !== 1
+
+  i INFO DOC-04b silme sonrası dosya diskte mi => {"still":true}
+  ✗ FAIL DOC-04 silinen belgenin dosyası diskte kalmamalı; kontrollü belge silinemez
+       silinen belgenin dosyası diskte yetim kaldı
+
+       true !== false
+
+  ✓ DOC-05 yol/kimlik: yol geçişi (../), olmayan id, viewer yükleyemez
+
+[SEARCH] genel arama
+  i INFO SE-01b 'A_1' araması => ["Ürün AB1","Ürün A_1"]
+  i INFO SE-01c '%%' araması => {"items":6,"customers":6}
+  ✗ FAIL SE-01 LIKE joker karakterleri: % ve _ tam eşleşme gibi davranmalı; pasif kayıtlar
+       '_' joker olarak davrandı: 'A_1' araması 'AB1'i buldu
+  i INFO SE-02b pasif müşteri arandı => {"bulundu":1}
+  ✗ FAIL SE-02 pasif/anonim müşteri arama sonuçlarında görünmemeli
+       pasif müşteri aramada görünüyor
+
+       1 !== 0
+
+  ✓ SE-03 arama: 1 karakter boş, 10.000 karakter/özel karakter 500 vermez; yetkisiz 401
+
+[WEBHOOK] webhook
+  ✓ WH-01 olay teslimatı: imza (HMAC-SHA256) doğru, başlıklar ve gövde biçimi
+  ✓ WH-02 olaylar: yalnız abone olunan olay gider; pasif webhook gitmez
+  i INFO WH-03b başarısız teslimat kayıtları => {"toplamKayit":6,"basarisiz":5,"alinan":5,"sonrakiDenemeBekleyen":1}
+  ✓ WH-03 başarısız teslimat: hata kaydedilir, otomatik yeniden deneme sınırlıdır (dead-letter)
+  i INFO WH-04b webhook hedef URL kabul durumu => {"http://127.0.0.1:1/x":201,"http://169.254.169.254/latest/meta-data":201,"http://localhost/x":201,"file:///etc/passwd":201,"ftp://x/y":201,"javascript:alert(1)":201,"http://[::1]/x":201}
+  ✓ WH-04 SSRF: iç ağ/loopback/link-local ve garip şemalar hedef olarak kabul ediliyor mu (yalnız admin)
+  ✓ WH-05 webhook yönetimi yalnız admin; secret yenileme eskiyi geçersiz kılar
+
+[LABEL] etiket (ZPL)
+  i INFO LB-01b ZPL çıktısı (ilk 400 karakter) => ^XA
+^CI28
+^PW799
+^LL559
+^FO24,24^A0N,32,32^FB751,2,0,L,0^FDVida\5EFO0,0\5EFDHACK\5EFS\7EJA^FS
+^FO24,112^A0N,20,20^FDZPL\5E1^FS
+^FO24,164^A0N,20,20^FDBirim: adet^FS
+^FO24,216^A0N,20,20^FDKategori: Genel^FS
+^FO24,268^BY2,2,235
+^BCN,235,Y,N,N
+^FD123^FS
+^PQ1
+^XZ
+  ✓ LB-01 ZPL: ürün adındaki ^ ve ~ komut karakterleri etikete komut enjekte edemez
+  i INFO LB-02b print olmayan ürün => {"status":422}
+  ✓ LB-02 etiket: olmayan ürün/lot 404; yazdırma ucu geçersiz IP/port ile 500 vermez
+
+[NOTIF] bildirim
+  i INFO NT-01b tarama sonuçları => {"ilk":9,"ikinci":9}
+  i INFO NT-01c viewer "tümünü oku" sonrası admin okunmamış sayısı => {"once":9,"sonra":0}
+  ✓ NT-01 bildirim taraması: ikinci tarama aynı uyarıyı tekrar üretmez; okundu durumu kullanıcıya özgü mü
+
+[TEMPLATE] şablon ve firma kimliği
+  i INFO TP-01b name='' gönderildi => {"status":200,"ad":""}
+  ✗ FAIL TP-01 firma kimliği kısmi güncelleme: gönderilmeyen alanlar korunur; boş ad reddedilir
+       firma adı boşa çekilebiliyor (yazdırma başlığı boş kalır)
+  i INFO TP-02a logo ucuna yanlış alan adıyla ('file') yükleme => {"status":500}
+  i INFO TP-02b script içeren SVG logo => {"status":201}
+  ✗ FAIL TP-02 logo: PNG kabul; 513KB 413; yanlış tür 415; SVG içinde script saklanabiliyor mu (bilgi)
+       beklenmeyen multipart alanı 500 döndü (400 beklenirdi)
+  ✓ TP-03 şablon: kısmi güncelleme diğer alanları korur; geçersiz değerler reddedilir; sıfırlama çalışır
+
+=== b4a-misc: 14 geçti, 10 BAŞARISIZ, 0 HATA (toplam 44) ===
+(sonuçlar: C:\Projelerim\Dream\dream-plus\test\faz0-verify\results\b4a-misc.json )

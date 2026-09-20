@@ -1,0 +1,168 @@
+
+[PR/RFQ] talep ve teklif
+  i INFO PR-01b olmayan itemId => {"status":500}
+  ✗ FAIL PR-01 talep: geçersiz miktar/boş satır 4xx; olmayan ürün id ile (satır adıyla) kabul
+       500
+  i INFO PR-02b reddedilmiş talebi onayla => {"status":200}
+  i INFO PR-02c onaylı talebi reddet => {"status":200}
+  ✗ FAIL PR-02 talep onay/red: durum geçişi kontrolü (reddedilen sonra onaylanabilir mi, onaylı tekrar reddedilebilir mi)
+       reddedilmiş talep onaylanabildi (durum kontrolü yok)
+  i INFO PR-03b talep sahibi kendi talebini onaylar => {"status":200}
+  ✓ PR-03 talep: kendi talebini onaylama (dört göz) — mevcut davranış
+  i INFO PR-04b 'purchase_request' kuralı admin rolü şart koşarken müdür onaylar => {"status":200}
+  ✗ FAIL PR-04 talep onay kuralı (purchase_request eşiği) uygulanıyor mu
+       talep onay kuralı hiç uygulanmıyor
+
+       200 !== 403
+
+  i INFO RFQ-01b teklif doğrulama sonuçları => {"olmayanTedarikci":500,"rfqDisiUrun":201,"negatifFiyat":422,"olmayanUrun":500}
+  i INFO RFQ-01c RFQ ödüllendirme ucu => {"status":404}
+  ✗ FAIL RFQ-01 teklif: olmayan tedarikçi/ürün, RFQ dışı ürün, negatif fiyat; RFQ ödül/sipariş dönüşümü uçları
+       teklifte 500: {"olmayanTedarikci":500,"rfqDisiUrun":201,"negatifFiyat":422,"olmayanUrun":500}
+
+[PO] satın alma siparişi
+  i INFO PO-01b sipariş doğrulama sonuçları => {"olmayanUrun":500,"olmayanDepo":500,"olmayanTedarikci":404,"sifirMiktar":422,"negatifFiyat":422,"bosFiyat":201,"gecersizTarih":201}
+  ✗ FAIL PO-01 sipariş: olmayan ürün/depo/tedarikçi/pasif tedarikçi 4xx; negatif/0 miktar
+       sorunlu: olmayanUrun:500, olmayanDepo:500, bosFiyat:201, gecersizTarih:201
+
+       4 !== 0
+
+  ✓ PO-02 pasif (onaysız) tedarikçiye sipariş açılamaz
+  ✓ PO-03 onay: eşik altı/üstü, yetki limiti, çift onay, reddedilmiş onay
+  i INFO PO-04b müdür limiti / tutar 999999 => {"limit":250000,"status":403}
+  ✓ PO-04 onay limiti: personel limiti aşan tutar 403; limit 0 = limitsiz (kayıt)
+  i INFO PO-05b kısmen teslim alınmış siparişi reddet => {"http":200,"durum":{"status":"rejected","approval_status":"rejected"}}
+  ✗ FAIL PO-05 red: onaylanmış/teslim alınmış siparişi reddetmek durumu bozmamalı
+       kısmen teslim alınmış sipariş reddedilebildi → durum rejected
+  i INFO PO-06b iptal/kapat/düzenle/sil => {"POST cancel":404,"POST close":404,"PUT b5b1cb66-ea2e-4877-b59d-bb4caaace423":404,"DELETE b5b1cb66-ea2e-4877-b59d-bb4caaace423":404}
+  ✓ PO-06 sipariş iptal/kapatma/düzenleme uçları var mı (bilgi)
+
+[RECEIPT] mal kabul
+  ✓ RC-01 mal kabul: fazla teslim tolerans, kalan, statü geçişleri, 0/negatif miktar, başka siparişin kalemi
+  i INFO RC-02b expiryDate='abc' => {"status":201}
+  ✗ FAIL RC-02 mal kabul: siparişte depo yoksa 422; geçersiz son kullanma tarihi kabul mü
+       geçersiz son kullanma tarihi kabul edildi
+  ✓ RC-03 kalite muayenesi gerektiren ürün karantinaya girer; kullanılabilir stok artmaz
+  ✓ RC-04 eşzamanlı iki mal kabul aynı satırı toleransın üstüne çıkaramaz
+  i INFO RC-05b operator mal kabul => {"status":201}
+  ✓ RC-05 mal kabul rolleri: viewer/quality 403; operator izin (kayıt)
+  i INFO RC-06b mal kabul iptal uçları => {"DELETE/purchasing/receipts/x":404,"POST/purchasing/receipts/x/cancel":404,"POST/purchasing/receipts/x/reverse":404}
+  ✓ RC-06 yanlış mal kabulü geri alma/düzeltme yolu var mı (bilgi)
+
+[LANDED] ek maliyet
+  i INFO LC-01b tohum irsaliyesine ek maliyet => {"status":409,"body":"Tüketilmiş veya geçmiş maliyeti belirsiz teslimat için maliyet mutabakatı gerekli / Consumed or historical receipt requires cost reconciliation"}
+  ✗ FAIL LC-01 demo tohumundaki mal kabul (IRS-2026-001) yeni ek maliyet kabul ediyor mu
+       demo tohum irsaliyesine ek maliyet eklenemiyor: {"error":"Tüketilmiş veya geçmiş maliyeti belirsiz teslimat için maliyet mutabakatı gerekli / Consumed or historical receipt requires cost reconciliation","requestId":"185d6857-4de9-4238-8e01-fa1b93e1
+
+       409 !== 201
+
+  i INFO LC-02b amount='' => {"status":201}
+  ✗ FAIL LC-02 ek maliyet: negatif/boş tutar, olmayan irsaliye, aynı iş iki kez
+       boş ek maliyet tutarı kabul edildi
+  ✓ LC-03 ek maliyet USD: masraf kuruyla çevrilir ve tahsis toplamı tutar
+
+[SUP-INV] tedarikçi faturası / 3'lü eşleştirme
+  i INFO SI-01b karma döviz 3lü eşleştirme => {"receivedBase":1380,"beklenen":1434,"fark":-54,"durum":"discrepancy"}
+  ✗ FAIL SI-01 karma dövizli siparişte alınan tutar satır kuruyla hesaplanmalı
+       alınan tutar 1380 beklenen 1434
+  i INFO SI-02b fatura doğrulama => {"ilk":201,"mukerrer":201,"baskaSiparisIrsaliyesi":201,"gecersizTarih":500}
+  ✗ FAIL SI-02 fatura: mükerrer fatura no (aynı tedarikçi), başka siparişin irsaliyesi, geçersiz tarih
+       aynı fatura no ikinci kez kabul edildi (mükerrer ödeme riski)
+
+       false !== true
+
+  i INFO SI-03b ödeme uçları => {"POSTapprove":404,"POSTpay":404,"PATCHstatus":404}
+  ✓ SI-03 tedarikçi faturası durum ilerletme/ödeme uçları (bilgi)
+  ✓ SI-04 tolerans: %2 içi eşleşir, dışı uyuşmazlık
+
+[FX] kur
+  i INFO FX-01b {"currency":"USD","rate":0} => {"status":422}
+  i INFO FX-01b {"currency":"USD","rate":-1} => {"status":422}
+  i INFO FX-01b {"currency":"USD","rate":"x"} => {"status":422}
+  i INFO FX-01b {"currency":"ABC","rate":1} => {"status":422}
+  i INFO FX-01b {"currency":"USD","rate":34,"rateDate":"2026-99-99"} => {"status":201}
+  ✗ FAIL FX-01 kur girişi: geçersiz tarih/oran; geçmiş kur değişince mevcut belge değişmez
+       geçersiz takvim tarihi kur olarak kaydedildi
+  i INFO FX-02b aşırı kurlar => {"kucuk":201,"buyuk":201}
+  ✓ FX-02 uçtan uç kur uygunsuzluğu: aşırı oranlar (0.0000001 / 1e12) kabul mü (bilgi)
+
+[AUTH] kimlik
+  i INFO AU-01b pasif kullanıcı doğru şifre => {"status":403,"mesaj":"Hesap pasif durumda / Account is disabled"}
+  ✗ FAIL AU-01 giriş: yanlış şifre 401, olmayan kullanıcı 401 (aynı mesaj), pasif kullanıcı ve kilit yanıtları ayırt edilebilir mi
+       pasif kullanıcı 403 döndürdü: kullanıcı adı varlığı sızıyor
+
+       false !== true
+
+  i INFO AU-02b kilit bittikten sonra 1 yanlış + 1 doğru deneme => {"yanlis":401,"dogru":429}
+  ✗ FAIL AU-02 kilitlenme: 5 hata → kilit; kilit bitince TEK yanlış deneme yeniden kilitlemesin
+       kilit süresi bittikten sonra tek yanlış deneme hesabı yeniden kilitledi (sayaç sıfırlanmıyor)
+
+       429 !== 200
+
+  i INFO AU-03b aynı şifreye değiştirme => {"status":200}
+  ✗ FAIL AU-03 şifre değiştirme: yanlış mevcut şifre 400; aynı şifreyle "değiştirme" zorunlu değişimi atlatmamalı
+       zorunlu şifre değişimi aynı şifreyle atlatılabiliyor
+  i INFO AU-04b yönetici (create) vs kendi değişimi => {"admin":{"12345678":400,"abcdefgh":400,"Abcdefgh":201,"abcdefg!":201,"abcdefg1":201,"Password1":201,"aaaaaaaa1":201},"self":{"12345678":422,"abcdefgh":422,"Abcdefgh":422,"abcdefg!":422,"abcdefg1":200,"Password1":200,"aaaaaaaa1":200}}
+  ✗ FAIL AU-04 şifre politikası tutarlılığı: yönetici belirlemesi ile kendi değişimi aynı kuralları uygular
+       tutarsız politika: Abcdefgh, abcdefg!
+
+       2 !== 0
+
+  ✓ AU-05 oturum: çıkış sonrası token 401; şifre sıfırlanınca eski oturumlar düşer; pasif kullanıcı token 401
+  ✗ FAIL AU-06 sahte/bozuk token: none alg, süresi geçmiş, başka imza, boş, çok uzun
+       cokUzun -> 431
+
+       431 !== 401
+
+  ✓ AU-07 JWT içindeki rol/kimlik yerine DB kullanılıyor: rol düşürülünce mevcut token yetkisini kaybeder
+
+[ADMIN] yönetim
+  i INFO AD-01b 'Admin' (büyük harf) kullanıcı adı => {"status":201}
+  ✗ FAIL AD-01 kullanıcı: son admin korunur, kendini silemez, mükerrer/benzer kullanıcı adı, e-posta doğrulama
+       'Admin' ile 'admin' ayrı kullanıcı olarak oluşturulabiliyor (karışıklık/taklit riski)
+
+       201 !== 409
+
+  i INFO AD-02b yönetim uçları rol matrisi => {"viewer":{"GET /users":403,"POST /users":403,"GET /audit":200,"GET /settings":200,"PUT /settings":403,"POST /approval-rules":403,"GET /notification-rules":200,"GET /approval-rules":200,"POST /exchange-rates":403,"GET /warehouses":200},"operator":{"GET /users":403,"POST /users":403,"GET /audit":200,
+  ✗ FAIL AD-02 yetki: yönetim uçları yalnız admin/manager; viewer/operator/quality kapalı
+       viewer rolü şunları okuyabiliyor: GET /audit, GET /settings, GET /notification-rules, GET /approval-rules
+
+       4 !== 0
+
+  i INFO AD-03b {"defaultVatRate":"abc"} => {"status":200,"okunan":{"defaultVatRate":null}}
+  i INFO AD-03b {"defaultVatRate":-5} => {"status":200,"okunan":{"defaultVatRate":-5}}
+  i INFO AD-03b {"defaultVatRate":1000000000} => {"status":200,"okunan":{"defaultVatRate":1000000000}}
+  i INFO AD-03b {"baseCurrency":"ZZZ"} => {"status":200,"okunan":{"baseCurrency":"ZZZ"}}
+  i INFO AD-03b {"expiryWarningDays":"x"} => {"status":200,"okunan":{"expiryWarningDays":null}}
+  i INFO AD-03b {"defaultLaborRate":-1} => {"status":200,"okunan":{"defaultLaborRate":-1}}
+  i INFO AD-03b {"labelPrinterPort":99999} => {"status":200,"okunan":{"labelPrinterPort":99999}}
+  i INFO AD-03b {"companyName":""} => {"status":200,"okunan":{"companyName":"Dream Plus"}}
+  ✗ FAIL AD-03 ayarlar doğrulaması: geçersiz değerler kaydedilmemeli (KDV, para birimi, sayılar)
+       doğrulanmadan kaydedilenler: {"defaultVatRate":"abc"} | {"defaultVatRate":-5} | {"defaultVatRate":1000000000} | {"baseCurrency":"ZZZ"} | {"expiryWarningDays":"x"} | {"defaultLaborRate":-1} | {"labelPrinterPort":99999} | {"companyName":""}
+
+       8 !== 0
+
+  i INFO AD-04b defaultVatRate='abc' iken KDV'siz-belirtilmemiş kalemli fatura => {"status":500,"err":{"error":"Sunucu hatası / Server error","requestId":"26edc166-f641-409a-8184-4738face9176"}}
+  ✗ FAIL AD-04 bozuk KDV ayarı faturalamayı bozar mı (NaN)
+       fatura tutarı undefined (HTTP 500)
+  i INFO AD-05b false / 0 / "0" gönderimi sonucu => {"false":true,"sifir":false,"metinSifir":false}
+  ✗ FAIL AD-05 boolean ayarlar: false gönderilince kapanıyor mu (lowStockCheckEnabled)
+       JSON false ayarı kapatmıyor
+
+       true !== false
+
+  i INFO AD-06b PUT name='' => {"status":200,"ad":""}
+  i INFO AD-06c PUT name=obje => {"status":500}
+  i INFO AD-06d stoklu depoyu pasifleştir => {"status":200}
+  ✗ FAIL AD-06 depo: boş ad, tipsiz gövde, stoklu depoyu pasifleştirme
+       boş depo adı kabul edildi
+  ✓ AD-07 onay kuralı/bildirim kuralı: geçersiz değerler ve silme sonrası davranış
+  i INFO AD-08b approvalLimit=1e300 => {"status":200}
+  ✓ AD-08 kullanıcı güncelleme: geçersiz e-posta, onay limiti NaN/negatif/çok büyük, uzun ad
+  ✓ AD-09 denetim kaydı: yazma işlemleri kayıt bırakır; kayıtlar silinemez/değiştirilemez uç yok
+
+[INVARIANTS]
+  ✓ INV-ALL küresel değişmezler
+
+=== b2-purch-auth: 20 geçti, 23 BAŞARISIZ, 0 HATA (toplam 88) ===
+(sonuçlar: C:\Projelerim\Dream\dream-plus\test\faz0-verify\results\b2-purch-auth.json )

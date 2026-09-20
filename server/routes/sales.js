@@ -10,6 +10,7 @@ const { dispatchEvent } = require('../lib/webhooks');
 const { createSalesOrder } = require('../services/sales-orders');
 const { prepareInvoiceAllocation, saveInvoiceAllocation } = require('../services/invoice-allocation');
 const kvkk = require('../lib/kvkk');
+const { isValidLocalDate } = require('../lib/dates');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -126,7 +127,8 @@ router.get('/orders/:id', (req, res) => {
 
 const soSchema = z.object({
   customerId: z.coerce.number().int(),
-  date: z.string().max(1000).optional(), promisedDate: z.string().max(1000).optional(),
+  date: z.string().refine(isValidLocalDate, 'Geçerli tarih gerekli / Valid date required').optional(),
+  promisedDate: z.string().refine(isValidLocalDate, 'Geçerli tarih gerekli / Valid date required').optional(),
   currency: z.enum(['TRY', 'USD', 'EUR']).default('TRY'),
   incoterm: z.string().max(1000).optional(), notes: z.string().max(5000).optional(),
   lines: z.array(z.object({
@@ -189,7 +191,8 @@ const shipmentSchema = z.object({
   customerId: z.coerce.number().int().optional(),
   type: z.string().default('Yurt İçi'),
   carrier: z.string().max(1000).optional(), destination: z.string().min(1).max(200),
-  date: z.string().max(1000).optional(), incoterm: z.string().max(1000).optional(), trackingNo: z.string().max(1000).optional(),
+  date: z.string().refine(isValidLocalDate, 'Geçerli tarih gerekli / Valid date required').optional(),
+  incoterm: z.string().max(1000).optional(), trackingNo: z.string().max(1000).optional(),
   warehouseId: z.coerce.number().int().optional(),
   items: z.array(z.object({
     itemId: z.string().min(1).max(200),
@@ -342,7 +345,7 @@ router.get('/invoices', (req, res) => {
 const invoiceSchema = z.object({
   customerId: z.coerce.number().int(),
   soId: z.string().max(1000).optional(), shipmentId: z.string().max(1000).optional(),
-  invoiceDate: z.string().max(1000).optional(),
+  invoiceDate: z.string().refine(isValidLocalDate, 'Geçerli tarih gerekli / Valid date required').optional(),
   amount: z.coerce.number().min(0).optional(),
   currency: z.enum(['TRY', 'USD', 'EUR']).default('TRY'),
   invoiceType: z.enum(['satis', 'iade', 'tevkifat', 'istisna', 'ihrackayitli']).default('satis'),
@@ -469,11 +472,17 @@ router.get('/invoices/:id', (req, res) => {
 });
 
 router.post('/invoices/:id/pay', WRITE, (req, res) => {
-  const inv = db.prepare('SELECT * FROM customer_invoices WHERE id = ?').get(req.params.id);
-  if (!inv) throw new AppError('Fatura bulunamadı / Invoice not found', 404);
-  db.prepare("UPDATE customer_invoices SET status='paid' WHERE id = ?").run(inv.id);
-  logAudit(req, 'auditCustomerInvoicePaid', { entityType: 'customer_invoice', entityId: inv.id, detail: inv.invoice_no });
-  res.json({ ok: true });
+  const result = db.txImmediate(() => {
+    const inv = db.prepare('SELECT * FROM customer_invoices WHERE id = ?').get(req.params.id);
+    if (!inv) throw new AppError('Fatura bulunamadı / Invoice not found', 404);
+    if (inv.invoice_type === 'iade') throw new AppError('İade faturası tahsil edilemez / A credit note cannot be paid', 409);
+    if (inv.status === 'paid') return { ok: true, alreadyPaid: true };
+    if (inv.status !== 'issued') throw new AppError('Bu fatura tahsil edilemez / Invoice is not issued', 409);
+    db.prepare("UPDATE customer_invoices SET status='paid' WHERE id = ?").run(inv.id);
+    logAudit(req, 'auditCustomerInvoicePaid', { entityType: 'customer_invoice', entityId: inv.id, detail: inv.invoice_no });
+    return { ok: true };
+  });
+  res.json(result);
 });
 
 /* ============================ PROFITABILITY ============================ */

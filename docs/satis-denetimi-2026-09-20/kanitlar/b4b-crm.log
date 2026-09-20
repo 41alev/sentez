@@ -1,0 +1,54 @@
+
+[CRM] fırsat hunisi
+  i INFO CR-01a {"customerId":999999} => {"status":404}
+  i INFO CR-01a {"assignedTo":999999} => {"status":500}
+  ✗ FAIL CR-01 olmayan müşteri/atanan kullanıcı ile fırsat: 404/422 olmalı, 500 olmamalı; kısmi yazı yok
+       {"assignedTo":999999} → 500
+  i INFO CR-02b geçersiz tarih / null değer / hayalet ürün kalemi => {"tarih":201,"nullDeger":201,"hayaletKalem":500}
+  ✗ FAIL CR-02 geçersiz alanlar: negatif değer, olasılık>100, geçersiz kaynak, tarih formatı, olmayan kalem ürünü
+       estimatedCloseDate '2026-99-99' kabul edildi
+  i INFO CR-03b 'new' → 'won' doğrudan (teklif aşaması atlanarak) => {"stage":"won"}
+  ✓ CR-03 aşama akışı: geçersiz aşama 400/422, kayıp sebebi zorunlu, kapanmış fırsat yeniden açılamaz/düzenlenemez
+  i INFO CR-04b eşzamanlı çift dönüştürme => {"durumlar":[201,409],"yeniSiparis":1}
+  i INFO CR-04c pasife alınmış ürünlü kalemi dönüştür => {"status":201,"conv":{"converted_so_id":"75ca1b9d-6a9b-4a3f-b0b5-4a2e7913537a"}}
+  ✓ CR-04 dönüştürme: kazanılmamış 409, kalemsiz 422, müşterisiz 422, çift dönüştürme 409, tek sipariş
+  i INFO CR-05b anonim müşteri üzerinde işlemler => {"firsatOlustur":201,"talep":201,"ziyaret":201,"donusum":201}
+  ✗ FAIL CR-05 pasif/anonim müşteriye fırsat dönüştürme ve yeni fırsat/talep/ziyaret açılamamalı
+       anonim müşteriye kayıt açılabildi: talep=201 ziyaret=201 dönüşüm=201
+  i INFO CR-06b notes='' phone='' ile PUT sonrası => {"status":200,"notes":"","phone":""}
+  ✓ CR-06 kısmi güncelleme: alan temizlenebilir mi (COALESCE deseni) — notes/telefon boşaltma
+  i INFO CR-07b pageSize=100000&page=-5 => {"status":200,"pageSize":500,"n":8}
+  i INFO CR-07c q='%' => {"n":8}
+  ✓ CR-07 yetki: viewer yazamaz; liste sayfalama sınırları; q joker
+
+[SUP] destek talepleri
+  i INFO SP-01a {"customerId":999999} => {"status":404}
+  i INFO SP-01a {"assignedTo":999999} => {"status":500}
+  ✗ FAIL SP-01 talep: olmayan müşteri/kullanıcı 404/422; geçersiz enum 400/422; hayalet ilişkili kayıt kimlikleri
+       {"assignedTo":999999} → 500
+  i INFO SP-02b çözülmüş talep yeniden açıldı => {"resolvedAt":1789912207687,"resolution":"tamam"}
+  i INFO SP-02c kapalı talebe yorum => {"status":201}
+  ✗ FAIL SP-02 durum akışı: resolved için çözüm zorunlu; closed sonrası kilit; resolved→open sonrası resolved_at temizlenmeli
+       talep yeniden açıldı ama resolvedAt dolu kaldı (SLA/çözüm süresi raporunu bozar)
+  i INFO SP-03b eşzamanlı çift NCR dönüşümü => {"durumlar":[201,409],"yeniNcr":1}
+  i INFO SP-03c hayalet ürün/parti ile NCR => {"status":201,"ncr":{"item_id":null,"lot_id":null}}
+  ✓ SP-03 NCR dönüştürme: yalnız şikayet; müşterisiz 422; çift dönüşüm 409 (eşzamanlı dahil); hayalet ürün/parti
+  ✓ SP-04 yetki ve arama: viewer yazamaz; q ile LIKE jokerleri; yorum uzunluğu sınırı
+
+[VIS] ziyaretler
+  i INFO VZ-01b ziyaret tarihi kabul durumu => {"2026-13-45":201,"2026-02-30":201,"2099-01-01":201,"0001-01-01":201}
+  ✗ FAIL VZ-01 ziyaret tarihi: yalnız şekil regex — 2026-13-45, 2026-02-30 ve gelecek tarih kabul ediliyor mu
+       takvimde olmayan tarih kabul edildi: {"2026-13-45":201,"2026-02-30":201,"2099-01-01":201,"0001-01-01":201}
+  i INFO VZ-02a B müşterisinin ziyareti A müşterisinin fırsatına bağlandı => {"status":201}
+  i INFO VZ-02b takip tarihi ziyaret tarihinden önce => {"status":201}
+  i INFO VZ-02c {"latitude":91} => {"status":422}
+  i INFO VZ-02c {"longitude":181} => {"status":422}
+  i INFO VZ-02c {"latitude":"abc"} => {"status":422}
+  i INFO VZ-02c {"latitude":null} => {"status":201}
+  ✗ FAIL VZ-02 başka müşterinin fırsatına bağlı ziyaret; takip tarihi ziyaretten önce; koordinat sınırları
+       ziyaret farklı müşterinin fırsatına bağlanabildi
+  ✓ VZ-03 ziyaret silme yalnız yönetici/müdür; audit kaydı; olmayan id 404
+  i INFO INV küresel değişmezler => []
+
+=== b4b-crm: 7 geçti, 7 BAŞARISIZ, 0 HATA (toplam 38) ===
+(sonuçlar: C:\Projelerim\Dream\dream-plus\test\faz0-verify\results\b4b-crm.json )

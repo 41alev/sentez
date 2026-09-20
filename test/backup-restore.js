@@ -38,12 +38,18 @@ const { runMigrations } = require(path.join(ROOT, 'server', 'migrate'));
 const { seedIfEmpty } = require(path.join(ROOT, 'server', 'seed'));
 const backup = require(path.join(ROOT, 'server', 'scripts', 'backup'));
 const restore = require(path.join(ROOT, 'server', 'scripts', 'restore'));
+const full = require(path.join(ROOT, 'server', 'scripts', 'full-backup'));
 
 (async () => {
   console.log('=== HAZIRLIK / SETUP ===');
   console.log(`  geçici klasör / temp dir: ${tmpRoot}`);
   runMigrations({ silent: true });
   seedIfEmpty();
+  const uploadDir = path.join(tmpRoot, 'uploads');
+  fs.mkdirSync(uploadDir);
+  fs.writeFileSync(path.join(uploadDir, 'sample.txt'), 'document at backup time');
+  db.prepare('INSERT INTO documents(title,file_path,uploaded_at) VALUES (?,?,?)')
+    .run('Backup drill file', 'sample.txt', Date.now());
 
   const snap = () => ({
     items: db.prepare('SELECT COUNT(*) c FROM items').get().c,
@@ -56,6 +62,67 @@ const restore = require(path.join(ROOT, 'server', 'scripts', 'restore'));
 
   const before = snap();
   ok('veritabanı kuruldu ve dolduruldu', before.items > 0 && before.users === 5, JSON.stringify(before));
+
+  console.log('\n=== TAM YEDEK / FULL BACKUP ===');
+  const complete = await full.runFullBackup({ keep: 3 });
+  ok('DB ve yüklenen dosya bir arada paketlendi',
+    fs.existsSync(path.join(complete.file, 'database.sqlite')) &&
+    fs.existsSync(path.join(complete.file, 'uploads', 'sample.txt')));
+  ok('tam paket manifest ve veritabanı doğrulamasından geçiyor', full.verifyFullBackup(complete.file).ok);
+  const clean = path.join(tmpRoot, 'clean-target');
+  const cleanDb = path.join(clean, 'database.sqlite');
+  const cleanUploads = path.join(clean, 'uploads');
+  const completeRestore = full.restoreFullBackup(complete.file,
+    { destinationDb: cleanDb, destinationUploads: cleanUploads });
+  ok('boş dizine dosya ve DB beraber geri yüklenebiliyor', completeRestore.verification.ok &&
+    fs.readFileSync(path.join(cleanUploads, 'sample.txt'), 'utf8') === 'document at backup time');
+  const cleanConnection = new (require('better-sqlite3'))(cleanDb, { readonly: true });
+  ok('geri yüklenen DB dosyası yüklenen belgeye işaret ediyor',
+    cleanConnection.prepare('SELECT file_path FROM documents WHERE title=?').get('Backup drill file').file_path === 'sample.txt');
+  cleanConnection.close();
+  fs.writeFileSync(path.join(cleanUploads, 'sample.txt'), 'newer unsaved document');
+  const changedConnection = new (require('better-sqlite3'))(cleanDb);
+  changedConnection.prepare('UPDATE documents SET title=? WHERE file_path=?').run('Newer document', 'sample.txt');
+  changedConnection.close();
+  const realRename = fs.renameSync;
+  fs.renameSync = (source, destination) => {
+    if (destination === cleanUploads && source.includes('.restore-stage-')) throw new Error('simulated upload swap failure');
+    return realRename(source, destination);
+  };
+  let swapFailed = false;
+  try { full.restoreFullBackup(complete.file, { destinationDb: cleanDb, destinationUploads: cleanUploads }); }
+  catch (e) { swapFailed = /simulated upload swap failure/.test(e.message); }
+  finally { fs.renameSync = realRename; }
+  const unchangedConnection = new (require('better-sqlite3'))(cleanDb, { readonly: true });
+  ok('yarıda kesilen geri yükleme eski DB ve uploads çiftini koruyor', swapFailed &&
+    unchangedConnection.prepare('SELECT title FROM documents WHERE file_path=?').get('sample.txt').title === 'Newer document' &&
+    fs.readFileSync(path.join(cleanUploads, 'sample.txt'), 'utf8') === 'newer unsaved document');
+  unchangedConnection.close();
+  const replaced = full.restoreFullBackup(complete.file, { destinationDb: cleanDb, destinationUploads: cleanUploads });
+  ok('başarılı geri yükleme önceki DB ve dosyaları güvenlik kopyasında tutuyor',
+    fs.existsSync(replaced.safetyCopy) && fs.existsSync(path.join(replaced.uploadSafetyCopy, 'sample.txt')));
+  const { execFileSync } = require('node:child_process');
+  const fullScript = path.join(ROOT, 'server', 'scripts', 'full-backup.js');
+  const cliEnv = { ...process.env, DATA_DIR: clean, DB_PATH: cleanDb, UPLOAD_DIR: cleanUploads };
+  const verifiedCli = execFileSync(process.execPath, [fullScript, '--verify', complete.file],
+    { env: cliEnv, encoding: 'utf8' });
+  ok('ayrı süreçte tam paket doğrulama komutu çalışıyor', JSON.parse(verifiedCli).ok);
+  const restoredCli = execFileSync(process.execPath, [fullScript, '--restore', complete.file],
+    { env: cliEnv, encoding: 'utf8' });
+  ok('ayrı süreçte tam geri yükleme komutu çalışıyor', JSON.parse(restoredCli).verification.ok);
+  const bundleFile = path.join(complete.file, 'uploads', 'sample.txt');
+  const originalFile = fs.readFileSync(bundleFile);
+  fs.writeFileSync(bundleFile, 'tampered');
+  ok('bozuk dosya karması yakalanıyor', !full.verifyFullBackup(complete.file).ok);
+  let refusedBundle = false;
+  try { full.restoreFullBackup(complete.file, { destinationDb: cleanDb, destinationUploads: cleanUploads }); }
+  catch { refusedBundle = true; }
+  ok('bozuk tam paket mevcut kurtarılmış dosyaları değiştirmiyor', refusedBundle &&
+    fs.readFileSync(path.join(cleanUploads, 'sample.txt'), 'utf8') === 'document at backup time');
+  fs.writeFileSync(bundleFile, originalFile);
+  fs.unlinkSync(bundleFile);
+  ok('eksik dosyalı paket reddediliyor', !full.verifyFullBackup(complete.file).ok);
+  fs.writeFileSync(bundleFile, originalFile);
 
   console.log('\n=== 1. YEDEK ALMA / BACKUP ===');
   const b = await backup.runBackup({ keep: 5 });

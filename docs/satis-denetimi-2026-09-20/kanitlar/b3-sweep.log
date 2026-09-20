@@ -1,0 +1,28 @@
+  i INFO SW-00 keşfedilen uç nokta sayısı => {"toplam":232,"mobilHaric":227}
+  ✓ SW-01 kimlik doğrulama: herkese açık olmayan HER uç nokta tokensiz 401 döner
+  ✓ SW-02 HTTP yöntemleri: tanımsız yöntemler 404/405 (500 değil); OPTIONS/HEAD güvenli
+  ✓ SW-03 yetki matrisi: her mutasyon ucu her role karşı denenir (2xx/validasyon = yetki geçti)
+  i INFO SW-04b viewer için "X" olmayan mutasyon uçları => []
+  ✓ SW-04 viewer (salt okunur) hiçbir mutasyon ucuna yetkili değil (raporlama/kişisel işlemler hariç)
+  i INFO SW-05b izinli mutasyon sayıları => {"viewer":5,"operator":44,"quality":20,"manager":99}
+  ✓ SW-05 quality/operator/manager için beklenmeyen yetkiler (bilgi: her rol için izinli mutasyon sayısı)
+  ✓ SW-06 yönetim/güvenlik uçları yalnız admin: kullanıcı, webhook, veri saklama, onay kuralı, lisans, anonimleştirme
+  i INFO SW-07b 500 veren farklı uç noktalar => ["PUT /warehouses/:id […] -> 500","POST /notifications/test-mail […] -> 502","POST /planning/mrp/suggestions/:id/convert […] -> 500"]
+  ✗ FAIL SW-07 fuzz: hiçbir uç nokta bozuk gövde/sorgu/yol parametresiyle 500 veya iç bilgi (stack/SQL/yol) sızdırmamalı
+       25 adet 500, 0 adet sızıntı; ilk örnekler:
+       PUT /warehouses/:id [sql/tırnak] -> 500
+       POST /notifications/test-mail [{}] -> 502
+       POST /notifications/test-mail [dizi] -> 502
+  i INFO SW-08b /health kimliksiz döndürdükleri => {"status":"ok","uptimeSec":9,"db":"connected","users":5,"pendingMigrations":0,"version":"2.0.0","ts":1789912198506}
+  ✓ SW-08 güvenlik başlıkları: CSP, nosniff, frame, referrer; X-Powered-By yok; /health bilgi sızıntısı
+  i INFO SW-09b 40 başarısız girişte (her biri farklı XFF) sınır devreye girdi mi => {"limited":false}
+  i INFO SW-09c aynı kaynaktan 40 başarısız giriş (XFF yok) => {"limited":false}
+  ✓ SW-09 hız sınırı: sahte X-Forwarded-For ile giriş denemesi sınırı aşılabiliyor mu (trust proxy=1)
+  i INFO SW-10b son audit IP değerleri => ["::ffff:127.0.0.1","::ffff:127.0.0.1","::ffff:127.0.0.1","::ffff:127.0.0.1","::ffff:127.0.0.1"]
+  ✓ SW-10 audit kaydına IP yazılıyor mu; sahte XFF ile IP taklit edilebiliyor mu
+  i INFO SW-11b evil origin için Access-Control-Allow-Origin => {"acao":"*"}
+  ✓ SW-11 CORS: Origin başlığı olan istekte izinli origin politikası (üretim varsayılanı)
+  ✓ SW-12 JSON gövde sınırı: 3MB gövde 413; bozuk JSON 400
+
+=== b3-sweep: 11 geçti, 1 BAŞARISIZ, 0 HATA (toplam 21) ===
+(sonuçlar: C:\Projelerim\Dream\dream-plus\test\faz0-verify\results\b3-sweep.json )

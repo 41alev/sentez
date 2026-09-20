@@ -19,6 +19,13 @@ function createSalesOrder(req, input) {
   return db.txImmediate(() => {
     const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(input.customerId);
     if (!customer) throw new AppError('Müşteri bulunamadı / Customer not found', 404);
+    const findItem = db.prepare('SELECT name,is_active,deleted_at FROM items WHERE id=?');
+    const itemLines = input.lines.map(line => {
+      const item = findItem.get(line.itemId);
+      if (!item) throw new AppError('Ürün bulunamadı / Item not found', 404);
+      if (!item.is_active || item.deleted_at) throw new AppError('Pasif ürün siparişe eklenemez / Inactive item cannot be ordered', 409);
+      return { ...line, itemName: item.name };
+    });
     const date = input.date || new Date().toISOString().slice(0, 10);
     const rate = fxRate(input.currency, date);
 
@@ -43,9 +50,8 @@ function createSalesOrder(req, input) {
            input.opportunityId || null);
 
     const ins = db.prepare('INSERT INTO sales_order_lines (so_id,item_id,item_name,qty,price,currency) VALUES (?,?,?,?,?,?)');
-    input.lines.forEach(l => {
-      const item = db.prepare('SELECT name FROM items WHERE id = ?').get(l.itemId);
-      ins.run(id, l.itemId, item ? item.name : '—', l.qty, l.price, input.currency);
+    itemLines.forEach(l => {
+      ins.run(id, l.itemId, l.itemName, l.qty, l.price, input.currency);
     });
     logAudit(req, 'auditSalesOrderAdd', { entityType: 'sales_order', entityId: id, newValue: { soNo, customer: customer.name, totalBase }, detail: soNo });
     return db.prepare('SELECT * FROM sales_orders WHERE id = ?').get(id);

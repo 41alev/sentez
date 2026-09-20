@@ -216,7 +216,11 @@ export default function ItemsView() {
           ${field(t('salePrice'), input('iSale', { type: 'number', step: '0.01', value: item?.salePrice ?? 0, min: 0 }))}
           ${field(t('hsCode'), input('iHs', { value: item?.hsCode || '' }))}
         </div>
-        ${field(t('defaultSupplier'), select('iSup', [{ v: '', l: t('none') }, ...suppliers.map(sp => ({ v: sp.id, l: sp.name }))], item?.defaultSupplierId || ''))}
+          ${field(t('defaultSupplier'), select('iSup', [{ v: '', l: t('none') }, ...suppliers.map(sp => ({ v: sp.id, l: sp.name }))], item?.defaultSupplierId || ''))}
+          ${field(UI.getLang() === 'tr' ? 'Tedarik yöntemi' : 'Procurement method', select('iProcurement', [
+            { v: 'buy', l: UI.getLang() === 'tr' ? 'Satın al' : 'Buy' },
+            { v: 'make', l: UI.getLang() === 'tr' ? 'Üret' : 'Make' }
+          ], item?.procurementType || 'buy'))}
         ${checkbox('iLot', t('lotTracked'), item ? item.isLotTracked : true)}
         ${checkbox('iInsp', t('requiresInspection'), item?.requiresIncomingInspection || false)}
         ${field(t('description'), textarea('iDesc', { value: item?.description || '' }))}
@@ -237,7 +241,7 @@ export default function ItemsView() {
         box.querySelector('#iSave').onclick = async () => {
           const payload = {
             name: val('iName'), code: val('iCode'), barcode: val('iBarcode'), category: val('iCategory'),
-            itemType: val('iType'), origin: val('iOrigin'), unit: val('iUnit'),
+            itemType: val('iType'), procurementType: val('iProcurement'), origin: val('iOrigin'), unit: val('iUnit'),
             warehouseId: intVal('iWh') || undefined, location: val('iLoc'),
             minStock: numVal('iMin'), reorderQty: numVal('iReorder'),
             shelfLifeDays: val('iShelf') ? intVal('iShelf') : null,

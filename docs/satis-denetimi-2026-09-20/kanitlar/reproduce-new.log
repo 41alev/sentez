@@ -1,0 +1,54 @@
+{
+  "ncrScrap": {
+    "httpStatus": 200,
+    "lots": [
+      {
+        "id": "audit-bad",
+        "qty": 5,
+        "status": "rejected"
+      },
+      {
+        "id": "audit-good",
+        "qty": 5,
+        "status": "available"
+      }
+    ],
+    "movements": [
+      {
+        "lot_id": "audit-good",
+        "qty": 5
+      }
+    ]
+  },
+  "directNodeRateLimit": {
+    "direct": [
+      401,
+      401,
+      401,
+      401,
+      401,
+      401,
+      401,
+      401,
+      401,
+      401,
+      429,
+      429
+    ],
+    "spoofed": [
+      401,
+      401,
+      401,
+      401
+    ],
+    "condition": "Direct Node port; no nginx proxy. Production login limit 10."
+  },
+  "backup": {
+    "artifactType": ".sqlite",
+    "entries": [
+      "depo-takip-2026-09-20T13-52-25-651Z.sqlite"
+    ],
+    "uploadsIncluded": false,
+    "note": "Directory inspection plus source inspection: only SQLite artifact produced."
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "host": "codex",
+  "phase": "review",
+  "task": "Hazirlanan satis ve gelir planini verilen kanitlarla elestir. Bu bir inceleme teslimidir; uygulama bitmis veya satisa hazir degil. Fiyatlar varsayimsal, tum satirlar manuel okunmus iddiasi yok. Kesin hukuki veya kazanc iddiasi uretme. Kaynagini gormedigin kodu dogruladigini soyleme.",
+  "project": "C:\\Projelerim\\Dream",
+  "included_files": [
+    "AGENTS.md",
+    "PROJECT_STATUS.md",
+    "dream-plus\\docs\\satis-denetimi-2026-09-20\\SATIS-VE-GELIR-PLANI.md",
+    "dream-plus\\docs\\satis-denetimi-2026-09-20\\kanitlar\\test-summary.json",
+    "dream-plus\\docs\\satis-denetimi-2026-09-20\\kanitlar\\reproduce-new.json"
+  ],
+  "notices": [],
+  "reviews": {
+    "claude": {
+      "status": "error",
+      "message": "Command '['C:\\\\Users\\\\ilker\\\\AppData\\\\Local\\\\Microsoft\\\\WinGet\\\\Packages\\\\Anthropic.ClaudeCode_Microsoft.Winget.Source_8wekyb3d8bbwe\\\\claude.exe', '--print', '--tools', '', '--output-format', 'json', 'Analyze the input on stdin according to its instructions.']' timed out after 60 seconds"
+    },
+    "gemini": {
+      "status": "ok",
+      "message": "**\u0130ddia:** Dream Plus'\u0131n k\u00fc\u00e7\u00fck \u00fcretim i\u015fletmeleri i\u00e7in hammadde, parti, kalite ve sevkiyat takibi yapabilen, sat\u0131\u015fa ve kuruluma haz\u0131r bir operasyonel yaz\u0131l\u0131m oldu\u011fu.\n\n**Kan\u0131t/Dosya:** `test-summary.json`, `reproduce-new.json`, `SATIS-VE-GELIR-PLANI.md`.\n\n**Risk:**\n1. **Teknik Karars\u0131zl\u0131k:** `test-summary.json` verilerine g\u00f6re kritik mod\u00fcllerde (ops: 13/78, stock: 41/104, purch-auth: 20/88) ba\u015far\u0131 oran\u0131 \u00e7ok d\u00fc\u015f\u00fckt\u00fcr ve 266 adet tip hatas\u0131 mevcuttur. Bu durum \u00fcr\u00fcn\u00fcn temel vaatlerini (stok/lot takibi) yerine getiremedi\u011fini g\u00f6sterir.\n2. **G\u00fcvenlik ve Altyap\u0131:** `reproduce-new.json` dosyas\u0131nda login limitlerinde (401/429 hatalar\u0131) ve proxy yap\u0131land\u0131rmas\u0131nda eksikler tespit edilmi\u015ftir.\n3. **Veri Kayb\u0131:** Yedekleme mekanizmas\u0131n\u0131n (`backup`) sadece SQLite ile s\u0131n\u0131rl\u0131 oldu\u011fu, kullan\u0131c\u0131 y\u00fcklemelerini (`uploadsIncluded: false`) kapsamad\u0131\u011f\u0131 do\u011frulanm\u0131\u015ft\u0131r.\n4. **Lisanslama:** `SATIS-VE-GELIR-PLANI.md` i\u00e7inde de belirtildi\u011fi \u00fczere, teknik olarak bir lisans denetimi (`LICENSE_FILE` bo\u015f) bulunmamaktad\u0131r.\n\n**\u00d6neri:** Sat\u0131\u015f faaliyetlerine ba\u015flanmadan \u00f6nce \"b4c-ops\" ve \"b1b-stock\" mod\u00fcllerindeki test ba\u015far\u0131s\u0131zl\u0131klar\u0131 giderilmeli, tip hatalar\u0131 temizlenmeli ve yedekleme stratejisi t\u00fcm dosyalar\u0131 kapsayacak \u015fekilde g\u00fcncellenmelidir. Mevcut haliyle \"pilot\" uygulama dahi y\u00fcksek veri tutars\u0131zl\u0131\u011f\u0131 riski ta\u015f\u0131maktad\u0131r.\n\n**Do\u011frulama Durumu:** **KALDI.** Teknik kan\u0131tlar (test sonu\u00e7lar\u0131 ve denetim raporu), sat\u0131\u015f plan\u0131ndaki \"sat\u0131lacak de\u011ferin\" hen\u00fcz do\u011frulanmad\u0131\u011f\u0131n\u0131 ve \u00fcr\u00fcn\u00fcn operasyonel olarak g\u00fcvenilmez oldu\u011funu g\u00f6stermektedir."
+    }
+  },
+  "round_history": [
+    {
+      "claude": {
+        "status": "error",
+        "message": "Command '['C:\\\\Users\\\\ilker\\\\AppData\\\\Local\\\\Microsoft\\\\WinGet\\\\Packages\\\\Anthropic.ClaudeCode_Microsoft.Winget.Source_8wekyb3d8bbwe\\\\claude.exe', '--print', '--tools', '', '--output-format', 'json', 'Analyze the input on stdin according to its instructions.']' timed out after 60 seconds"
+      },
+      "gemini": {
+        "status": "ok",
+        "message": "**\u0130ddia:** Dream Plus'\u0131n k\u00fc\u00e7\u00fck \u00fcretim i\u015fletmeleri i\u00e7in hammadde, parti, kalite ve sevkiyat takibi yapabilen, sat\u0131\u015fa ve kuruluma haz\u0131r bir operasyonel yaz\u0131l\u0131m oldu\u011fu.\n\n**Kan\u0131t/Dosya:** `test-summary.json`, `reproduce-new.json`, `SATIS-VE-GELIR-PLANI.md`.\n\n**Risk:**\n1. **Teknik Karars\u0131zl\u0131k:** `test-summary.json` verilerine g\u00f6re kritik mod\u00fcllerde (ops: 13/78, stock: 41/104, purch-auth: 20/88) ba\u015far\u0131 oran\u0131 \u00e7ok d\u00fc\u015f\u00fckt\u00fcr ve 266 adet tip hatas\u0131 mevcuttur. Bu durum \u00fcr\u00fcn\u00fcn temel vaatlerini (stok/lot takibi) yerine getiremedi\u011fini g\u00f6sterir.\n2. **G\u00fcvenlik ve Altyap\u0131:** `reproduce-new.json` dosyas\u0131nda login limitlerinde (401/429 hatalar\u0131) ve proxy yap\u0131land\u0131rmas\u0131nda eksikler tespit edilmi\u015ftir.\n3. **Veri Kayb\u0131:** Yedekleme mekanizmas\u0131n\u0131n (`backup`) sadece SQLite ile s\u0131n\u0131rl\u0131 oldu\u011fu, kullan\u0131c\u0131 y\u00fcklemelerini (`uploadsIncluded: false`) kapsamad\u0131\u011f\u0131 do\u011frulanm\u0131\u015ft\u0131r.\n4. **Lisanslama:** `SATIS-VE-GELIR-PLANI.md` i\u00e7inde de belirtildi\u011fi \u00fczere, teknik olarak bir lisans denetimi (`LICENSE_FILE` bo\u015f) bulunmamaktad\u0131r.\n\n**\u00d6neri:** Sat\u0131\u015f faaliyetlerine ba\u015flanmadan \u00f6nce \"b4c-ops\" ve \"b1b-stock\" mod\u00fcllerindeki test ba\u015far\u0131s\u0131zl\u0131klar\u0131 giderilmeli, tip hatalar\u0131 temizlenmeli ve yedekleme stratejisi t\u00fcm dosyalar\u0131 kapsayacak \u015fekilde g\u00fcncellenmelidir. Mevcut haliyle \"pilot\" uygulama dahi y\u00fcksek veri tutars\u0131zl\u0131\u011f\u0131 riski ta\u015f\u0131maktad\u0131r.\n\n**Do\u011frulama Durumu:** **KALDI.** Teknik kan\u0131tlar (test sonu\u00e7lar\u0131 ve denetim raporu), sat\u0131\u015f plan\u0131ndaki \"sat\u0131lacak de\u011ferin\" hen\u00fcz do\u011frulanmad\u0131\u011f\u0131n\u0131 ve \u00fcr\u00fcn\u00fcn operasyonel olarak g\u00fcvenilmez oldu\u011funu g\u00f6stermektedir."
+      }
+    }
+  ]
+}

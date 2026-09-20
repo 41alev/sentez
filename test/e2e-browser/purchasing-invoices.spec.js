@@ -37,4 +37,21 @@ test.describe('Satın Alma — fatura 3\'lü eşleştirme gerçek verilerle dolu
     // Eskiden hep boştu.
     await expect(row).toContainText('teslim alınan');
   });
+
+  test('kısmi teslim miktarı formda seçilip eşleşen fatura kaydediliyor', async ({ page }) => {
+    await login(page);
+    await goToView(page, 'purchasing');
+    await page.getByRole('button', { name: 'Faturalar', exact: true }).click();
+    await page.getByRole('button', { name: 'Fatura Gir' }).click();
+    await page.selectOption('#ivPo', { label: 'SA-2026-001 — Akım Bağlantı San. Ltd.' });
+    const qty = page.locator('.iv-line-qty');
+    await expect(qty).toHaveCount(1);
+    await qty.fill('2');
+    await page.fill('#ivNo', 'PART-BROWSER-001');
+    await page.fill('#ivAmt', '302');
+    await page.getByRole('button', { name: 'Kaydet' }).click();
+    const row = page.locator('tr', { hasText: 'PART-BROWSER-001' });
+    await expect(row).toBeVisible();
+    await expect(row).toContainText('Eşleşti');
+  });
 });

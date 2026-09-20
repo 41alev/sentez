@@ -2,7 +2,7 @@
 const express = require('express');
 const db = require('../db');
 const { AppError, uuid, nextNumber, logAudit, diff, fxRate } = require('../lib/core');
-const { toLocalDateStr } = require('../lib/dates');
+const { toLocalDateStr, isValidLocalDate } = require('../lib/dates');
 const { companyIdOf } = require('../lib/tenant');
 const { requireAuth, requirePermission, requireRole } = require('../middleware/auth');
 const kvkk = require('../lib/kvkk');
@@ -367,8 +367,8 @@ const poSchema = z.object({
   supplierId: z.coerce.number(),
   requestId: z.string().nullable().optional(),
   rfqId: z.string().nullable().optional(),
-  date: z.string().nullable().optional(),
-  expected: z.string().nullable().optional(),
+  date: z.string().refine(isValidLocalDate, 'Geçerli tarih gerekli / Valid date required').nullable().optional(),
+  expected: z.string().refine(isValidLocalDate, 'Geçerli tarih gerekli / Valid date required').nullable().optional(),
   warehouseId: z.coerce.number().nullable().optional(),
   currency: currency.default('TRY'),
   incoterm: z.string().max(1000).optional(),
@@ -376,7 +376,7 @@ const poSchema = z.object({
   items: z.array(z.object({
     itemId: z.string(),
     qty: z.coerce.number().positive(),
-    price: z.coerce.number().min(0),
+    price: z.union([z.number(), z.string().trim().min(1)]).pipe(z.coerce.number().min(0)),
     currency: currency.optional(),
     tolerancePct: z.coerce.number().min(0).max(100).default(0)
   })).min(1)
@@ -390,6 +390,22 @@ router.post('/orders', requirePermission('purchase.write'), validate(poSchema), 
     if (!supplier.is_approved) throw new AppError('Onaylı olmayan tedarikçiye sipariş açılamaz / Supplier is not approved');
 
     const result = db.txImmediate(() => {
+      if (b.warehouseId && !db.prepare('SELECT id FROM warehouses WHERE id=?').get(b.warehouseId)) {
+        throw new AppError('Depo bulunamadı / Warehouse not found', 404);
+      }
+      if (b.requestId && !db.prepare('SELECT id FROM purchase_requests WHERE id=?').get(b.requestId)) {
+        throw new AppError('Satın alma talebi bulunamadı / Purchase request not found', 404);
+      }
+      if (b.rfqId && !db.prepare('SELECT id FROM rfqs WHERE id=?').get(b.rfqId)) {
+        throw new AppError('Teklif talebi bulunamadı / RFQ not found', 404);
+      }
+      const findItem = db.prepare('SELECT name,is_active,deleted_at FROM items WHERE id=?');
+      const itemLines = b.items.map(line => {
+        const item = findItem.get(line.itemId);
+        if (!item) throw new AppError('Ürün bulunamadı / Item not found', 404);
+        if (!item.is_active || item.deleted_at) throw new AppError('Pasif ürün siparişe eklenemez / Inactive item cannot be ordered', 409);
+        return { ...line, itemName: item.name };
+      });
       const poId = uuid();
       const no = nextNumber('purchase_order', 'SA');
       const date = b.date || new Date().toISOString().slice(0, 10);
@@ -415,9 +431,8 @@ router.post('/orders', requirePermission('purchase.write'), validate(poSchema), 
         VALUES (?,?,?,?,?,?,?,?)`);
       const insHist = db.prepare(`INSERT INTO supplier_price_history (supplier_id,item_id,price,currency,source,source_id,recorded_at)
         VALUES (?,?,?,?,'po',?,?)`);
-      b.items.forEach(l => {
-        const item = db.prepare('SELECT name FROM items WHERE id = ?').get(l.itemId);
-        ins.run(poId, l.itemId, item ? item.name : '—', l.qty, l.price, l.currency || b.currency, l.tolerancePct,
+      itemLines.forEach(l => {
+        ins.run(poId, l.itemId, l.itemName, l.qty, l.price, l.currency || b.currency, l.tolerancePct,
           fxRate(l.currency || b.currency, date));
         insHist.run(supplier.id, l.itemId, l.price, l.currency || b.currency, poId, Date.now());
       });
@@ -465,11 +480,16 @@ router.post('/orders/:id/approve', requirePermission('purchase.approve'), (req, 
 
 router.post('/orders/:id/reject', requirePermission('purchase.approve'), (req, res, next) => {
   try {
-    const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(req.params.id);
-    if (!po) throw new AppError('Sipariş bulunamadı / Order not found', 404);
-    db.prepare(`UPDATE purchase_orders SET status='rejected', approval_status='rejected', approved_by=?, approved_at=?, reject_reason=? WHERE id=?`)
-      .run(req.user.id, Date.now(), req.body.reason || '', po.id);
-    logAudit(req, 'auditPOReject', { entityType: 'purchase_order', entityId: po.id, detail: po.po_no });
+    db.txImmediate(() => {
+      const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(req.params.id);
+      if (!po) throw new AppError('Sipariş bulunamadı / Order not found', 404);
+      if (po.status !== 'pending_approval' || po.approval_status !== 'pending') {
+        throw new AppError('Yalnız onay bekleyen sipariş reddedilebilir / Only pending orders can be rejected', 409);
+      }
+      db.prepare(`UPDATE purchase_orders SET status='rejected', approval_status='rejected', approved_by=?, approved_at=?, reject_reason=? WHERE id=?`)
+        .run(req.user.id, Date.now(), req.body.reason || '', po.id);
+      logAudit(req, 'auditPOReject', { entityType: 'purchase_order', entityId: po.id, detail: po.po_no });
+    });
     res.json({ ok: true });
   } catch (e) { next(e); }
 });
@@ -483,7 +503,7 @@ const receiptSchema = z.object({
     poItemId: z.coerce.number(),
     qty: z.coerce.number().positive(),
     lotNo: z.string().max(1000).optional(),
-    expiryDate: z.string().nullable().optional()
+    expiryDate: z.string().refine(isValidLocalDate, 'Geçerli son kullanma tarihi gerekli / Valid expiry date required').nullable().optional()
   })).min(1)
 });
 
@@ -612,10 +632,45 @@ const invoiceSchema = z.object({
   invoiceNo: z.string().trim().min(1).max(200),
   poId: z.string(),
   receiptId: z.string().nullable().optional(),
-  invoiceDate: z.string().nullable().optional(),
+  invoiceDate: z.string().refine(isValidLocalDate,
+    'Geçerli takvim tarihi gerekli / Valid calendar date required').nullable().optional(),
   amount: z.coerce.number().min(0),
-  currency: currency.default('TRY')
+  currency: currency.default('TRY'),
+  lines: z.array(z.object({
+    receiptLineId: z.coerce.number().int().positive(),
+    qty: z.coerce.number().positive(),
+    vatRate: z.coerce.number().min(0).max(100).optional()
+  })).min(1).optional()
 });
+
+router.get('/invoices/receivable-lines', requirePermission('purchase.write'),
+  validateQuery(z.object({ poId: z.string().min(1) })), (req, res, next) => {
+    try {
+      const poId = req.validatedQuery.poId;
+      if (!db.prepare('SELECT id FROM purchase_orders WHERE id=?').get(poId)) {
+        throw new AppError('Sipariş bulunamadı / Order not found', 404);
+      }
+      const legacy = !!db.prepare(`SELECT id FROM supplier_invoices
+        WHERE po_id=? AND allocation_state='legacy' LIMIT 1`).get(poId);
+      const lines = db.prepare(`SELECT rl.id AS receipt_line_id, rl.receipt_id, pr.receipt_no,
+          COALESCE(rl.item_name, i.name, '') AS item_name, rl.qty, pi.price, pi.currency,
+          pi.fx_rate, i.vat_rate, COALESCE((SELECT SUM(a.qty) FROM supplier_invoice_allocations a
+            WHERE a.receipt_line_id=rl.id),0) AS allocated_qty
+        FROM po_receipt_lines rl
+        JOIN po_receipts pr ON pr.id=rl.receipt_id
+        JOIN po_items pi ON pi.id=rl.po_item_id AND pi.po_id=pr.po_id
+        LEFT JOIN items i ON i.id=rl.item_id
+        WHERE pr.po_id=? ORDER BY pr.received_at, rl.id`).all(poId);
+      res.json({ legacy, lines: lines.map(line => ({
+        receiptLineId: line.receipt_line_id, receiptId: line.receipt_id,
+        receiptNo: line.receipt_no, itemName: line.item_name,
+        receivedQty: line.qty, invoicedQty: line.allocated_qty,
+        availableQty: Math.max(0, line.qty - line.allocated_qty),
+        price: line.price, currency: line.currency, fxRate: line.fx_rate,
+        vatRate: line.vat_rate
+      })) });
+    } catch (e) { next(e); }
+  });
 
 /**
  * Three-way match: purchase order vs goods actually received vs supplier invoice.
@@ -624,34 +679,88 @@ const invoiceSchema = z.object({
 router.post('/invoices', requirePermission('purchase.write'), validate(invoiceSchema), (req, res, next) => {
   try {
     const b = req.body;
-    const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(b.poId);
-    if (!po) throw new AppError('Sipariş bulunamadı / Order not found', 404);
-
-    const received = db.prepare(`SELECT COALESCE(SUM(pi.received_qty * pi.price),0) v FROM po_items pi WHERE pi.po_id = ?`).get(po.id).v;
-    const rate = fxRate(b.currency, b.invoiceDate);
-    const invoiceBase = b.amount * rate;
-    const receivedBase = received * po.fx_rate;
-    const tolerance = Math.max(1, receivedBase * 0.02); // 2% tolerance
-    const withinTolerance = Math.abs(invoiceBase - receivedBase) <= tolerance;
-
-    const id = uuid();
-    const supplier = db.prepare('SELECT payment_terms_days FROM suppliers WHERE id = ?').get(po.supplier_id);
-    const invDate = b.invoiceDate || new Date().toISOString().slice(0, 10);
-    const due = new Date(invDate); due.setDate(due.getDate() + (supplier ? supplier.payment_terms_days : 30));
-
-    db.prepare(`INSERT INTO supplier_invoices (id,invoice_no,supplier_id,po_id,receipt_id,invoice_date,due_date,
-      amount,currency,fx_rate,match_status,discrepancy_note,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-      id, b.invoiceNo, po.supplier_id, po.id, b.receiptId || null, invDate, due.toISOString().slice(0, 10),
-      b.amount, b.currency, rate, withinTolerance ? 'matched' : 'discrepancy',
-      withinTolerance ? null : `Fatura ${invoiceBase.toFixed(2)} TL, teslim alınan ${receivedBase.toFixed(2)} TL`, Date.now());
-
-    logAudit(req, 'auditInvoiceAdd', { entityType: 'supplier_invoice', entityId: id,
-      newValue: { invoiceNo: b.invoiceNo, amount: b.amount, matched: withinTolerance }, detail: b.invoiceNo });
-
-    res.status(201).json({
-      id, matchStatus: withinTolerance ? 'matched' : 'discrepancy',
-      invoiceBase, receivedBase, difference: invoiceBase - receivedBase, dueDate: due.toISOString().slice(0, 10)
+    const result = db.txImmediate(() => {
+      const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(b.poId);
+      if (!po) throw new AppError('Sipariş bulunamadı / Order not found', 404);
+      if (db.prepare('SELECT id FROM supplier_invoices WHERE supplier_id=? AND invoice_no=?').get(po.supplier_id, b.invoiceNo)) {
+        throw new AppError('Bu tedarikçinin fatura numarası zaten kayıtlı / Duplicate supplier invoice number', 409);
+      }
+      if (b.receiptId) {
+        const receipt = db.prepare('SELECT po_id FROM po_receipts WHERE id=?').get(b.receiptId);
+        if (!receipt || receipt.po_id !== po.id) throw new AppError('İrsaliye bu siparişe ait değil / Receipt does not belong to order', 422);
+      }
+      const lines = db.prepare(`SELECT rl.id, rl.qty, rl.receipt_id, pi.price, pi.currency,
+          pi.fx_rate, i.vat_rate,
+          COALESCE((SELECT SUM(a.qty) FROM supplier_invoice_allocations a
+            WHERE a.receipt_line_id=rl.id),0) AS allocated_qty
+        FROM po_receipt_lines rl
+        JOIN po_receipts pr ON pr.id=rl.receipt_id
+        JOIN po_items pi ON pi.id=rl.po_item_id AND pi.po_id=pr.po_id
+        LEFT JOIN items i ON i.id=rl.item_id
+        WHERE pr.po_id=? AND (? IS NULL OR pr.id=?)
+        ORDER BY pr.received_at, rl.id`).all(po.id, b.receiptId || null, b.receiptId || null);
+      if (lines.some(line => !(line.fx_rate > 0))) {
+        throw new AppError('Teslim satırında kayıtlı kur yok / Receipt line has no historical FX rate', 409);
+      }
+      const legacy = db.prepare(`SELECT id FROM supplier_invoices WHERE po_id=? AND allocation_state='legacy' LIMIT 1`).get(po.id);
+      if (legacy && lines.length) {
+        throw new AppError('Eski faturaların teslim satırları eşleştirilmemiş; önce mutabakat gerekli / Legacy invoices require reconciliation', 409);
+      }
+      const chosen = [];
+      if (b.lines) {
+        const byId = new Map(lines.map(line => [line.id, line]));
+        const seen = new Set();
+        for (const requested of b.lines) {
+          const line = byId.get(requested.receiptLineId);
+          if (!line) throw new AppError('Teslim satırı bu sipariş/irsaliyeye ait değil / Receipt line does not belong to order', 422);
+          if (seen.has(line.id)) throw new AppError('Teslim satırı tekrarlandı / Duplicate receipt line', 422);
+          seen.add(line.id);
+          if (requested.qty > line.qty - line.allocated_qty + 1e-9) {
+            throw new AppError('Teslim miktarı daha önce faturalanmış / Receipt quantity already invoiced', 409);
+          }
+          chosen.push({ ...line, invoiceQty: requested.qty,
+            invoiceVatRate: requested.vatRate ?? line.vat_rate });
+        }
+      } else {
+        for (const line of lines) {
+          const available = line.qty - line.allocated_qty;
+          if (available > 1e-9) chosen.push({ ...line, invoiceQty: available,
+            invoiceVatRate: line.vat_rate });
+        }
+      }
+      if (lines.length && !chosen.length) {
+        throw new AppError('Bu teslimatın faturalanmamış miktarı kalmadı / No uninvoiced receipt quantity remains', 409);
+      }
+      if (chosen.some(line => line.invoiceVatRate == null)) {
+        throw new AppError('Ürünsüz teslim satırında fatura KDV oranı gerekli / Invoice VAT rate required for free-text receipt line', 422);
+      }
+      const receivedBase = chosen.reduce((sum, line) => sum + line.invoiceQty * line.price * line.fx_rate, 0);
+      const rate = fxRate(b.currency, b.invoiceDate);
+      const invoiceBase = b.amount * rate;
+      const tolerance = Math.max(1, receivedBase * 0.02);
+      const withinTolerance = chosen.length > 0 && Math.abs(invoiceBase - receivedBase) <= tolerance;
+      const id = uuid();
+      const supplier = db.prepare('SELECT payment_terms_days FROM suppliers WHERE id = ?').get(po.supplier_id);
+      const invDate = b.invoiceDate || toLocalDateStr();
+      const due = toLocalDateStr(new Date(`${invDate}T12:00:00`).getTime() + (supplier ? supplier.payment_terms_days : 30) * 86400000);
+      db.prepare(`INSERT INTO supplier_invoices (id,invoice_no,supplier_id,po_id,receipt_id,invoice_date,due_date,
+        amount,currency,fx_rate,match_status,discrepancy_note,created_at,allocation_state) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+        id, b.invoiceNo, po.supplier_id, po.id, b.receiptId || null, invDate, due,
+        b.amount, b.currency, rate, withinTolerance ? 'matched' : 'discrepancy',
+        withinTolerance ? null : `Fatura ${invoiceBase.toFixed(2)} TL, teslim alınan ${receivedBase.toFixed(2)} TL`,
+        Date.now(), chosen.length ? 'recorded' : 'none');
+      const insertAllocation = db.prepare(`INSERT INTO supplier_invoice_allocations
+        (invoice_id,receipt_line_id,qty,unit_price,currency,fx_rate,vat_rate)
+        VALUES (?,?,?,?,?,?,?)`);
+      for (const line of chosen) insertAllocation.run(id, line.id, line.invoiceQty, line.price,
+        line.currency, line.fx_rate, line.invoiceVatRate);
+      logAudit(req, 'auditInvoiceAdd', { entityType: 'supplier_invoice', entityId: id,
+        newValue: { invoiceNo: b.invoiceNo, amount: b.amount, matched: withinTolerance }, detail: b.invoiceNo });
+      return { id, matchStatus: withinTolerance ? 'matched' : 'discrepancy',
+        invoiceBase, receivedBase, difference: invoiceBase - receivedBase, dueDate: due,
+        allocations: chosen.map(line => ({ receiptLineId: line.id, qty: line.invoiceQty })) };
     });
+    res.status(201).json(result);
   } catch (e) { next(e); }
 });
 

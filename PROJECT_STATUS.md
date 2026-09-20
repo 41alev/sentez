@@ -1,5 +1,225 @@
 # PROJECT_STATUS.md
 
+## 20 Eylül 2026 — satış engellerini kapatma geliştirmesi (devam ediyor)
+
+**Aktif hedef:** masaüstü/ayrı kurulum ürününü başka firmalara güvenle sunabilecek
+düzeye getirmek. Kabul: kritik stok/para/veri kaybı ve yetki hataları kapanmalı;
+tam yedek/geri yükleme, temiz kurulum/yükseltme, gerçek iş akışı, test ve müşteri
+pilotu kanıtlanmalı. **Bu hedef henüz karşılanmadı; ürün satışa hazır değil.**
+
+Bu turda düzeltildi ve izole testle doğrulandı:
+
+- T01: NCR hurda artık yalnız ilişkili reddedilmiş lotu tüketiyor; sağlam lot
+  değişmiyor, tekrar karar 409. `quality.js`, `test/stock-integrity.js`.
+- T13: Miadı geçmiş lotun durumu stok servisiyle değişiyor ve ürünün
+  kullanılabilir miktar özeti güncelleniyor. `data-health.js`.
+- T05: Import yazma ve geri alma her satırda savepoint kullanıyor; ikinci
+  yazma/silme hatasında ilk adım geri alınıyor. `import-commit.js`, `test/import.js`.
+- T04 kısmi: birleştirme şemadaki yeni FK ilişkilerini de taşıyor, farklı
+  birimli ürünleri ve reçete çakışmalarını reddediyor, silinen kaynak cache'ini
+  sıfırlıyor. Tüm tarihsel/serbest metin referansların korunması henüz
+  kanıtlanmadı; çakışan reçete otomatik uzlaştırılmıyor.
+- T03: doğrudan Node kurulumunda istemcinin X-Forwarded-For başlığına güven
+  kaldırıldı; Docker uygulama portu host'a açılmıyor. Sahadaki proxy/TLS
+  yapılandırması ayrıca doğrulanmalı.
+- T02: varsayılan otomatik ve elle yedek DB + uploads + SHA-256 manifestli
+  `.bundle` oluşturuyor; ayrı süreçte tam geri yükleme, eksik/bozuk paket reddi,
+  yarıda kesilen yer değiştirmede eski DB+dosyanın korunması test edildi.
+  Yükseltme öncesi yedek ve otomatik geri dönüş de tam pakete geçirildi.
+  Gerçek off-site hedef, büyük müşteri verisi ve müşteri ortamı sınanmadı.
+- T07: sayım onayında form verisi onay penceresinden önce tutuluyor; gerçek
+  Chromium testinde kaydetmeden onaylanan miktar/gerekçe DB'den doğrulandı.
+- T11: iade faturası ödeme ucunda reddediliyor; ödenmiş faturanın tekrar
+  çağrısı etkisiz; karar tek transaction içinde. Kısmi tahsilat ürünü açık.
+- T09 kısmi: ürün POST/PUT/GET ve formu `procurementType` make/buy alanını
+  koruyor. MRP'nin tarihsel arz-talep ve BOM snapshot kusurları açık.
+- T06 kısmi: alış faturası gerçek teslim satırları, satır kur snapshot'ı ve
+  `supplier_invoice_allocations` ile miktar bazında eşleştiriliyor. Kısmi
+  miktar API'de ve formda seçilebiliyor; ikinci faturaya aynı miktar 409,
+  farklı PO/irsaliye 422. DB tetikleyicisi toplam tahsisi ve PO sahipliğini
+  koruyor. Yevmiye, yeni faturalarda tahsis anındaki KDV oranı snapshot'ını
+  kullanıyor. Eski faturaların satırları bilinmediğinden aynı PO'da yeni
+  tahsis mutabakata kadar duruyor; elle mutabakat akışı ve gerçek fatura KDV
+  satırları/ödeme onayı henüz yok. Bunlar satış engeli olarak açık.
+- T16 kısmi: satış siparişi, sevkiyat, satış faturası, alış siparişi ve
+  alış teslimatındaki tarih alanları gerçek takvim günü olarak doğrulanıyor;
+  olmayan ürünle satış/alış siparişi 404, hayalet depo 404, boş alış fiyatı
+  422. Kısmi teslim alınmış PO onay reddi 409 ve stok/durum korunuyor.
+  Diğer modüllerdeki tarih ve sayısal doğrulama açık.
+- Faz 0 doğrulama takımındaki TypeScript tanım hataları düzeltildi;
+  üretim kodu/testler dışlanmadı.
+
+**Kontroller:** `node test/run-all.js` **Geçti** (36 paket; T06/T16 ve son PO
+reddi/ürün-FK düzeltmeleri sonrası genel koşu); `node test/run-all.js finance-integrity accounting-export
+contract setup-upgrade` **Geçti** (T06 tahsis migration'ı sonrası),
+`npm run test:e2e-browser` **Geçti** (38 Chromium testi; KDV alanı eklenmeden
+önce),
+`npx playwright test test/e2e-browser/purchasing-invoices.spec.js` **Geçti**
+(2 test, kısmi fatura formu ve KDV girişi dahil), `npm run build`
+**Geçti**, `npm run typecheck` **Geçti**, `npm run lint` **Geçti** (0 hata,
+46 uyarı), `node test/run-all.js backup-restore setup-upgrade planning`
+**Geçti**. `git diff --check` **Geçti**; `npm audit --omit=dev
+--audit-level=high` **Geçti** (0 bildirim). Faz 0 izole takımında bu tur ilk
+tam tekrar: 147 PASS / 67 FAIL / 3 ERROR / 214 INFO; bunların bir bölümü
+artık güvenli 409 reddini eski beklentiyle hata sayıyor (SI-04, DH-02),
+gerçek bulgular ayrıca var. İlk hedefli düzeltmeler satışta 4 FAIL'i,
+satın almada 21 FAIL'in üçünü kapattı.
+Son hedefli tekrar: `b1a-sales` **0 FAIL / 0 ERROR**; `b2-purch-auth`
+**18 FAIL / 1 ERROR** (SI-04, artık aynı teslim miktarını ikinci kez kullanmak
+409 ile reddedildiği için eski test beklentisi geçersiz). Bu takım ana CI
+paketinde değil ve tamamı yeşil değil. Müşteri veri migration'ı, off-site
+kopya/geri alma, temiz müşteri cihazı, TLS ve pilot **Doğrulanamadı**.
+`docker compose config` **Doğrulanamadı** (Docker komutu bu makinede yok).
+
+**Kalan P1/P2:** T06 eski faturaların mutabakatı/gerçek vergi tutarı; T08 ekran
+sayfalama/arama; T09 tarihsel MRP; T10 sonlu kapasite/çakışma; T12 KVKK
+anonimleştirme; T14 kalite imzası; T15 webhook outbox/SSRF; T16 mali/tarih
+kuralları; T17 kurulum/TLS/lisans/müşteri paketi; T18 kalite/erişilebilirlik.
+Faz 0 FAIL/ERROR'ları tek tek ayıklanmalı; ana test paketi onların tamamını
+kapsamaz. İş kuralı kararları, hedef sektör, lisans
+hak sahibi ve pilot müşterinin ortamı kullanıcıdan bekleniyor; tahmin edilmedi.
+
+`ai_team.py` bu proje kökünde yok; otomatik bağımsız CLI incelemesi bu turda
+çalıştırılamadı. Kullanıcının eski değişiklikleri, izlenmeyen dokümanları ve
+verileri korundu; commit/push/üretim dağıtımı yapılmadı. **Yeni ajanın ilk
+somut adımı:** T06 için mevcut alış faturası–teslimat ilişki şemasını ve
+T12 anonimleştirme kalıntıları için kaynak alan haritasını, mali kayıt koruma
+sınırını ve geri dönüş planını çıkarıp izole regresyon kurmak.
+
+## 20 Eylül 2026 — güncel satış denetimi ve gelir planı (Codex)
+
+**Aktif hedef:** projeyi tamamlayıp uzun vadeli satmak; tüm dosya kapsamını inceleme.
+Güncel doğrulama ve öncelik kaynağı: [satış denetimi](docs/satis-denetimi-2026-09-20/OKU-ONCE.md).
+Ticari öneri: [satış ve gelir planı](docs/satis-denetimi-2026-09-20/SATIS-VE-GELIR-PLANI.md).
+
+**Durum: inceleme/plan teslim edildi; ürün bitmiş veya satışa hazır değil.**
+254 dosya envanteri, 247 metin/60.107 satır otomatik tarama. 67 backend dosyası
+bağımsız kaynak incelemesinde tam okundu; UI/test büyük dosyalarında seçili
+akışlar ayrıntılı incelendi. Her satırın elle doğrulandığı iddia edilmiyor.
+Müşteri verisi/sırlar okunmadı; uygulama kaynakları değiştirilmedi. Yeni rapor,
+envanter, tanı betiği ve gerçek test logları eklendi; public/dist build ile yenilendi.
+Önceden değişmiş README/durum ile izlenmeyen kullanıcı dosyaları korundu.
+
+Windows Node v24.19.0 üzerinde **Geçti:** build, 36 ana paket, 35 Chromium testi
+(45,6 sn), üretim npm audit (0 bildirim). **Kaldı:** typecheck 266 tanı;
+lint 2 hata/45 uyarı; yedi Faz 0 dosyasında 141 PASS / 75 FAIL / 1 ERROR /
+215 INFO. 75 FAIL bağımsız hata sayısı değildir; bir ERROR test SQL'indeki
+olmayan s.created_at sütunu. b1a-sales sonuç JSON'u salt okunur olduğundan
+EPERM aldı; 35 PASS/5 FAIL yeni logda kayıtlı. Ek tanı betiği hedefli lint geçti.
+Eski günlüklerdeki “typecheck/lint başarılı” kaydı bugünkü klasöre uygulanmaz.
+
+Yeni izole API kanıtı: NCR hurda reddedilmiş 5 adedi bırakıp sağlam 10 adedi
+5'e indiriyor. Doğrudan Node portunda 10 başarısız giriş sonrası 429,
+değişen X-Forwarded-For ile yeniden 401; nginx arkasında aynı bulgu doğrulanmadı.
+Yedek çıktı dizininde yalnız SQLite var, uploads yok. Kaynakta sayım onay modalı,
+işlemeyen sayfalama, import satır atomikliği ve diğer stok/mali açıklar da incelendi.
+
+Saha/temiz kurulum/servis/TLS/Docker/pilot **Doğrulanamadı**. Gerçek veri
+migration/üretim değişikliği **Uygulanamaz**, yapılmadı. Kanıtlar rapor klasöründe.
+Hedef segment ve gelir modeli kullanıcıya soruldu; yanıt bekleniyor, mevcut
+ayrı kurulum/masaüstü kararı esas alındı. Fiyat ve gelirler yalnız varsayımsal hesap.
+
+İki Codex yardımcı ajan salt okunur çalıştı. ai_team planında Claude timeout,
+Gemini sınırlı belge görüşü verdi; doğrulanmayan hukuki/teknik öneriler alınmadı.
+Sonraki tek somut geliştirme: **T01 NCR yanlış lot tüketimini regresyonla düzelt**;
+tam yedek, birleştirme ve import bütünlüğü aynı öncelik grubunda. Commit/push yok.
+
+
+## 20 Eylül 2026 (gece) — geliştirici rehberi ve Faz 0 doğrulama takımının kalıcı kayda alınması
+
+Kullanıcı isteği: bir yazılımcı için kurulum+kullanım birleşimi bir rehber
+yaz, projeyi devralan kişi anlayıp kurup devam edebilsin.
+
+`docs/GELISTIRICI-REHBERI.md` yazıldı: hızlı kurulum, mimari kurallar
+(stok yazma tekeli, transaction sınırı, tarihsel kur, COALESCE kısmi
+güncelleme tuzağı, zod coerce tuzağı, KVKK anonimleştirme durumu,
+procurementType boşluğu), test etme, "şu an neredeyiz" (Faz 0/9, mobil
+en-son kararı, en kritik V-bulguları, bekleyen K-kararları), çalışma
+disiplini, sır/güvenlik notları ve tüm `docs/` dosyalarının haritası.
+`README.md`'ye tek satır bağlantı eklendi.
+
+Ayrıca: bu oturumda izole kopyada yazılan Faz 0 doğrulama test takımı
+(`lib.js`, `inv.js`, `b1a-sales.js`…`b4c-ops.js`, 9 dosya) `%TEMP%` altındaki
+geçici kopyadan gerçek projeye `test/faz0-verify/` altına taşındı — aksi
+halde oturum bitince kalıcı olarak kaybolacaktı. Yol hesaplamaları
+(`ROOT`, sonuç dosyası yolları) yeni konuma göre düzeltildi ve
+`node test/faz0-verify/b1a-sales.js` gerçek proje kökünden çalıştırılıp
+doğrulandı (35 geçti/5 başarısız/0 hata — sonuç önceki batch koşusuyla
+birebir aynı, taşıma sırasında davranış bozulmadı). `test/run-all.js`'in
+sabit paket listesine eklenmedi (kasıtlı — çoğu kontrol henüz düzeltilmemiş
+bilinen hataları kanıtlıyor, CI'ı kırmızıya düşürür), `test/faz0-verify/
+README.md` bunu açıklıyor.
+
+## 20 Eylül 2026 (akşam) — Faz 0 bağımsız doğrulama (kısmi) ve proje klasörü temizliği
+
+Kullanıcı talebi: `TAM-LISTE-2026-09-20.md`'deki devir/denetim iddialarını
+bağımsız olarak doğrula (mobil el terminali hariç, en son kaldırılacak),
+ardından projeyi başka bir konuma kopyalayıp devam edeceği için klasörü
+düzenle ve gereksiz dosyaları temizle.
+
+**Yöntem:** İzole bir kopyada (`%TEMP%\...\scratchpad\f0-copy`, gerçek
+`data/` klasörüne dokunulmadı) gerçek `server/index.js` sandbox ortamda
+(`NODE_ENV=test`, geçici `DATA_DIR`, demo veri) çalıştırıldı; gerçek HTTP
+API'ye istekler atıldı, DB doğrudan okunarak (`stock_lots`, `movements`,
+FK/`integrity_check`) küresel değişmezler her batch sonunda kontrol edildi.
+Her 500 hatasının kök nedeni sunucu loglarındaki stack trace ile dosya/satır
+düzeyinde doğrulandı — tahmin yürütülmedi.
+
+**Kapsanan alanlar (bu oturumda ~400 kontrol):** stok/sevkiyat/sipariş,
+satın alma/finans/kimlik/yönetim, rota keşfi + yetkisiz erişim taraması,
+KVKK anonimleştirme kalıntı taraması, doküman yönetimi, genel arama,
+webhook, ZPL etiket, bildirim, firma kimliği/şablon, CRM fırsat hunisi,
+destek talepleri, saha ziyaretleri, MRP, üretim planlama (iş merkezi/
+vardiya/rota/çizelgeleme), veri sağlığı (birleştirme/toplu güncelleme),
+muhasebe dışa aktarımı, raporlar.
+
+**Sonuç:** F21, S08, S14, S16, N-11 somut kanıtla yeniden doğrulandı
+(detay ve dosya/satır referansları `docs/TAM-LISTE-2026-09-20.md` §1-3).
+22 yeni bulgu (V01-V22) eklendi — ayrıntı `docs/TAM-LISTE-2026-09-20.md`
+§3b. Öne çıkanlar: ürün formu `procurementType` alanını hiç kaydetmiyor
+(V11, MRP'nin mamul/hammadde ayrımı bu yüzden API'den asla ayarlanamıyor);
+ürün birleştirme farklı ölçü birimli ürünleri uyarısız birleştirip stok
+defterini bozuyor (V14/V15); planlama modülünde 4 uç olmayan id ile FK
+hatasıyla 500 veriyor (V13); fatura ödeme ucunda durum kontrolü yok (V21);
+anonimleştirme "geri döndürülemez" garantisi PUT ile aşılabiliyor (V01/V08).
+
+**Henüz doğrulanmadı:** masaüstü ekran taraması (Playwright), varsayılan
+hız sınırlayıcı + X-Forwarded-For sahteciliği testi, yedekleme/geri yükleme
+script'lerinin gerçek testi, import kısmi-yazma senaryosu (S15). Hiçbir
+düzeltme henüz uygulanmadı — bu tamamen doğrulama/tespit turu.
+
+**Proje klasörü temizliği:** Kullanıcı bu projeyi başka bir konuma
+kopyalayıp devam edecek. Kullanıcı onayıyla silinenler (`project/` klasörü
+zaten temizdi, hepsi `C:\Erp` seviyesindeki tekrar kopyalar):
+- `C:\Erp\dream-plus-audit-20260919` — 19 Eylül denetiminin tam proje
+  kopyası (node_modules dahil); içeriği `project/docs/analiz-2026-09-19/`
+  içinde aynen duruyor, kayıp yok.
+- `C:\Erp\dream-plus-release-verification` — yalnızca eski test/derleme
+  logları, kaynak kod içermiyordu.
+- `C:\Erp\backups` — 3 zaman damgalı SQLite yedeği; uygulamanın gerçek
+  yedek dizini değildi (`.env`'de `BACKUP_DIR` boş → kod varsayılanı
+  `data/backups` kullanır), bu klasör önceki oturumlarda elle alınmış
+  tek seferlik yedeklerdi.
+- `project/docs/DreamPlus-Teknik-Analiz-2026-09-19.zip` — unpacked hâli
+  (`analiz-2026-09-19/`) zaten mevcut olduğu için gereksizdi.
+
+`data/`, `.env`, `license-signing-key.pem` (KVKK/N-14) hiçbir zaman
+silinmedi/dokunulmadı; kopyalama sırasında bu üçü ayrıca elle ve güvenli
+şekilde taşınmalı, düz/gözden geçirilmeden kopyalanmamalı.
+
+**Beklenmeyen ve BENİM SİLMEDİĞİM bir durum tespit edildi:** Bu temizlik
+sırasında `C:\Erp\AGENTS.md`, `C:\Erp\CLAUDE.md` (dış/proje-üstü kopya) ve
+`C:\Erp\.claude-agents\gemini-analyzer.md` dosyalarının diskten kaybolduğu
+görüldü. Bu dosyalar benim `Remove-Item` komutlarımın hedefi DEĞİLDİ (yalnız
+yukarıdaki 4 öge hedeflendi) — oturum içinde çalışma dizini `C:\Erp`'den
+`C:\Erp\project`'e geçtiği sırada (harness kaynaklı bir olay olabilir)
+ortadan kayboldular; kesin neden bende değil. `CLAUDE.md` içeriği kayıp
+DEĞİL: `C:\Erp\project\CLAUDE.md` (43.352 bayt) dış kopyayla birebir
+aynıydı ve olduğu gibi duruyor. `AGENTS.md` ve `gemini-analyzer.md`
+içeriği bu oturumda bana hiç gösterilmemişti; projede eşleniği yok,
+kurtarılamıyor — kullanıcı bunları önemsiyorsa kendi yedeğinden/git
+dışı bir kopyadan geri getirmesi gerekir.
+
 ## 20 Eylül 2026 — kullanıcı isteğiyle çalışma durduruldu / devir
 
 Mevcut bakım güvenliği işi tamamlandı. Kullanıcı yeni işe geçilmemesini istedi;

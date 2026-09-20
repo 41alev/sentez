@@ -37,6 +37,13 @@ function today() {
   return toLocalDateStr(Date.now());
 }
 
+/** Strict calendar-date check; Date parsing alone normalizes impossible days. */
+function isValidLocalDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T12:00:00`);
+  return Number.isFinite(date.getTime()) && toLocalDateStr(date) === value;
+}
+
 /**
  * Bir YYYY-MM-DD tarihine N gün ekler (negatif de olabilir), sonucu yine
  * YYYY-MM-DD olarak döner. Girdi ve çıktı her zaman yerel takvim günüdür.
@@ -65,4 +72,4 @@ function daysBetween(fromStr, toStr) {
   );
 }
 
-module.exports = { DAY_MS, toLocalDateStr, today, addDays, isoWeekday, daysBetween };
+module.exports = { DAY_MS, toLocalDateStr, today, isValidLocalDate, addDays, isoWeekday, daysBetween };

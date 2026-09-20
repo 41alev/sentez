@@ -103,6 +103,7 @@ const Api = (() => {
     receipt: (id) => req('GET', '/purchasing/receipts/' + id),
     addLandedCost: (receiptId, d) => req('POST', `/purchasing/receipts/${receiptId}/landed-costs`, d),
     supplierInvoices: (p) => req('GET', '/purchasing/invoices' + qs(p)),
+    supplierInvoiceReceivableLines: (poId) => req('GET', '/purchasing/invoices/receivable-lines' + qs({ poId })),
     createSupplierInvoice: (d) => req('POST', '/purchasing/invoices', d),
     createSupplierReturn: (d) => req('POST', '/purchasing/returns', d),
 

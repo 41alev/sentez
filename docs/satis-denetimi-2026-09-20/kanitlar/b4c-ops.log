@@ -1,0 +1,134 @@
+
+[MRP]
+  i INFO MP-00 POST /items ile procurementType:'make' ve defaultSupplierId gönderildi; DB'de kalan => [{"p":"buy","d":null},{"p":"buy","d":1}]
+  i INFO MP-01b MRP çalıştırma => {"onerı":4,"gec":2,"dongu":[]}
+  ✓ MP-01 MRP: talep → mamul (make) + bileşen (buy) önerisi; miktarlar reçeteden doğru türer
+  i INFO MP-00b create sonrası / PUT sonrası procurement_type => {"create":"buy","put":"buy"}
+  ✗ FAIL MP-00 ürün oluşturma/güncelleme API'si procurementType (make/buy) alanını KAYDETMELİ (MRP bunu kullanıyor)
+       ürün formundan make/buy atanamıyor (create=buy, put=buy) → UI'da açılan mamuller MRP'de 'buy' sayılır
+
+       'buy' !== 'make'
+
+  i INFO MP-02a eşzamanlı çift dönüştürme => {"durumlar":[500,201],"yeniPO":1}
+  i INFO MP-02b tekrar dönüştürme / olmayan öneri => {"tekrar":500,"olmayan":500}
+  ✗ FAIL MP-02 öneri dönüştürme: PO oluşur; ikinci dönüştürme 409, bilinmeyen id 404 (500 olmamalı); eşzamanlı çift
+       tekrar=500 (409 beklenir), olmayan=500 (404 beklenir)
+  i INFO MP-03b durumlar => {"tedarikcisiz":500,"reddedilenDonustur":500,"hayaletDepo":500}
+  ✗ FAIL MP-03 öneri: reddedilmiş öneri dönüştürülemez; tedarikçisiz buy önerisi 4xx; hayalet depo 4xx
+       tedarikçisiz=500 reddedilen=500 hayaletDepo=500
+  i INFO MP-04b döngülü reçete ile MRP => {"status":201,"ms":18,"dongu":[["52e27912-4d91-4b74-a284-e7e5d23f2a0a","f7ccdcb6-2cec-4a4f-9eab-7c2a9dd5a388","52e27912-4d91-4b74-a284-e7e5d23f2a0a"],["f7ccdcb6-2cec-4a4f-9eab-7c2a9dd5a388","52e27912-4d91-4b74-a284-e7e5d23f2a0a","f7ccdcb6-2cec-4a4f-9eab-7c2a9dd5a388"]]}
+  ✓ MP-04 MRP: BOM döngüsü (DB'ye doğrudan) sonsuz döngü/500 üretmez; döngü raporlanır
+  i INFO MP-05a {"horizonDays":0} => {"status":422}
+  i INFO MP-05a {"horizonDays":731} => {"status":422}
+  i INFO MP-05a {"horizonDays":-1} => {"status":422}
+  i INFO MP-05a {"horizonDays":"abc"} => {"status":422}
+  i INFO MP-05a {"horizonDays":1.5} => {"status":422}
+  ✓ MP-05 MRP girdi doğrulama ve yetki
+
+[PLAN]
+  i INFO PL-01a sonuçlar => {"ilk":201,"mukerrerKod":500,"saat9999":201,"ayniSaat":201,"molaFazla":201,"tekrarGun":201,"hayaletDepo":500,"hayaletVardiya":500,"kapasite0":422}
+  ✗ FAIL PL-01 vardiya/iş merkezi: mükerrer kod, geçersiz saat, geçersiz depo/vardiya id → 4xx (500 olmamalı)
+       500 dönenler: mükerrerKod=500 saat=201 ayniSaat=201 molaFazla=201 hayaletDepo=500 hayaletVardiya=500
+
+       3 !== 0
+
+  i INFO PL-02a sonuçlar => {"hayaletMerkez":500,"gecersizTarih":201,"kismiSaatsiz":201,"mukerrer":[201,201]}
+  ✗ FAIL PL-02 takvim istisnası: hayalet iş merkezi, geçersiz tarih, kısmi gün saat olmadan, mükerrer
+       hayalet iş merkezi → 500
+  i INFO PL-03a hayalet iş merkezi => {"status":500,"rotaKorundu":true}
+  i INFO PL-03b pasif iş merkezi ile rota => {"status":200}
+  ✗ FAIL PL-03 rota: hayalet/pasif iş merkezi 4xx ve mevcut rota bozulmaz; olmayan ürün 404
+       hayalet=500 pasif=200
+  i INFO PL-04a üretim emri açılamadı => {"status":400,"data":{"error":"Bu ürün için reçete tanımlı değil / No recipe (BOM) defined for this item","requestId":"1500fa41-3ba1-4489-9e00-4c6320c7c536"}}
+  ✓ PL-04 çizelgeleme: olmayan emir 404, geçersiz startFrom 4xx (NaN tarih yazılmamalı)
+  i INFO PL-05a bozuk aralık durumları => {"cap from=abc&to=xyz":400,"oee from=abc&to=xyz":200,"cap from=2026-12-01&to=2026-01-01":400,"oee from=2026-12-01&to=2026-01-01":200,"cap from=2026-13-45&to=2026-99-99":400,"oee from=2026-13-45&to=2026-99-99":200}
+  i INFO PL-05b 200 yıllık kapasite aralığı => {"status":200,"ms":59075}
+  i INFO PL-05c hayalet vardiya/iş merkezi ile vardiya kaydı => {"status":500}
+  ✗ FAIL PL-05 kapasite/OEE/vardiya kaydı: geçersiz aralık ve devasa aralık (süre), hayalet id
+       500 sayısı=0, hayaletKayıt=500, geniş aralık=59075ms
+  i INFO INV-pre ihlaller => []
+  ✓ INV-pre küresel değişmezler (veri sağlığı/birleştirme testlerinden ÖNCE)
+
+[DATA-HEALTH]
+  i INFO DH-01a rapor özeti => ["generatedAt","score","totals","checks"]
+  i INFO DH-01b GET /data-health/check/yok => {"status":404}
+  i INFO DH-01b POST /data-health/check/yok/fix => {"status":404}
+  ✓ DH-01 denetim: rapor çalışır; bilinmeyen kontrol id 4xx (500 değil)
+  i INFO DH-02a birleşme sonrası reçete => [{"c":"ece94a2a-664b-44b4-b922-19b6d4a3f7be","q":2}]
+  ✗ FAIL DH-02 ürün birleştirme: aynı bileşen iki kez birleşince reçete miktarı TOPLANMALI (kod yorumu böyle diyor)
+       reçete toplam bileşen miktarı 2 (beklenen 5): birleşme sırasında miktar KAYBOLDU
+
+       2 !== 5
+
+  i INFO DH-03a kg ürünü ile adet ürünü birleştirildi mi / sevkiyat kalemi kaynakta kaldı mı => {"birlesti":true,"hedefStok":11,"kaynaktaKalanSevkKalemi":1,"degismezIhlal":2}
+  ✗ FAIL DH-03 ürün birleştirme: stok/defter bütünlüğü, birim uyuşmazlığı, sevkiyat/muayene/NCR bağları
+       farklı birimli ürünler (kg + adet) uyarısız birleştirildi: hedef stok 11 (birimsiz toplam)
+  ! ERROR DH-03b birleştirme sonrası o ürünün sevkiyatı iptal edilirse ne olur (sevk kalemi kaynakta kaldı)
+       no such column: s.created_at
+  i INFO DH-09a FK ile bağlı ama birleştirmede TAŞINMAYAN sütunlar => {"items":["raw_materials.item_id","purchase_request_lines.item_id","rfq_lines.item_id","rfq_quotes.item_id","po_receipt_lines.item_id","supplier_returns.item_id","supplier_price_history.item_id","production_consumption.component_item_id","inspection_plans.item_id","ncrs.item_id","mrp_suggestions.ite
+  ✗ FAIL DH-09 birleştirme planı eksikliği: items/suppliers/customers'a işaret eden TÜM yabancı anahtarlar taşınıyor mu
+       taşınmayan bağ sayısı 23: {"items":["raw_materials.item_id","purchase_request_lines.item_id","rfq_lines.item_id","rfq_quotes.item_id","po_receipt_lines.item_id","supplier_returns.item_id","supplier_price_history.item_id","production_consumption.component_item_id","inspection_plans.item_id","ncrs.item_id","mrp_suggestions.item_id","opportunity_lines.item_id"],"suppliers":["rfqs.awarded_supplier_id","rfq_quotes.supplier_id","supplier_returns.supplier_id","supplier_price_history.supplier_id","inspections.supplier_id","ncrs.supplier_id","mrp_suggestions.supplier_id"],"customers":["ncrs.customer_id","opportunities.customer_id","support_tickets.customer_id","customer_visits.customer_id"]}
+
+       23 !== 0
+
+  i INFO DH-04a sonuç => {"status":500,"kaynakVarMi":true,"kaynagaBagliKalan":3,"hata":{"error":"Sunucu hatası / Server error","requestId":"5db138ed-232e-418e-abd1-1636fd140315"}}
+  ✗ FAIL DH-04 müşteri birleştirme: fırsat/ziyaret/talep/NCR bağlı kaynak kayıt silinirken 500 (FK) veya sahipsiz bağ
+       müşteri birleştirme 500 (FK sorunu → 500)
+  i INFO DH-05a sonuç => {"status":500,"data":{"error":"Sunucu hatası / Server error","requestId":"e3a388d7-0621-476c-b17a-4bdc4f151218"}}
+  ✗ FAIL DH-05 tedarikçi birleştirme: PO/varsayılan tedarikçi taşınır, kaynak silinir, defter bozulmaz
+       tedarikçi birleştirme 500
+  ✓ DH-06 birleştirme girdi/yetki: kendine, olmayan, confirm eksik, operatör
+  i INFO DH-07a toplu güncelleme sonuçları => {"minStock=null":{"status":200,"degisti":true},"minStock=\"\"":{"status":200,"degisti":false},"minStock=true":{"status":200,"degisti":true},"minStock=-5":{"status":200,"degisti":true},"vatRate=1000":{"status":200,"degisti":true},"vatRate=-1":{"status":200,"degisti":true},"safetyStock=\"abc\"":{"stat
+  ✗ FAIL DH-07 toplu güncelleme: null/boş/mantıksız değerler 0 veya geçersiz veriye dönüşmemeli
+       kabul edilen/500 veren: minStock=null→200, minStock=""→200, minStock=true→200, minStock=-5→200, vatRate=1000→200, vatRate=-1→200, unit=""→200, itemType="bogus"→500, defaultSupplierId="ghost"→500, defaultSupplierId=999999→500
+
+       10 !== 0
+
+  i INFO DH-08a toplam stok değeri => {"ozetOnce":186228,"degerlemeOnce":186228,"ozetSonra":186228,"degerlemeSonra":181228}
+  ✗ FAIL DH-08 pasife alınan stoklu ürün: özet rapor değeri ile değerleme raporu aynı toplamı vermeli
+       özet 186228 ≠ değerleme 181228 (pasif stoklu ürün)
+
+       186228 !== 181228
+
+
+[ACCOUNTING]
+  i INFO AC-01a fatura => {"subtotal":99.99,"vat_total":20,"amount":119.99,"fx_rate":1,"invoice_date":"2026-09-20"}
+  i INFO AC-01b dışa aktarım => {"satir":6,"borc":239.99,"alacak":239.99}
+  i INFO AC-01c satış maliyeti (COGS) satırı var mı; stok hesabı alacaklanıyor mu => {"cogs":false,"stokAlacak":false}
+  ✓ AC-01 yevmiye: satış (KDV dahil, döviz, iade) + alış; borç=alacak; tutarlar fatura ile birebir
+  i INFO AC-02a iade => {"iade":201,"asiriIade":409,"dovizUyusmazligi":422,"iadeSatiri":[{"h":"120","b":0,"a":60},{"h":"600","b":50,"a":0},{"h":"391","b":10,"a":0}],"borc":419.99,"alacak":419.99}
+  i INFO AC-02b iade faturasına ödeme / asıl faturaya iki kez ödeme => {"iadeOdeme":200,"ilkOdeme":200,"ikinciOdeme":200}
+  ✗ FAIL AC-02 yevmiye: iade faturası ters yönde; aşırı iade 409; döviz uyuşmazlığı 422; ödeme ucu durum kontrolü; geçersiz aralık
+       iade faturası "ödendi" yapılabildi=true; aynı fatura ikinci kez "ödendi" yapılabildi=true
+  i INFO AC-03a mevcut eşlemeler => ["accounts_payable=320","accounts_receivable=120","inventory=153","purchase_vat=191","sales_revenue=600","sales_vat=391"]
+  ✓ AC-03 hesap eşlemesi: geçersiz anahtar 4xx, boş kod 4xx; eksik eşleme açık hata verir
+
+[REPORTS]
+  i INFO RP-01a durumlar => {"/reports/summary":200,"/reports/trends":200,"/reports/dead-stock":200,"/reports/turnover":200,"/reports/abc":200,"/reports/reorder-suggestions":200,"/reports/supplier-performance":200,"/reports/quality-kpis":200,"/reports/production-costs":200,"/reports/valuation":200}
+  ✓ RP-01 tüm rapor uçları 200; sayısal alanlarda NaN/Infinity/null yok; bozuk sorgu parametreleri 500 vermez
+  i INFO RP-02a toplam => {"rapor":181328,"db":181328}
+  ✓ RP-02 değerleme raporu toplamı = DB'deki uygun parti Σ(qty×unit_cost) (aktif ürünler)
+  i INFO RP-03a kritik stok sayısı => {"once":15,"sonra":18}
+  ✗ FAIL RP-03 kritik stok uyarısı: min_stock=0 ve stok=0 olan ürünler "kritik" sayılmamalı (yanlış alarm)
+       min_stock=0 olan 3 ürün kritik listesine 3 eklendi
+
+       18 !== 15
+
+  i INFO RP-04a süresi geçmiş partili stok özet değerinde => {"toplam":187328,"vadesiGecen":2}
+  ✓ RP-04 süresi geçmiş uygun parti stok değerine dahil mi (F09 politikası) — bilgi
+  i INFO RP-05a {"dataSource":"nope","dimension":"x","metric":"y"} => {"status":400}
+  i INFO RP-05a {"dataSource":"movements","dimension":"type; DROP TABLE items;--","met => {"status":400}
+  i INFO RP-05a {"dataSource":"movements","dimension":"type","metric":"1) UNION SELECT => {"status":400}
+  i INFO RP-05a {"dataSource":"__proto__","dimension":"constructor","metric":"toString => {"status":500}
+  ✗ FAIL RP-05 pivot: geçersiz veri kaynağı/boyut/ölçü 400 (500 değil); SQL benzeri değerler zararsız; bozuk filtre
+       {"dataSource":"__proto__","dimension":"constructor","metric":"toString"} → 500
+  ✓ RP-06 kayıtlı rapor: geçersiz boyut 400; başkasının raporunu operatör silemez; yönetici siler
+  i INFO INV-post ihlaller => ["qty_cache uyuşmuyor: OItem 10 cache=6 partiler=0","sipariş satırı sevk miktarı > sevkiyat kalemleri: line=6 shipped=1 kalemler=0"]
+  ✗ FAIL INV-post küresel değişmezler (tüm batch sonrası)
+       qty_cache uyuşmuyor: OItem 10 cache=6 partiler=0; sipariş satırı sevk miktarı > sevkiyat kalemleri: line=6 shipped=1 kalemler=0
+
+       2 !== 0
+
+
+=== b4c-ops: 13 geçti, 18 BAŞARISIZ, 1 HATA (toplam 78) ===
+(sonuçlar: C:\Projelerim\Dream\dream-plus\test\faz0-verify\results\b4c-ops.json )
