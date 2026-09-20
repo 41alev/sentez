@@ -20,6 +20,7 @@
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+if (require.main === module) require('dotenv').config({ quiet: true });
 
 const dataDir = process.env.DATA_DIR || path.join(__dirname, '..', '..', 'data');
 const dbPath = process.env.DB_PATH || path.join(dataDir, 'depo-takip.sqlite');
@@ -52,6 +53,9 @@ async function main() {
     process.exit(1);
   }
 
+  // Keep the lease through backup, migration and nested restore on failure.
+  const releaseMaintenanceLock = require('../lib/maintenance-lock').acquireMaintenanceLock(dbPath);
+  process.once('exit', releaseMaintenanceLock);
   /* ---- 1. Sunucu kontrolü ---- */
   if (serverLooksRunning() && !flag('force')) {
     console.error('\n✗ Sunucu çalışıyor görünüyor (WAL dosyası dolu).');

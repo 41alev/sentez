@@ -12,11 +12,13 @@
  *   node server/scripts/restore.js --verify <dosya>     (yazmaz, sadece kontrol eder)
  *
  * Sunucu çalışırken geri yükleme yapılmamalıdır: WAL dosyaları tutarsız kalır.
- * Script bunu tespit edip uyarır.
+ * Bakım kilidi ve WAL denetimi geri yüklemeyi engeller; --force bunu aşamaz.
  */
 const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
+if (require.main === module) require('dotenv').config({ quiet: true });
+const { acquireMaintenanceLock } = require('../lib/maintenance-lock');
 
 const dataDir = process.env.DATA_DIR || path.join(__dirname, '..', '..', 'data');
 const dbPath = process.env.DB_PATH || path.join(dataDir, 'depo-takip.sqlite');
@@ -100,13 +102,11 @@ function verifyBackup(file) {
   return result;
 }
 
-/** Sunucunun çalışıp çalışmadığını WAL dosyasının varlığından tahmin eder. */
-function warnIfRunning() {
+/** Refuse unresolved WAL state even when an older server has no maintenance lock. */
+function assertNoActiveWal() {
   const wal = dbPath + '-wal';
   if (fs.existsSync(wal) && fs.statSync(wal).size > 0) {
-    console.warn('\n⚠ UYARI: WAL dosyası dolu görünüyor — sunucu çalışıyor olabilir.');
-    console.warn('  Geri yüklemeden önce sunucuyu durdurun, aksi halde veri kaybı olur.\n');
-    return true;
+    throw new Error('WAL dosyası boş değil; sunucuyu durdurun ve WAL kurtarmasını tamamlayın / Nonempty WAL: stop the server and complete WAL recovery before restore');
   }
   return false;
 }
@@ -116,13 +116,19 @@ function warnIfRunning() {
  * yeniden adlandırılır: yanlış yedeği yüklerseniz geri dönüş yolu kalır.
  */
 function restore(file, { force = false } = {}) {
+  const release = acquireMaintenanceLock(dbPath);
+  try { return restoreOffline(file, { force }); } finally { release(); }
+}
+
+function restoreOffline(file, { force = false } = {}) {
+  if (path.resolve(file) === path.resolve(dbPath)) throw new Error('Kaynak ve hedef aynı olamaz / Source and destination must differ');
   const v = verifyBackup(file);
   if (!v.ok && !force) {
     throw new Error(`Yedek doğrulamayı geçemedi / Backup failed verification:\n` +
       v.checks.filter(c => !c.ok).map(c => `  - ${c.name} ${c.detail}`).join('\n'));
   }
 
-  warnIfRunning();
+  assertNoActiveWal();
 
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const safety = `${dbPath}.pre-restore-${stamp}`;

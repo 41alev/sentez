@@ -1,0 +1,22 @@
+
+> dream-plus@2.0.0 build
+> node scripts/build-frontend.js
+
+React vendor paketi (React/ReactDOM BİR KEZ, paylaşılan global olarak)...
+  ✓ vendor-react.js
+Ekran paketleri (her biri React'i vendor-react.js'ten paylaşır)...
+  ✓ view-dashboard.js
+  ✓ view-items.js
+  ✓ view-counts.js
+  ✓ view-lots.js
+  ✓ view-production.js
+  ✓ view-reports.js
+  ✓ view-planning.js
+  ✓ view-purchasing.js
+  ✓ view-quality.js
+  ✓ view-sales.js
+  ✓ view-crm.js
+  ✓ view-support.js
+  ✓ view-admin.js
+
+Tamamlandı — public/dist/ içinde 1 vendor + 13 ekran paketi.

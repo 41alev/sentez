@@ -1,0 +1,889 @@
+[WebServer] ◇ injected env (0) from .env // tip: ⌘ suppress logs { quiet: true }
+[WebServer] Migration uygulandı / applied: 001_initial_schema.js
+[WebServer] Migration uygulandı / applied: 002_einvoice.js
+[WebServer] Migration uygulandı / applied: 003_planning.js
+[WebServer] Migration uygulandı / applied: 004_import.js
+[WebServer] Migration uygulandı / applied: 005_templates.js
+[WebServer] Migration uygulandı / applied: 006_multitenancy_prep.js
+[WebServer] Migration uygulandı / applied: 007_scoped_uniqueness.js
+[WebServer] Migration uygulandı / applied: 008_accounting_bridge.js
+[WebServer] Migration uygulandı / applied: 009_webhooks.js
+[WebServer] Migration uygulandı / applied: 010_crm.js
+[WebServer] Migration uygulandı / applied: 011_saved_reports.js
+[WebServer] Migration uygulandı / applied: 012_webhook_retry.js
+[WebServer] Migration uygulandı / applied: 013_pivot_datasources.js
+[WebServer] Migration uygulandı / applied: 014_support_and_visits.js
+[WebServer] Migration uygulandı / applied: 015_invoice_return_reference.js
+[WebServer] Migration uygulandı / applied: 016_kvkk_anonymization.js
+[WebServer] Migration uygulandı / applied: 017_remove_einvoice_module.js
+[WebServer] Örnek veriler yüklendi / Seed data loaded.
+[WebServer] Kullanıcılar / Users: admin/Admin123!  mudur/Mudur123!  operator/Operator123!  kalite/Kalite123!  viewer/Viewer123!
+[WebServer] (node:8984) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:8984) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] [07:50:53.107] INFO (8984): Dream Plus çalışıyor / running at http://localhost:3000
+
+Running 33 tests using 1 worker
+
+(node:10340) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x   1 [chromium] › test\e2e-browser\admin-audit-log.spec.js:15:3 › Yönetim — Denetim Kaydı null rol sızdırmıyor › başarısız giriş denemesi satırında literal "null" görünmüyor (1ms)
+(node:17808) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x   2 [chromium] › test\e2e-browser\counts-quality-role.spec.js:21:3 › Sayım — Kalite rolü gerçekten sayım oluşturup kaydedebiliyor › kalite kullanıcısı yeni sayım açıp bir satırı kaydedebiliyor (1ms)
+(node:5596) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x   3 [chromium] › test\e2e-browser\crm.spec.js:6:3 › CRM — fırsat oluşturma ve satış siparişine dönüştürme › fırsat oluşturulup kazanılıp gerçek bir siparişe dönüştürülüyor (1ms)
+(node:16396) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x   4 [chromium] › test\e2e-browser\global-search.spec.js:14:3 › Genel arama — kenar çubuğundaki arama kutusu › müşteri araması gerçek sonuç gösterip doğru ekrana götürüyor (1ms)
+(node:12612) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x   5 [chromium] › test\e2e-browser\global-search.spec.js:27:3 › Genel arama — kenar çubuğundaki arama kutusu › ürün araması ve parti araması gerçek verilerle sonuç veriyor (1ms)
+(node:13568) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x   6 [chromium] › test\e2e-browser\global-search.spec.js:37:3 › Genel arama — kenar çubuğundaki arama kutusu › sonuç yoksa "sonuç bulunamadı" gösteriliyor, Escape kapatıyor (1ms)
+(node:6412) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x   7 [chromium] › test\e2e-browser\items.spec.js:6:3 › Ürünler — stok girişi (uçtan uca gerçek sunucuya karşı) › stok girişi diyaloğu gerçek miktarı sunucuya yazıyor (1ms)
+(node:14176) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x   8 [chromium] › test\e2e-browser\login.spec.js:6:3 › Giriş ve temel gezinme › giriş yapılabiliyor ve panel gerçek veriyle render oluyor (1ms)
+(node:5896) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x   9 [chromium] › test\e2e-browser\login.spec.js:16:3 › Giriş ve temel gezinme › yanlış şifre reddediliyor (2ms)
+(node:14948) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  10 [chromium] › test\e2e-browser\login.spec.js:25:3 › Giriş ve temel gezinme › görüntüleyici rolünde Yönetim sekmesi gizli (1ms)
+(node:3932) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  11 [chromium] › test\e2e-browser\login.spec.js:30:3 › Giriş ve temel gezinme › kalite rolünde Yönetim sekmesi gizli (1ms)
+(node:9880) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  12 [chromium] › test\e2e-browser\login.spec.js:41:5 › Giriş ve temel gezinme › items ekranı hatasız render oluyor (1ms)
+(node:13500) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  13 [chromium] › test\e2e-browser\login.spec.js:41:5 › Giriş ve temel gezinme › lots ekranı hatasız render oluyor (1ms)
+(node:4720) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  14 [chromium] › test\e2e-browser\login.spec.js:41:5 › Giriş ve temel gezinme › crm ekranı hatasız render oluyor (1ms)
+(node:15108) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  15 [chromium] › test\e2e-browser\login.spec.js:41:5 › Giriş ve temel gezinme › sales ekranı hatasız render oluyor (1ms)
+(node:12668) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  16 [chromium] › test\e2e-browser\login.spec.js:41:5 › Giriş ve temel gezinme › reports ekranı hatasız render oluyor (1ms)
+(node:14704) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  17 [chromium] › test\e2e-browser\lots-traceability.spec.js:23:3 › Partiler — izlenebilirlik raporu gerçek verilerle doluyor › geriye/ileriye izleme ve geri çağırma raporu doğru bilgiyi gösteriyor (1ms)
+(node:17352) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  18 [chromium] › test\e2e-browser\mobile-count.spec.js:19:3 › Depo Terminali — Sayım gerçekten sunucuya kaydediyor › mobilde sayılan bir kalem sunucuya yazılıyor (no such column hatası değil) (1ms)
+(node:13272) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  19 [chromium] › test\e2e-browser\mobile-offline-queue.spec.js:19:3 › Depo Terminali — çevrimdışı kuyruk gerçekten çalışıyor › çevrimdışıyken sayım kuyruğa alınıyor, bağlantı gelince otomatik gönderiliyor (1ms)
+(node:17412) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  20 [chromium] › test\e2e-browser\mobile-receiving.spec.js:21:3 › Depo Terminali — Mal Kabul gerçekten sunucuya kaydediyor › SA-2026-003 siparişindeki kalem teslim alınıp sunucuya yazılıyor (422 değil) (1ms)
+(node:6560) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  21 [chromium] › test\e2e-browser\mobile.spec.js:5:3 › Depo Terminali — gerçek tarayıcı CSS/layout regresyonu › hidden öznitelikli elemanlar GERÇEKTEN görünmez (Aşama 6 regresyon testi) (1ms)
+(node:14624) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  22 [chromium] › test\e2e-browser\mobile.spec.js:22:3 › Depo Terminali — gerçek tarayıcı CSS/layout regresyonu › giriş yapıp barkod okutarak ürün ekranına ulaşılıyor (1ms)
+(node:13600) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  23 [chromium] › test\e2e-browser\permission-matrix.spec.js:14:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Müdür sevkiyat silme butonunu görmüyor (DELETE /shipments yalnızca gerçek admin) (1ms)
+(node:7492) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  24 [chromium] › test\e2e-browser\permission-matrix.spec.js:30:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Kalite kullanıcısı bir ürüne doküman yükleme butonunu görüyor (2ms)
+(node:10472) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  25 [chromium] › test\e2e-browser\permission-matrix.spec.js:46:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Müdür parti durum değiştirme butonunu görmüyor (POST /lot-status yalnızca admin+kalite) (1ms)
+(node:5772) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  26 [chromium] › test\e2e-browser\permission-matrix.spec.js:65:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Kalite kullanıcısı parti durum değiştirme butonunu görüyor (2ms)
+(node:14292) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  27 [chromium] › test\e2e-browser\permission-matrix.spec.js:73:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Müdür Webhook sekmesini açınca "yalnızca yöneticilere açık" görüyor, 403 hatası değil (1ms)
+(node:9632) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  28 [chromium] › test\e2e-browser\permission-matrix.spec.js:86:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Müdür kendi kaydettiği raporu silebiliyor (sahibi olduğu için) (1ms)
+(node:15488) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  29 [chromium] › test\e2e-browser\permission-matrix.spec.js:104:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Operatör #admin hash'ine doğrudan gidince Yönetim ekranını GÖREMİYOR (gizli sekme = yetki değil) (1ms)
+(node:14920) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  30 [chromium] › test\e2e-browser\permission-matrix.spec.js:125:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Başkasının kayıtlı raporunu Operatör silemiyor (1ms)
+(node:1960) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  31 [chromium] › test\e2e-browser\print-output-content.spec.js:22:3 › Yazdırma çıktıları — gerçek belge içeriği › sevkiyat irsaliyesi çıktısı GERÇEK sevkiyat verisini içeriyor (şablon değil) (1ms)
+(node:8332) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  32 [chromium] › test\e2e-browser\purchasing-compare-quotes.spec.js:20:3 › Satın Alma — teklif karşılaştırma gerçek verilerle doluyor › 3 teklifli RFQ karşılaştırma tablosu doğru fiyat/tedarikçi/en iyi fiyatı gösteriyor (1ms)
+(node:9668) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  33 [chromium] › test\e2e-browser\purchasing-invoices.spec.js:20:3 › Satın Alma — fatura 3'lü eşleştirme gerçek verilerle doluyor › yeni fatura girildiğinde tedarikçi adı ve fark notu doğru gösteriliyor (1ms)
+
+
+  1) [chromium] › test\e2e-browser\admin-audit-log.spec.js:15:3 › Yönetim — Denetim Kaydı null rol sızdırmıyor › başarısız giriş denemesi satırında literal "null" görünmüyor 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\admin-audit-log-Yönetim-—--04387-nda-literal-null-görünmüyor-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\admin-audit-log-Yönetim-—--04387-nda-literal-null-görünmüyor-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\admin-audit-log-Yönetim-—--04387-nda-literal-null-görünmüyor-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [chromium] › test\e2e-browser\counts-quality-role.spec.js:21:3 › Sayım — Kalite rolü gerçekten sayım oluşturup kaydedebiliyor › kalite kullanıcısı yeni sayım açıp bir satırı kaydedebiliyor 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\counts-quality-role-Sayım--80f4d-p-bir-satırı-kaydedebiliyor-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\counts-quality-role-Sayım--80f4d-p-bir-satırı-kaydedebiliyor-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\counts-quality-role-Sayım--80f4d-p-bir-satırı-kaydedebiliyor-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [chromium] › test\e2e-browser\crm.spec.js:6:3 › CRM — fırsat oluşturma ve satış siparişine dönüştürme › fırsat oluşturulup kazanılıp gerçek bir siparişe dönüştürülüyor 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\crm-CRM-—-fırsat-oluşturma-e8cc0-bir-siparişe-dönüştürülüyor-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\crm-CRM-—-fırsat-oluşturma-e8cc0-bir-siparişe-dönüştürülüyor-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\crm-CRM-—-fırsat-oluşturma-e8cc0-bir-siparişe-dönüştürülüyor-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) [chromium] › test\e2e-browser\global-search.spec.js:14:3 › Genel arama — kenar çubuğundaki arama kutusu › müşteri araması gerçek sonuç gösterip doğru ekrana götürüyor 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\global-search-Genel-arama--78ecf-erip-doğru-ekrana-götürüyor-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\global-search-Genel-arama--78ecf-erip-doğru-ekrana-götürüyor-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\global-search-Genel-arama--78ecf-erip-doğru-ekrana-götürüyor-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) [chromium] › test\e2e-browser\global-search.spec.js:27:3 › Genel arama — kenar çubuğundaki arama kutusu › ürün araması ve parti araması gerçek verilerle sonuç veriyor 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\global-search-Genel-arama--6027a-çek-verilerle-sonuç-veriyor-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\global-search-Genel-arama--6027a-çek-verilerle-sonuç-veriyor-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\global-search-Genel-arama--6027a-çek-verilerle-sonuç-veriyor-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) [chromium] › test\e2e-browser\global-search.spec.js:37:3 › Genel arama — kenar çubuğundaki arama kutusu › sonuç yoksa "sonuç bulunamadı" gösteriliyor, Escape kapatıyor 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\global-search-Genel-arama--04333-steriliyor-Escape-kapatıyor-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\global-search-Genel-arama--04333-steriliyor-Escape-kapatıyor-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\global-search-Genel-arama--04333-steriliyor-Escape-kapatıyor-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  7) [chromium] › test\e2e-browser\items.spec.js:6:3 › Ürünler — stok girişi (uçtan uca gerçek sunucuya karşı) › stok girişi diyaloğu gerçek miktarı sunucuya yazıyor 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\items-Ürünler-—-stok-giriş-ad446-ek-miktarı-sunucuya-yazıyor-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\items-Ürünler-—-stok-giriş-ad446-ek-miktarı-sunucuya-yazıyor-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\items-Ürünler-—-stok-giriş-ad446-ek-miktarı-sunucuya-yazıyor-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  8) [chromium] › test\e2e-browser\login.spec.js:6:3 › Giriş ve temel gezinme › giriş yapılabiliyor ve panel gerçek veriyle render oluyor 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\login-Giriş-ve-temel-gezin-fd509-erçek-veriyle-render-oluyor-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\login-Giriş-ve-temel-gezin-fd509-erçek-veriyle-render-oluyor-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\login-Giriş-ve-temel-gezin-fd509-erçek-veriyle-render-oluyor-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  9) [chromium] › test\e2e-browser\login.spec.js:16:3 › Giriş ve temel gezinme › yanlış şifre reddediliyor 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\login-Giriş-ve-temel-gezinme-yanlış-şifre-reddediliyor-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\login-Giriş-ve-temel-gezinme-yanlış-şifre-reddediliyor-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\login-Giriş-ve-temel-gezinme-yanlış-şifre-reddediliyor-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  10) [chromium] › test\e2e-browser\login.spec.js:25:3 › Giriş ve temel gezinme › görüntüleyici rolünde Yönetim sekmesi gizli 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\login-Giriş-ve-temel-gezin-71ded-lünde-Yönetim-sekmesi-gizli-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\login-Giriş-ve-temel-gezin-71ded-lünde-Yönetim-sekmesi-gizli-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\login-Giriş-ve-temel-gezin-71ded-lünde-Yönetim-sekmesi-gizli-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  11) [chromium] › test\e2e-browser\login.spec.js:30:3 › Giriş ve temel gezinme › kalite rolünde Yönetim sekmesi gizli 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\login-Giriş-ve-temel-gezin-6e88b-lünde-Yönetim-sekmesi-gizli-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\login-Giriş-ve-temel-gezin-6e88b-lünde-Yönetim-sekmesi-gizli-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\login-Giriş-ve-temel-gezin-6e88b-lünde-Yönetim-sekmesi-gizli-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  12) [chromium] › test\e2e-browser\login.spec.js:41:5 › Giriş ve temel gezinme › items ekranı hatasız render oluyor 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\login-Giriş-ve-temel-gezin-db13f-kranı-hatasız-render-oluyor-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\login-Giriş-ve-temel-gezin-db13f-kranı-hatasız-render-oluyor-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\login-Giriş-ve-temel-gezin-db13f-kranı-hatasız-render-oluyor-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  13) [chromium] › test\e2e-browser\login.spec.js:41:5 › Giriş ve temel gezinme › lots ekranı hatasız render oluyor 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\login-Giriş-ve-temel-gezin-b368d-kranı-hatasız-render-oluyor-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\login-Giriş-ve-temel-gezin-b368d-kranı-hatasız-render-oluyor-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\login-Giriş-ve-temel-gezin-b368d-kranı-hatasız-render-oluyor-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  14) [chromium] › test\e2e-browser\login.spec.js:41:5 › Giriş ve temel gezinme › crm ekranı hatasız render oluyor 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\login-Giriş-ve-temel-gezin-37a92-kranı-hatasız-render-oluyor-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\login-Giriş-ve-temel-gezin-37a92-kranı-hatasız-render-oluyor-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\login-Giriş-ve-temel-gezin-37a92-kranı-hatasız-render-oluyor-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  15) [chromium] › test\e2e-browser\login.spec.js:41:5 › Giriş ve temel gezinme › sales ekranı hatasız render oluyor 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\login-Giriş-ve-temel-gezin-58f7a-kranı-hatasız-render-oluyor-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\login-Giriş-ve-temel-gezin-58f7a-kranı-hatasız-render-oluyor-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\login-Giriş-ve-temel-gezin-58f7a-kranı-hatasız-render-oluyor-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  16) [chromium] › test\e2e-browser\login.spec.js:41:5 › Giriş ve temel gezinme › reports ekranı hatasız render oluyor 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\login-Giriş-ve-temel-gezin-5268e-kranı-hatasız-render-oluyor-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\login-Giriş-ve-temel-gezin-5268e-kranı-hatasız-render-oluyor-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\login-Giriş-ve-temel-gezin-5268e-kranı-hatasız-render-oluyor-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  17) [chromium] › test\e2e-browser\lots-traceability.spec.js:23:3 › Partiler — izlenebilirlik raporu gerçek verilerle doluyor › geriye/ileriye izleme ve geri çağırma raporu doğru bilgiyi gösteriyor 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\lots-traceability-Partiler-0b7ed-ru-doğru-bilgiyi-gösteriyor-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\lots-traceability-Partiler-0b7ed-ru-doğru-bilgiyi-gösteriyor-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\lots-traceability-Partiler-0b7ed-ru-doğru-bilgiyi-gösteriyor-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  18) [chromium] › test\e2e-browser\mobile-count.spec.js:19:3 › Depo Terminali — Sayım gerçekten sunucuya kaydediyor › mobilde sayılan bir kalem sunucuya yazılıyor (no such column hatası değil) 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\mobile-count-Depo-Terminal-6ea4c-o-such-column-hatası-değil--chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\mobile-count-Depo-Terminal-6ea4c-o-such-column-hatası-değil--chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\mobile-count-Depo-Terminal-6ea4c-o-such-column-hatası-değil--chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  19) [chromium] › test\e2e-browser\mobile-offline-queue.spec.js:19:3 › Depo Terminali — çevrimdışı kuyruk gerçekten çalışıyor › çevrimdışıyken sayım kuyruğa alınıyor, bağlantı gelince otomatik gönderiliyor 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\mobile-offline-queue-Depo--4be8e-lince-otomatik-gönderiliyor-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\mobile-offline-queue-Depo--4be8e-lince-otomatik-gönderiliyor-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\mobile-offline-queue-Depo--4be8e-lince-otomatik-gönderiliyor-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  20) [chromium] › test\e2e-browser\mobile-receiving.spec.js:21:3 › Depo Terminali — Mal Kabul gerçekten sunucuya kaydediyor › SA-2026-003 siparişindeki kalem teslim alınıp sunucuya yazılıyor (422 değil) 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\mobile-receiving-Depo-Term-d7985-nucuya-yazılıyor-422-değil--chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\mobile-receiving-Depo-Term-d7985-nucuya-yazılıyor-422-değil--chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\mobile-receiving-Depo-Term-d7985-nucuya-yazılıyor-422-değil--chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  21) [chromium] › test\e2e-browser\mobile.spec.js:5:3 › Depo Terminali — gerçek tarayıcı CSS/layout regresyonu › hidden öznitelikli elemanlar GERÇEKTEN görünmez (Aşama 6 regresyon testi) 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\mobile-Depo-Terminali-—-ge-73f47-ez-Aşama-6-regresyon-testi--chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\mobile-Depo-Terminali-—-ge-73f47-ez-Aşama-6-regresyon-testi--chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\mobile-Depo-Terminali-—-ge-73f47-ez-Aşama-6-regresyon-testi--chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  22) [chromium] › test\e2e-browser\mobile.spec.js:22:3 › Depo Terminali — gerçek tarayıcı CSS/layout regresyonu › giriş yapıp barkod okutarak ürün ekranına ulaşılıyor 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\mobile-Depo-Terminali-—-ge-13e3c-ak-ürün-ekranına-ulaşılıyor-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\mobile-Depo-Terminali-—-ge-13e3c-ak-ürün-ekranına-ulaşılıyor-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\mobile-Depo-Terminali-—-ge-13e3c-ak-ürün-ekranına-ulaşılıyor-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  23) [chromium] › test\e2e-browser\permission-matrix.spec.js:14:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Müdür sevkiyat silme butonunu görmüyor (DELETE /shipments yalnızca gerçek admin) 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\permission-matrix-Yetki-ma-b6c67-ents-yalnızca-gerçek-admin--chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\permission-matrix-Yetki-ma-b6c67-ents-yalnızca-gerçek-admin--chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\permission-matrix-Yetki-ma-b6c67-ents-yalnızca-gerçek-admin--chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  24) [chromium] › test\e2e-browser\permission-matrix.spec.js:30:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Kalite kullanıcısı bir ürüne doküman yükleme butonunu görüyor 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\permission-matrix-Yetki-ma-5f4b7-an-yükleme-butonunu-görüyor-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\permission-matrix-Yetki-ma-5f4b7-an-yükleme-butonunu-görüyor-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\permission-matrix-Yetki-ma-5f4b7-an-yükleme-butonunu-görüyor-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  25) [chromium] › test\e2e-browser\permission-matrix.spec.js:46:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Müdür parti durum değiştirme butonunu görmüyor (POST /lot-status yalnızca admin+kalite) 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\permission-matrix-Yetki-ma-7ab75-atus-yalnızca-admin-kalite--chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\permission-matrix-Yetki-ma-7ab75-atus-yalnızca-admin-kalite--chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\permission-matrix-Yetki-ma-7ab75-atus-yalnızca-admin-kalite--chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  26) [chromium] › test\e2e-browser\permission-matrix.spec.js:65:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Kalite kullanıcısı parti durum değiştirme butonunu görüyor 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\permission-matrix-Yetki-ma-8c0fc-değiştirme-butonunu-görüyor-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\permission-matrix-Yetki-ma-8c0fc-değiştirme-butonunu-görüyor-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\permission-matrix-Yetki-ma-8c0fc-değiştirme-butonunu-görüyor-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  27) [chromium] › test\e2e-browser\permission-matrix.spec.js:73:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Müdür Webhook sekmesini açınca "yalnızca yöneticilere açık" görüyor, 403 hatası değil 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\permission-matrix-Yetki-ma-9b479-ık-görüyor-403-hatası-değil-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\permission-matrix-Yetki-ma-9b479-ık-görüyor-403-hatası-değil-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\permission-matrix-Yetki-ma-9b479-ık-görüyor-403-hatası-değil-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  28) [chromium] › test\e2e-browser\permission-matrix.spec.js:86:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Müdür kendi kaydettiği raporu silebiliyor (sahibi olduğu için) 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\permission-matrix-Yetki-ma-dba49-biliyor-sahibi-olduğu-için--chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\permission-matrix-Yetki-ma-dba49-biliyor-sahibi-olduğu-için--chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\permission-matrix-Yetki-ma-dba49-biliyor-sahibi-olduğu-için--chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  29) [chromium] › test\e2e-browser\permission-matrix.spec.js:104:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Operatör #admin hash'ine doğrudan gidince Yönetim ekranını GÖREMİYOR (gizli sekme = yetki değil) 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\permission-matrix-Yetki-ma-d833a-OR-gizli-sekme-yetki-değil--chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\permission-matrix-Yetki-ma-d833a-OR-gizli-sekme-yetki-değil--chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\permission-matrix-Yetki-ma-d833a-OR-gizli-sekme-yetki-değil--chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  30) [chromium] › test\e2e-browser\permission-matrix.spec.js:125:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Başkasının kayıtlı raporunu Operatör silemiyor 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\permission-matrix-Yetki-ma-3432a-raporunu-Operatör-silemiyor-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\permission-matrix-Yetki-ma-3432a-raporunu-Operatör-silemiyor-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\permission-matrix-Yetki-ma-3432a-raporunu-Operatör-silemiyor-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  31) [chromium] › test\e2e-browser\print-output-content.spec.js:22:3 › Yazdırma çıktıları — gerçek belge içeriği › sevkiyat irsaliyesi çıktısı GERÇEK sevkiyat verisini içeriyor (şablon değil) 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\print-output-content-Yazdı-79c61-sini-içeriyor-şablon-değil--chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\print-output-content-Yazdı-79c61-sini-içeriyor-şablon-değil--chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\print-output-content-Yazdı-79c61-sini-içeriyor-şablon-değil--chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  32) [chromium] › test\e2e-browser\purchasing-compare-quotes.spec.js:20:3 › Satın Alma — teklif karşılaştırma gerçek verilerle doluyor › 3 teklifli RFQ karşılaştırma tablosu doğru fiyat/tedarikçi/en iyi fiyatı gösteriyor 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\purchasing-compare-quotes--0090c-çi-en-iyi-fiyatı-gösteriyor-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\purchasing-compare-quotes--0090c-çi-en-iyi-fiyatı-gösteriyor-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\purchasing-compare-quotes--0090c-çi-en-iyi-fiyatı-gösteriyor-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  33) [chromium] › test\e2e-browser\purchasing-invoices.spec.js:20:3 › Satın Alma — fatura 3'lü eşleştirme gerçek verilerle doluyor › yeni fatura girildiğinde tedarikçi adı ve fark notu doğru gösteriliyor 
+
+    Error: browserType.launch: Executable doesn't exist at C:\Users\ilker\AppData\Local\ms-playwright\chromium_headless_shell-1243\chrome-headless-shell-win64\chrome-headless-shell.exe
+    ╔════════════════════════════════════════════════════════════╗
+    ║ Looks like Playwright was just installed or updated.       ║
+    ║ Please run the following command to download new browsers: ║
+    ║                                                            ║
+    ║     npx playwright install                                 ║
+    ║                                                            ║
+    ║ <3 Playwright Team                                         ║
+    ╚════════════════════════════════════════════════════════════╝
+
+    Error Context: test-results\purchasing-invoices-Satın--d26fd-ark-notu-doğru-gösteriliyor-chromium\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\purchasing-invoices-Satın--d26fd-ark-notu-doğru-gösteriliyor-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\purchasing-invoices-Satın--d26fd-ark-notu-doğru-gösteriliyor-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  33 failed
+    [chromium] › test\e2e-browser\admin-audit-log.spec.js:15:3 › Yönetim — Denetim Kaydı null rol sızdırmıyor › başarısız giriş denemesi satırında literal "null" görünmüyor 
+    [chromium] › test\e2e-browser\counts-quality-role.spec.js:21:3 › Sayım — Kalite rolü gerçekten sayım oluşturup kaydedebiliyor › kalite kullanıcısı yeni sayım açıp bir satırı kaydedebiliyor 
+    [chromium] › test\e2e-browser\crm.spec.js:6:3 › CRM — fırsat oluşturma ve satış siparişine dönüştürme › fırsat oluşturulup kazanılıp gerçek bir siparişe dönüştürülüyor 
+    [chromium] › test\e2e-browser\global-search.spec.js:14:3 › Genel arama — kenar çubuğundaki arama kutusu › müşteri araması gerçek sonuç gösterip doğru ekrana götürüyor 
+    [chromium] › test\e2e-browser\global-search.spec.js:27:3 › Genel arama — kenar çubuğundaki arama kutusu › ürün araması ve parti araması gerçek verilerle sonuç veriyor 
+    [chromium] › test\e2e-browser\global-search.spec.js:37:3 › Genel arama — kenar çubuğundaki arama kutusu › sonuç yoksa "sonuç bulunamadı" gösteriliyor, Escape kapatıyor 
+    [chromium] › test\e2e-browser\items.spec.js:6:3 › Ürünler — stok girişi (uçtan uca gerçek sunucuya karşı) › stok girişi diyaloğu gerçek miktarı sunucuya yazıyor 
+    [chromium] › test\e2e-browser\login.spec.js:6:3 › Giriş ve temel gezinme › giriş yapılabiliyor ve panel gerçek veriyle render oluyor 
+    [chromium] › test\e2e-browser\login.spec.js:16:3 › Giriş ve temel gezinme › yanlış şifre reddediliyor 
+    [chromium] › test\e2e-browser\login.spec.js:25:3 › Giriş ve temel gezinme › görüntüleyici rolünde Yönetim sekmesi gizli 
+    [chromium] › test\e2e-browser\login.spec.js:30:3 › Giriş ve temel gezinme › kalite rolünde Yönetim sekmesi gizli 
+    [chromium] › test\e2e-browser\login.spec.js:41:5 › Giriş ve temel gezinme › items ekranı hatasız render oluyor 
+    [chromium] › test\e2e-browser\login.spec.js:41:5 › Giriş ve temel gezinme › lots ekranı hatasız render oluyor 
+    [chromium] › test\e2e-browser\login.spec.js:41:5 › Giriş ve temel gezinme › crm ekranı hatasız render oluyor 
+    [chromium] › test\e2e-browser\login.spec.js:41:5 › Giriş ve temel gezinme › sales ekranı hatasız render oluyor 
+    [chromium] › test\e2e-browser\login.spec.js:41:5 › Giriş ve temel gezinme › reports ekranı hatasız render oluyor 
+    [chromium] › test\e2e-browser\lots-traceability.spec.js:23:3 › Partiler — izlenebilirlik raporu gerçek verilerle doluyor › geriye/ileriye izleme ve geri çağırma raporu doğru bilgiyi gösteriyor 
+    [chromium] › test\e2e-browser\mobile-count.spec.js:19:3 › Depo Terminali — Sayım gerçekten sunucuya kaydediyor › mobilde sayılan bir kalem sunucuya yazılıyor (no such column hatası değil) 
+    [chromium] › test\e2e-browser\mobile-offline-queue.spec.js:19:3 › Depo Terminali — çevrimdışı kuyruk gerçekten çalışıyor › çevrimdışıyken sayım kuyruğa alınıyor, bağlantı gelince otomatik gönderiliyor 
+    [chromium] › test\e2e-browser\mobile-receiving.spec.js:21:3 › Depo Terminali — Mal Kabul gerçekten sunucuya kaydediyor › SA-2026-003 siparişindeki kalem teslim alınıp sunucuya yazılıyor (422 değil) 
+    [chromium] › test\e2e-browser\mobile.spec.js:5:3 › Depo Terminali — gerçek tarayıcı CSS/layout regresyonu › hidden öznitelikli elemanlar GERÇEKTEN görünmez (Aşama 6 regresyon testi) 
+    [chromium] › test\e2e-browser\mobile.spec.js:22:3 › Depo Terminali — gerçek tarayıcı CSS/layout regresyonu › giriş yapıp barkod okutarak ürün ekranına ulaşılıyor 
+    [chromium] › test\e2e-browser\permission-matrix.spec.js:14:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Müdür sevkiyat silme butonunu görmüyor (DELETE /shipments yalnızca gerçek admin) 
+    [chromium] › test\e2e-browser\permission-matrix.spec.js:30:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Kalite kullanıcısı bir ürüne doküman yükleme butonunu görüyor 
+    [chromium] › test\e2e-browser\permission-matrix.spec.js:46:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Müdür parti durum değiştirme butonunu görmüyor (POST /lot-status yalnızca admin+kalite) 
+    [chromium] › test\e2e-browser\permission-matrix.spec.js:65:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Kalite kullanıcısı parti durum değiştirme butonunu görüyor 
+    [chromium] › test\e2e-browser\permission-matrix.spec.js:73:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Müdür Webhook sekmesini açınca "yalnızca yöneticilere açık" görüyor, 403 hatası değil 
+    [chromium] › test\e2e-browser\permission-matrix.spec.js:86:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Müdür kendi kaydettiği raporu silebiliyor (sahibi olduğu için) 
+    [chromium] › test\e2e-browser\permission-matrix.spec.js:104:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Operatör #admin hash'ine doğrudan gidince Yönetim ekranını GÖREMİYOR (gizli sekme = yetki değil) 
+    [chromium] › test\e2e-browser\permission-matrix.spec.js:125:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Başkasının kayıtlı raporunu Operatör silemiyor 
+    [chromium] › test\e2e-browser\print-output-content.spec.js:22:3 › Yazdırma çıktıları — gerçek belge içeriği › sevkiyat irsaliyesi çıktısı GERÇEK sevkiyat verisini içeriyor (şablon değil) 
+    [chromium] › test\e2e-browser\purchasing-compare-quotes.spec.js:20:3 › Satın Alma — teklif karşılaştırma gerçek verilerle doluyor › 3 teklifli RFQ karşılaştırma tablosu doğru fiyat/tedarikçi/en iyi fiyatı gösteriyor 
+    [chromium] › test\e2e-browser\purchasing-invoices.spec.js:20:3 › Satın Alma — fatura 3'lü eşleştirme gerçek verilerle doluyor › yeni fatura girildiğinde tedarikçi adı ve fark notu doğru gösteriliyor 

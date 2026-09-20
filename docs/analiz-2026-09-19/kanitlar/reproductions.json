@@ -1,0 +1,243 @@
+[
+  {
+    "id": "F01",
+    "http": 201,
+    "requestedItem": "a42606d7-271f-4b28-9dbb-3da1fc788af4",
+    "actualLotItem": "22389c1a-888c-40e2-9ebd-af14788a56e5",
+    "lotBefore": 100,
+    "lotAfter": 98,
+    "cacheBefore": 121.5,
+    "cacheAfter": 121.5
+  },
+  {
+    "id": "F02",
+    "create": 201,
+    "delete": 204,
+    "initial": 100,
+    "afterDelete": 97,
+    "orphanMovements": 1
+  },
+  {
+    "id": "F03",
+    "http": 201,
+    "order": {
+      "status": "shipped"
+    },
+    "line": {
+      "qty": 1,
+      "shipped_qty": 4
+    }
+  },
+  {
+    "id": "F04",
+    "first": {
+      "total": 1,
+      "succeeded": 1,
+      "failed": 0,
+      "results": [
+        {
+          "clientId": "same-id-123",
+          "ok": true,
+          "id": "7128432c-393e-4283-b1ac-90a8ffce1474"
+        }
+      ]
+    },
+    "second": {
+      "total": 1,
+      "succeeded": 1,
+      "failed": 0,
+      "results": [
+        {
+          "clientId": "same-id-123",
+          "ok": true,
+          "id": "4edcba9f-f5d4-44fa-8b34-174edc2c0223"
+        }
+      ]
+    },
+    "distinctLotIds": true
+  },
+  {
+    "id": "F06",
+    "snapshot": 93,
+    "beforeApprove": 88,
+    "afterApprove": 93
+  },
+  {
+    "id": "F05",
+    "response": {
+      "total": 1,
+      "succeeded": 1,
+      "failed": 0,
+      "results": [
+        {
+          "clientId": "closed",
+          "ok": true
+        }
+      ]
+    },
+    "countStatus": "approved",
+    "line": {
+      "counted_qty": -9
+    }
+  },
+  {
+    "id": "F08",
+    "http": 201,
+    "rejectedLotBefore": 10,
+    "after": 10,
+    "actualMovements": [
+      {
+        "lot_id": "e7bab635-bc85-4c5c-8988-fed6ccb0d95f",
+        "qty": 3
+      }
+    ]
+  },
+  {
+    "id": "F09",
+    "http": 201,
+    "expiry": "2001-01-01",
+    "remaining": 9
+  },
+  {
+    "id": "F10",
+    "http": 200,
+    "response": {
+      "ok": true,
+      "acceptedQty": 1,
+      "rejectedQty": 9,
+      "ncrId": null,
+      "signature": "e88a10c9e2fa1470bb70202d8634fe6a"
+    },
+    "lot": {
+      "qty": 10,
+      "status": "available",
+      "unit_cost": 10
+    }
+  },
+  {
+    "id": "F07",
+    "before": 10,
+    "first": 20,
+    "second": 35,
+    "expected": 25
+  },
+  {
+    "id": "F11",
+    "mustChangePassword": true,
+    "http": 200
+  },
+  {
+    "id": "F12",
+    "http": 201,
+    "balanceBefore": 100,
+    "balanceAfter": 140,
+    "expectedDelta": -40
+  },
+  {
+    "id": "F13",
+    "requiredRole": "admin",
+    "actualRole": "manager",
+    "http": 200
+  },
+  {
+    "id": "F14",
+    "http": 400,
+    "roleAfterFailure": "manager"
+  },
+  {
+    "id": "F15",
+    "historicalMissingRate": 34.5,
+    "missingCurrencyRate": 1
+  },
+  {
+    "id": "F16",
+    "parent": "6f56c97b-43af-4cd7-ac95-cc403a3d8653",
+    "child": "b9c9d131-1605-4efd-97e7-9e706e6e971d",
+    "recallShipments": 0
+  },
+  {
+    "id": "F17",
+    "countedStateSecondSaveHttp": 400,
+    "error": "Sayım kapalı / Count is not open"
+  },
+  {
+    "id": "F18",
+    "http": 200,
+    "before": {
+      "type": "finished",
+      "price": 123,
+      "min": 12,
+      "bom": 1
+    },
+    "after": {
+      "type": "raw",
+      "price": 0,
+      "min": 0,
+      "bom": 0
+    }
+  },
+  {
+    "id": "F19",
+    "shift": "08:00-16:00",
+    "firstStart": "Mon Sep 21 2026 00:00:00 GMT+0300 (Türkiye Standart Saati)",
+    "secondStart": "Mon Sep 21 2026 00:00:00 GMT+0300 (Türkiye Standart Saati)",
+    "sameSlot": true
+  },
+  {
+    "id": "F20",
+    "lockedRate": 34.5,
+    "newRate": 44.5,
+    "expectedCost": 345,
+    "actualCost": 445
+  },
+  {
+    "id": "F21",
+    "card": "Anonimleştirilmiş Müşteri #4",
+    "orderSnapshot": "Audit private name",
+    "auditDetail": "Audit private name"
+  },
+  {
+    "id": "F22",
+    "returnInvoiceJournal": [
+      {
+        "account": "120",
+        "debit": 40,
+        "credit": 0
+      },
+      {
+        "account": "600",
+        "debit": 0,
+        "credit": 40
+      }
+    ]
+  },
+  {
+    "id": "F23",
+    "http": 201,
+    "status": "received",
+    "lines": [
+      {
+        "qty": 10,
+        "received_qty": 20
+      },
+      {
+        "qty": 10,
+        "received_qty": 0
+      }
+    ]
+  },
+  {
+    "id": "F24",
+    "firstHttp": 201,
+    "secondHttp": 201,
+    "firstAmount": 48,
+    "secondAmount": 48,
+    "distinct": true
+  },
+  {
+    "id": "F25",
+    "input": "1,234",
+    "parsed": 1234,
+    "turkishDecimalExpected": 1.234
+  }
+]

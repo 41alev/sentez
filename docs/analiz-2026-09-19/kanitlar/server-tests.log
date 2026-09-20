@@ -1,0 +1,2123 @@
+
+
+########## e2e (izole, taze veritabanı) ##########
+
+=== HEALTH ===
+  ✓ health endpoint responds
+  ✓ no pending migrations
+
+=== AUTH ===
+  ✓ admin login
+  ✓ manager login
+  ✓ operator login
+  ✓ quality login
+  ✓ viewer login
+  ✓ wrong password rejected
+  ✓ unauthenticated request rejected
+
+=== ITEMS & PAGINATION ===
+  ✓ items paginated
+  ✓ pagination metadata present
+  ✓ finished good has BOM
+  ✓ multi-level BOM exists on panel
+  ✓ barcode lookup works
+
+=== LOT-LEVEL STOCK ===
+  ✓ lots listed
+  ✓ quarantine status exists
+  ✓ available lots exist
+
+=== ROLE MATRIX ===
+  ✓ viewer cannot create item (403)
+  ✓ operator can create item (201)
+  ✓ operator cannot delete item (403)
+  ✓ admin can delete item
+  ✓ operator cannot list users (403)
+  ✓ admin can list users
+
+=== VALIDATION ===
+  ✓ empty name rejected (422)
+  ✓ weak password rejected
+
+=== PRODUCTION (BOM → stock consumption) ===
+  ✓ requirements-preview gerçek reçete bileşenlerini döndürüyor (404 değil)
+  ✓ requirements-preview miktarı ölçekliyor (qty=5)
+  ✓ production orders listed
+  ✓ completed production has real cost
+  ✓ operator can create production order
+  ✓ production completes and consumes lots
+  ✓ component stock decreased
+  ✓ insufficient stock blocks production
+  ✓ shortfall detail returned
+
+=== PURCHASING ===
+  ✓ suppliers listed with full card
+  ✓ purchase orders listed
+  ✓ partial receipt state exists
+  ✓ PO pending approval exists
+  ✓ operator cannot approve PO (403)
+  ✓ manager can approve PO
+  ✓ RFQ comparison works
+
+=== QUALITY ===
+  ✓ inspections listed
+  ✓ pending incoming inspection exists
+  ✓ operator cannot record inspection result (403)
+  ✓ quality can accept inspection (releases quarantine)
+  ✓ NCRs listed
+  ✓ CAPAs listed
+  ✓ equipment/calibration listed
+
+=== TRACEABILITY / RECALL ===
+  ✓ production output lot exists
+  ✓ backward trace works (what went in)
+  ✓ forward trace works (where it went)
+  ✓ recall report identifies customers
+
+=== SALES & PROFITABILITY ===
+  ✓ customers listed
+  ✓ sales orders listed
+  ✓ shipments listed
+  ✓ shipment carries lot reference
+  ✓ FEFO otomatik lot seçimiyle sevkiyat oluşturuluyor (stock.allocate/consume gerçekten var)
+  ✓ FEFO sevkiyatı gerçek bir lot taşıyor
+  ✓ FEFO sevkiyatı stoğu gerçekten düşürüyor
+  ✓ elle seçilen lotla sevkiyat oluşturuluyor
+  ✓ profitability computed
+  ✓ margin uses real lot cost
+
+=== REPORTS ===
+  ✓ dashboard summary (viewer allowed)
+  ✓ quarantine value tracked separately
+  ✓ trend report works
+  ✓ dead stock report works
+  ✓ turnover report works
+  ✓ ABC analysis works
+  ✓ reorder suggestions work
+  ✓ supplier performance scored
+  ✓ quality KPIs computed
+  ✓ valuation detail works
+
+=== FX (historical) ===
+  ✓ current FX rates available
+  ✓ historical FX rates stored
+
+=== AUDIT LOG (old → new values) ===
+  ✓ audit records old and new values
+
+=== NOTIFICATIONS ===
+  ✓ alert scan runs
+  ✓ notifications generated
+
+=== STOCK COUNT ===
+  ✓ stock count created
+  ✓ count sheet lists lots
+  ✓ counted quantities recorded
+  ✓ operator cannot approve count (403)
+  ✓ manager approves count and posts variance
+
+=== SESSION REVOCATION ===
+  ✓ token revoked after logout
+
+==================================================
+GEÇTİ / PASSED: 83    KALDI / FAILED: 0
+==================================================
+
+
+########## contract (izole, taze veritabanı) ##########
+
+=== LİSTE ZARFLARI / LIST ENVELOPES ===
+  ✓ items
+  ✓ lots
+  ✓ movements
+  ✓ counts
+  ✓ production
+  ✓ purchase orders
+  ✓ suppliers
+  ✓ sales orders
+  ✓ shipments
+  ✓ customers
+  ✓ inspections
+  ✓ ncrs
+  ✓ audit
+  ✓ notifications
+
+=== ÜRÜN / ITEMS ===
+  ✓ items list row has the columns the table renders
+  ✓ item card fields
+  ✓ stockByStatus buckets
+  ✓ BOM line fields
+
+=== LOT ===
+  ✓ lot row fields
+
+=== SAYIM / COUNT ===
+  ✓ count header fields
+  ✓ count line fields (incl. unitCost for variance value)
+  ✓ count list row has lineCount
+
+=== ÜRETİM / PRODUCTION ===
+  ✓ production row fields
+  ✓ completed production carries real costs
+
+=== SATIN ALMA / PURCHASING ===
+  ✓ PO row fields
+  ✓ PO line fields
+  ✓ supplier detail fields
+
+=== SATIŞ / SALES ===
+  ✓ sales order row fields
+  ✓ sales order line fields
+  ✓ shipment row fields
+  ✓ shipment item carries lot reference
+  ✓ profitability totals
+  ✓ profitability row
+  ✓ customer row fields (snake_case as the UI expects)
+
+=== KALİTE / QUALITY ===
+  ✓ inspection row fields
+  ✓ inspection line fields
+  ✓ NCR row fields
+  ✓ equipment row fields
+  ✓ CAPA row fields
+
+=== RAPORLAR / REPORTS ===
+  ✓ dashboard summary fields
+  ✓ trends fields
+  ✓ dead stock fields
+  ✓ turnover row
+  ✓ reorder suggestion row
+  ✓ supplier performance row
+  ✓ quality KPI fields
+  ✓ production cost row
+  ✓ valuation row
+
+=== YÖNETİM / ADMIN ===
+  ✓ user row fields
+  ✓ warehouse row fields
+  ✓ settings fields
+  ✓ FX row fields (snake_case as the UI expects)
+  ✓ approval rule fields
+  ✓ notification rule fields
+  ✓ notification row fields
+  ✓ notifications carry unreadCount for the badge
+
+=== DENETİM KAYDI / AUDIT ===
+  ✓ audit row fields
+  ✓ audit records both old and new values
+
+====================================================
+GEÇTİ / PASSED: 58    KALDI / FAILED: 0
+====================================================
+
+
+########## import (izole, taze veritabanı) ##########
+=== TİPLER VE ŞABLON / TYPES AND TEMPLATE ===
+  ✓ aktarım tipleri listeleniyor
+  ✓ alan tanımları geliyor
+  ✓ zorunlu alanlar işaretli
+  ✓ bağımlılık sırası bildiriliyor
+  ✓ şablon indirilebiliyor
+  ✓ şablon başlık satırı içeriyor
+  ✓ şablon açıklama satırı içeriyor
+  ✓ şablon örnek satır içeriyor
+  ✓ operatör şablon indiremiyor (403)
+  ✓ items şablonunun sütunları tanınıyor
+  ✓ suppliers şablonunun sütunları tanınıyor
+  ✓ customers şablonunun sütunları tanınıyor
+  ✓ opening_stock şablonunun sütunları tanınıyor
+  ✓ boms şablonunun sütunları tanınıyor
+  ✓ work_centers şablonunun sütunları tanınıyor
+  ✓ routings şablonunun sütunları tanınıyor
+
+=== SÜTUN EŞLEŞTİRME / COLUMN MAPPING ===
+  ✓ farklı yazımdaki başlıklar eşleşiyor
+  ✓ ürün adı doğru okundu
+  ✓ kod doğru okundu
+  ✓ zorunlu sütun yoksa dosya reddediliyor (400)
+  ✓ hangi sütunun eksik olduğu bildiriliyor
+
+=== SAYI VE TARİH AYRIŞTIRMA / NUMBER AND DATE PARSING ===
+  ✓ sayı dosyası okundu
+  ✓ Türkçe ondalık doğru (1.234,56 → 1234.56)
+  ✓ İngilizce ondalık doğru (1,234.56 → 1234.56)
+  ✓ tek virgül ondalık sayılıyor (12,5 → 12.5)
+  ✓ üç haneli grup binlik sayılıyor (1,234 → 1234)
+  ✓ para simgesi temizleniyor (₺ 99,90 → 99.9)
+  ✓ okunamayan sayı satırı hatalı işaretleniyor
+  ✓ tek bozuk satır dosyayı düşürmüyor
+
+=== HATALI SATIRLAR / INVALID ROWS ===
+  ✓ boş satırlar sessizce atlanıyor
+  ✓ zorunlu alanı boş satır hatalı
+  ✓ dosya içi tekrarlayan kod yakalanıyor
+  ✓ Türkçe tip adı çevriliyor (Mamul → finished)
+  ✓ "İthal" menşei Yurt Dışı olarak okunuyor
+  ✓ tanınmayan enum uyarı üretip varsayılana düşüyor
+  ✓ yalnızca hatalı satırlar filtrelenebiliyor
+
+=== KAYDETME / COMMIT ===
+  ✓ operatör aktarımı kaydedemiyor (403)
+  ✓ aktarım kaydedildi
+  ✓ yalnızca geçerli satırlar yazıldı
+  ✓ ürün sayısı tam olarak arttı
+  ✓ hatalı satırlar sisteme sızmadı
+  ✓ aynı aktarım ikinci kez kaydedilemiyor (409)
+
+=== TEKRAR DAVRANIŞI / DUPLICATE HANDLING ===
+  ✓ "atla" modunda var olan kayıt korunuyor
+  ✓ mevcut kaydın adı değişmedi
+  ✓ "güncelle" modunda kayıt güncelleniyor
+  ✓ ad güncellendi
+  ✓ kritik stok güncellendi
+  ✓ "hata ver" modunda önizleme kabul ediliyor
+  ✓ "hata ver" modunda tekrar eden kayıt satır bazında reddediliyor (failed:1)
+  ✓ hata mesajı "zaten var" içeriyor
+  ✓ "hata ver" modunda mevcut kayıt değişmeden kalıyor
+
+=== REFERANS DOĞRULAMA / REFERENCE VALIDATION ===
+  ✓ var olmayan ürün kodu hata üretiyor
+  ✓ hata mesajı hangi kodun bulunamadığını söylüyor
+  ✓ hata mesajı ne yapılması gerektiğini söylüyor
+  ✓ var olmayan depo uyarı üretiyor, hata değil
+
+=== AÇILIŞ STOĞU / OPENING STOCK ===
+  ✓ açılış stoğu yazıldı
+  ✓ stok miktarı ürüne yansıdı
+  ✓ ortalama maliyet hesaplandı
+  ✓ parti numarasıyla yazıldı
+  ✓ hareket kaydı bırakıldı (miktar izlenebilir)
+
+=== REÇETE AKTARIMI / BOM IMPORT ===
+  ✓ geçerli reçete satırı kabul edildi
+  ✓ ürünün kendi bileşeni olması engelleniyor
+  ✓ reçete yazıldı
+  ✓ reçete ürün kartında görünüyor
+
+=== GERİ ALMA / REVERT ===
+  ✓ aktarım geri alındı
+  ✓ reçete silindi
+  ✓ ürünler silinmedi (başka aktarımdan geldiler)
+  ✓ aynı aktarım ikinci kez geri alınamıyor (409)
+  ✓ stok aktarımı geri alındı
+  ✓ geri alma sonrası stok sıfırlandı
+
+=== GEÇMİŞ / HISTORY ===
+  ✓ aktarım geçmişi tutuluyor
+  ✓ durumlar doğru kaydedilmiş
+  ✓ aktarımı yapan kullanıcı kayıtlı
+  ✓ dosya adı saklanıyor
+  ✓ aktarımlar denetim kaydına yazıldı
+
+=== ÖNİZLEME SİLME / DISCARD PREVIEW ===
+  ✓ kaydedilmemiş önizleme silinebiliyor
+  ✓ silinen önizleme sisteme hiç yazılmadı
+  ✓ kaydedilmiş aktarım silinemiyor (409)
+
+=== DOSYA DOĞRULAMA / FILE VALIDATION ===
+  ✓ bozuk dosya reddediliyor
+  ✓ yalnızca başlık içeren dosya reddediliyor
+  ✓ bilinmeyen aktarım tipi reddediliyor
+
+=== BÜYÜK DOSYA / LARGE FILE ===
+  ✓ 1000 satırlık dosya doğrulandı
+  ✓ doğrulama makul sürede bitiyor (<20 sn)
+  ✓ 1000 satır kaydedildi
+  ✓ kaydetme makul sürede bitiyor (<20 sn)
+  ✓ 50.000 satır üst sınırını aşan dosya reddediliyor (413)
+  ✓ önizleme yalnızca örnek döndürüyor (yanıt şişmiyor)
+
+====================================================
+GEÇTİ / PASSED: 87    KALDI / FAILED: 0
+====================================================
+
+
+########## templates (izole, taze veritabanı) ##########
+=== VARSAYILAN ŞABLONLAR / DEFAULT TEMPLATES ===
+  ✓ şablonlar listeleniyor
+  ✓ sekiz belge tipi tanımlı
+  ✓ operatör şablonu okuyabiliyor (yazdırma için gerekli)
+  ✓ varsayılan düzen makul geliyor (A4, logo açık)
+  ✓ alanlar varsayılan olarak görünür
+  ✓ imza kutuları önceden tanımlı
+  ✓ etiket şablonu küçük kâğıt kullanıyor
+  ✓ etikette sayfa numarası kapalı
+  ✓ etikette barkod açık
+  ✓ etiketin imza kutusu yok
+
+=== YETKİ / PERMISSIONS ===
+  ✓ operatör şablon değiştiremiyor (403)
+  ✓ görüntüleyici şablon değiştiremiyor (403)
+  ✓ operatör logo yükleyemiyor (403)
+
+=== ŞABLON DÜZENLEME / EDITING ===
+  ✓ şablon kaydedildi
+  ✓ vurgu rengi kaydedildi
+  ✓ yazı boyutu kaydedildi
+  ✓ kapatılan ayar korundu
+  ✓ gönderilmeyen ayar sıfırlanmadı
+  ✓ üst not kaydedildi
+  ✓ imza kutusu eklenebiliyor
+  ✓ dörtten fazla imza kutusu reddediliyor
+  ✓ geçersiz renk kodu reddediliyor
+  ✓ tanımsız kâğıt boyutu reddediliyor
+  ✓ aşırı yazı boyutu reddediliyor
+
+=== ALAN GÖRÜNÜRLÜĞÜ / FIELD VISIBILITY ===
+  ✓ alanlar gizlenebiliyor
+  ✓ gizlenen alanlar isimlerini koruyor
+  ✓ ayar kalıcı (yeniden okundu)
+
+=== LOGO ===
+  ✓ logo yüklendi
+  ✓ logo veri URL'i olarak dönüyor
+  ✓ yazdırma için herkes okuyabiliyor
+  ✓ PDF logo olarak kabul edilmiyor (415)
+  ✓ 512 KB üstü logo reddediliyor
+  ✓ logo kaldırılabiliyor
+  ✓ kaldırılan logo geri dönmüyor
+
+=== FİRMA KİMLİĞİ / BRANDING ===
+  ✓ firma bilgisi kaydedildi
+  ✓ telefon güncellendi
+  ✓ ortak dipnot kaydedildi
+  ✓ firma adı silinmedi (kısmi güncelleme)
+  ✓ operatör firma bilgisini değiştiremiyor (403)
+
+=== VARSAYILANA DÖNÜŞ / RESET ===
+  ✓ şablon sıfırlandı
+  ✓ renk varsayılana döndü
+  ✓ gizlenen alanlar geri geldi
+  ✓ üst not temizlendi
+  ✓ kâğıt boyutu A4'e döndü
+  ✓ etiket sıfırlanınca etiket kâğıdında kalıyor
+
+=== HATA DURUMLARI / ERROR CASES ===
+  ✓ olmayan şablon 404 dönüyor
+  ✓ olmayan şablon kaydedilemiyor
+
+=== DENETİM KAYDI / AUDIT ===
+  ✓ şablon değişiklikleri denetime yazıldı
+  ✓ eski ve yeni değer birlikte tutuluyor
+  ✓ logo işlemleri denetime yazıldı
+
+====================================================
+GEÇTİ / PASSED: 50    KALDI / FAILED: 0
+====================================================
+
+Not: Basılan belgenin GÖRÜNÜMÜ bu ortamda doğrulanamaz — yazıcı ve tarayıcı
+gerekir. Test edilen, ayarların doğru saklandığı ve yazdırma motoruna doğru
+aktarıldığıdır. Gerçek çıktı bir kez gözle kontrol edilmelidir.
+
+
+########## mobile (izole, taze veritabanı) ##########
+=== KOD ÇÖZME / SCAN RESOLUTION ===
+  ✓ barkod ürüne çözülüyor
+  ✓ ürünün partileri birlikte geliyor
+  ✓ kullanılabilir partiler önce sıralanıyor
+  ✓ ürün kodu da çözülüyor
+  ✓ parti numarası partiye çözülüyor
+  ✓ parti yanıtında ürün adı var (kullanıcı ne olduğunu görmeli)
+  ✓ sipariş numarası belgeye çözülüyor
+  ✓ teslim alınabilir mi bilgisi geliyor
+  ✓ raf etiketi konuma çözülüyor
+  ✓ raftaki partiler listeleniyor
+  ✓ bulunamayan kod 404 dönüyor
+  ✓ nerede arandığı bildiriliyor
+  ✓ boş kod reddediliyor
+
+=== GÖREV LİSTESİ / TASK LIST ===
+  ✓ görev listesi geliyor
+  ✓ teslim alınacak siparişler listeleniyor
+  ✓ yalnızca onaylı siparişler geliyor
+  ✓ açık sevkiyatlar listeleniyor
+  ✓ açık üretim emirleri listeleniyor
+  ✓ her kalemde açık satır sayısı var
+
+=== TOPLAMA LİSTESİ / PICK LIST ===
+  ✓ toplama listesi üretiliyor
+  ✓ her kalem için parti önerisi var
+  ✓ öneriler FEFO sırasında
+  ✓ önerilen miktarlar ihtiyacı aşmıyor
+  ✓ eksik stok ayrıca bildiriliyor
+  ✓ raf bilgisi geliyor (aramak zaman kaybı)
+  ✓ olmayan sipariş 404 dönüyor
+
+=== MALZEME LİSTESİ / ISSUE LIST ===
+  ✓ malzeme listesi üretiliyor
+  ✓ her bileşende gerekli ve mevcut miktar var
+  ✓ eksik miktar hesaplanıyor
+  ✓ eksik sayısı özetleniyor
+
+=== TOPLU GÖNDERİM / SYNC ===
+  ✓ toplu gönderim çalışıyor
+  ✓ geçerli işlemler yazıldı
+  ✓ hatalı işlem diğerlerini düşürmüyor
+  ✓ her işlem kendi sonucunu döndürüyor
+  ✓ hata sebebi bildiriliyor
+  ✓ bilinmeyen işlem tipi reddediliyor
+  ✓ stok tam olarak arttı (5+3)
+  ✓ görüntüleyici işlem gönderemiyor (403)
+  ✓ boş liste reddediliyor
+  ✓ aşırı büyük parti reddediliyor (200 sınırı)
+
+=== KALİTE ROLÜ MOBİL ERİŞİMİ / QUALITY ROLE MOBILE ACCESS ===
+  ✓ sayım oluşturuldu (kalite testi için)
+  ✓ kalite artık mobil terminale erişebiliyor (403 değil)
+  ✓ kalite sayım işlemini kaydedebiliyor
+  ✓ kalite stok girişi yapamıyor (stock.write yok — masaüstüyle tutarlı)
+
+=== ARAYÜZ / TERMINAL UI ===
+  ✓ terminal betiği hatasız yükleniyor
+  ✓ eski kuyruk IndexedDB'ye taşındı (localStorage temizlendi)
+  ✓ giriş ekranı açılıyor
+  ✓ tarama çubuğu her ekranda mevcut
+  ✓ tarama alanı barkod hedefi olarak işaretli
+  ✓ giriş sonrası uygulama açılıyor
+  ✓ görev ekranı yükleniyor
+  ✓ giriş sonrası JS hatası yok
+  ✓ taşınan işlem kuyruk rozetinde görünüyor (kaybolmadı)
+  ✓ ana ekranda beş akış var
+  ✓ akışlar doğru isimlendirilmiş
+
+=== DOKUNMA HEDEFLERİ / TOUCH TARGETS ===
+  ✓ temel dokunma hedefi ≥56px
+  ✓ ikon butonlar ≥48px
+  ✓ miktar +/- düğmeleri ≥56px
+  ✓ giriş alanları 16px (iOS otomatik yakınlaştırmasını önler)
+  ✓ tarama çubuğu ekranın altında sabit
+  ✓ güvenli alan boşluğu hesaba katılmış (çentikli ekranlar)
+  ✓ yakınlaştırma kapalı (kazara bozulmasın)
+  ✓ hareket azaltma tercihi destekleniyor
+
+====================================================
+GEÇTİ / PASSED: 63    KALDI / FAILED: 0
+====================================================
+
+Not: Gerçek bir el terminalinde denenmedi — cihaz yok. Kamerayla okuma da
+test edilemez. USB okuyucu mantığı ve çevrimdışı kuyruk test edildi;
+sahada bir kez gerçek cihazla denenmelidir.
+
+
+########## data-health (izole, taze veritabanı) ##########
+=== TEMİZ VERİ / CLEAN BASELINE ===
+  ✓ denetim çalışıyor
+  ✓ hiçbir kontrol hata vermiyor
+  ✓ tohum veri temiz (puan 100)
+  ✓ her kontrolün açıklaması var
+  ✓ düzeltilebilir olanlar işaretli
+  ✓ düzeltilebilir olanlarda ne yapılacağı yazıyor
+  ✓ operatör düzeltme uygulayamıyor (403)
+
+=== VERİYİ BOZ / CORRUPT THE DATA ===
+  ✓ test için gereken tohum ürünler mevcut
+  ✓ test verisi oluşturuldu
+  ✓ maliyetsiz parti oluşturuldu
+  ✓ süresi geçmiş parti oluşturuldu
+
+=== BULGULARIN TESPİTİ / DETECTION ===
+  ✓ puan düştü
+  ✓ tekrarlayan barkod bulundu
+  ✓ hangi barkodun tekrarlandığı gösteriliyor
+  ✓ tekrarlayan barkod kritik sayılıyor
+  ✓ reçetesiz "üretilir" ürün bulundu
+  ✓ hangi ürün olduğu gösteriliyor
+  ✓ tedarikçisiz kritik stok bulundu
+  ✓ maliyetsiz stok bulundu
+  ✓ süresi geçmiş kullanılabilir parti bulundu
+  ✓ SKT bilgisi bulguyla birlikte geliyor
+
+=== TEK KONTROL / SINGLE CHECK ===
+  ✓ tek kontrol ayrı çalıştırılabiliyor
+  ✓ tam liste dönüyor (örnek değil)
+  ✓ sayfalama çalışıyor
+  ✓ olmayan kontrol 404 dönüyor
+
+=== OTOMATİK DÜZELTME / AUTO FIX ===
+  ✓ süresi geçmiş partiler bloke edildi
+  ✓ düzeltme öncesi ve sonrası sayı bildiriliyor
+  ✓ bulgu gerçekten kalktı
+  ✓ durum değişikliği hareket kaydı bıraktı
+  ✓ maliyetsiz partilere ürün maliyeti uygulandı
+  ✓ otomatik düzeltilemeyen bulgu reddediliyor (400)
+  ✓ neden düzeltilemediği açıklanıyor
+
+=== STOK ÖZETİ TUTARSIZLIĞI / CACHE MISMATCH ===
+  ✓ stok özeti yeniden hesaplanabiliyor
+  ✓ yeniden hesaplama doğru sonuç veriyor
+
+=== TOPLU GÜNCELLEME / BULK UPDATE ===
+  ✓ toplu güncelleme çalışıyor
+  ✓ değer gerçekten uygulandı
+  ✓ tanımsız alan reddediliyor
+  ✓ sayısal alana metin reddediliyor
+  ✓ geçersiz tedarik şekli reddediliyor
+  ✓ operatör toplu güncelleme yapamıyor (403)
+
+=== KAYIT BİRLEŞTİRME / MERGE ===
+  ✓ birleştirme önizlemesi çalışıyor
+  ✓ taşınacak bağlar sayılıyor
+  ✓ geri alınamaz olduğu belirtiliyor
+  ✓ aynı kayıt kendisiyle birleştirilemiyor
+  ✓ onaysız birleştirme reddediliyor
+  ✓ birleştirme tamamlandı
+  ✓ bağlar hedefe taşındı
+  ✓ stok hedefe geçti
+  ✓ hedefin maliyeti yeniden hesaplandı
+  ✓ kaynak kayıt kaldırıldı
+  ✓ birleştirme sonrası tekrarlayan barkod bulgusu düştü
+  ✓ operatör birleştirme yapamıyor (403)
+  ✓ bilinmeyen kayıt tipi reddediliyor
+
+=== DENETİM KAYDI / AUDIT ===
+  ✓ düzeltmeler denetime yazıldı
+  ✓ birleştirme denetime yazıldı
+  ✓ birleştirmede kaynak ve hedef birlikte kayıtlı
+  ✓ toplu güncelleme denetime yazıldı
+
+=== PUANLAMA / SCORING ===
+  ✓ puan 0-100 aralığında
+  ✓ kritik bulgular puanı daha çok düşürüyor
+  ✓ bulgu özeti tutarlı
+
+====================================================
+GEÇTİ / PASSED: 60    KALDI / FAILED: 0
+====================================================
+
+
+########## planning (izole, taze veritabanı) ##########
+
+=== İŞ MERKEZLERİ / WORK CENTRES ===
+  ✓ iş merkezleri listeleniyor
+  ✓ montaj hattı 4 paralel istasyon
+  ✓ vardiya atamaları görünüyor
+  ✓ boya 3 vardiya çalışıyor
+  ✓ rotalarda kullanım sayısı gösteriliyor
+  ✓ görüntüleyici iş merkezi açamıyor (403)
+  ✓ operatör iş merkezi açamıyor (403)
+  ✓ aynı kodla ikinci merkez engellendi (409)
+
+=== VARDİYALAR / SHIFTS ===
+  ✓ üç vardiya tanımlı
+  ✓ gündüz vardiyası net süresi 435 dk
+  ✓ gece vardiyası doğru hesaplanıyor (00:00-08:00)
+  ✓ çalışma günleri tanımlı
+
+=== KAPASİTE HESABI / CAPACITY ===
+  ✓ kapasite raporu üretildi
+  ✓ montaj kapasitesi hesaplandı
+  ✓ günlük kapasite vardiya × istasyon × verim ile uyumlu
+  ✓ üç vardiyalı merkez tek vardiyalıdan daha fazla saat açıyor
+  ✓ hafta sonu kapasite sıfır
+  ✓ resmî tatilde kapasite sıfır
+
+=== ROTALAR / ROUTINGS ===
+  ✓ panel rotası 4 operasyondan oluşuyor
+  ✓ operasyonlar sıralı
+  ✓ hazırlık ve birim süreleri ayrı tutuluyor
+  ✓ bekleme süresi tanımlı (termini uzatır, kapasite yemez)
+  ✓ tekrarlanan operasyon numarası reddediliyor (400)
+
+=== SONLU KAPASİTELİ ÇİZELGELEME / FINITE SCHEDULING ===
+  ✓ üretim emri açıldı
+  ✓ emir çizelgelendi
+  ✓ rota emre kopyalandı (4 operasyon)
+  ✓ operasyonlar sırayla planlandı
+  ✓ planlanan süre fire payını içeriyor
+  ✓ emir başlangıç ve bitişi kaydedildi
+  ✓ bitiş başlangıçtan sonra
+  ✓ ikinci emir de çizelgelendi
+  ✓ ikinci emir birinciden sonra bitiyor (kapasite paylaşımı)
+  ✓ çizelgeleme kapasite yükü olarak görünüyor
+  ✓ doluluk oranı hesaplanıyor
+  ✓ rotası olan mamul çizelgelenebiliyor
+  ✓ tek operasyonlu rota da çalışıyor
+
+=== OPERASYON TAKİBİ / OPERATION TRACKING ===
+  ✓ operasyon listesi sayfalanıyor
+  ✓ başlatılmadan tamamlanamıyor (409)
+  ✓ operasyon başlatıldı
+  ✓ iki kez başlatılamıyor (409)
+  ✓ operasyon tamamlandı
+  ✓ gerçekleşen süre ölçüldü
+  ✓ fire miktarı kaydedildi
+
+=== MRP ===
+  ✓ büyük talep siparişi girildi (alt seviye ihtiyaç yaratmak için)
+  ✓ operatör MRP çalıştıramıyor (403)
+  ✓ MRP çalıştı
+  ✓ çalıştırma numarası verildi
+  ✓ öneri üretildi
+  ✓ döngüsel reçete yok
+  ✓ öneriler listeleniyor
+  ✓ üretilecek ürün için "make" önerisi
+  ✓ satın alınacak ürün için "buy" önerisi
+  ✓ net ihtiyaç formülü doğru (brüt + emniyet − eldeki − yoldaki)
+  ✓ önerilen miktar net ihtiyaçtan az değil
+  ✓ parti büyüklüğü kuralı uygulandı (500 katı)
+  ✓ bırakma tarihi ihtiyaç tarihinden önce
+  ✓ ihtiyacın kaynağı gösteriliyor
+  ✓ reçete seviyeleri hesaplandı
+  ✓ reçete alt seviyeye yayıldı (make ve buy birlikte)
+  ✓ bileşen ihtiyacı üst seviyeden geldiği görülüyor
+  ✓ geciken öneriler işaretlendi
+
+=== ÖNERİYİ BELGEYE DÖNÜŞTÜRME / CONVERT SUGGESTION ===
+  ✓ satın alma önerisi siparişe dönüştü
+  ✓ oluşan sipariş doğru miktarı taşıyor
+  ✓ sipariş taslak ve onay bekliyor
+  ✓ aynı öneri ikinci kez dönüştürülemiyor
+  ✓ üretim önerisi emre dönüştü
+  ✓ öneri reddedilebiliyor
+
+=== VARDİYA KAYDI VE OEE ===
+  ✓ vardiya kaydı girildi
+  ✓ planlanan süre vardiya tanımından alındı (elle girilmiyor)
+  ✓ duruş çalışılan süreden fazla olamaz (400)
+  ✓ OEE hesaplandı
+  ✓ kullanılabilirlik hesaplandı
+  ✓ kalite oranı hesaplandı
+  ✓ OEE üç bileşenin çarpımı
+  ✓ OEE %100 üzerine çıkmıyor
+
+=== ÇALIŞTIRMA GEÇMİŞİ / RUN HISTORY ===
+  ✓ MRP çalıştırma geçmişi tutuluyor
+  ✓ çalıştırmayı yapan kullanıcı kayıtlı
+  ✓ MRP denetim kaydına yazıldı
+
+====================================================
+GEÇTİ / PASSED: 78    KALDI / FAILED: 0
+====================================================
+
+
+########## ui-smoke (izole, taze veritabanı) ##########
+
+=== BETİK YÜKLEME / SCRIPT LOADING ===
+  ✓ js/i18n.js
+  ✓ js/api.js
+  ✓ js/ui.js
+  ✓ dist/vendor-react.js
+  ✓ dist/view-dashboard.js
+  ✓ dist/view-items.js
+  ✓ dist/view-counts.js
+  ✓ dist/view-lots.js
+  ✓ dist/view-production.js
+  ✓ dist/view-reports.js
+  ✓ dist/view-planning.js
+  ✓ dist/view-purchasing.js
+  ✓ dist/view-quality.js
+  ✓ dist/view-sales.js
+  ✓ dist/view-crm.js
+  ✓ dist/view-support.js
+  ✓ dist/view-admin.js
+  ✓ js/app.js
+
+=== GİRİŞ / LOGIN ===
+  ✓ login screen is visible
+  ✓ login switches to the app shell
+  ✓ role is applied to <body> for permission gating
+  ✓ user name is shown in the sidebar
+
+=== EKRANLAR / VIEWS ===
+  ✓ dashboard renders
+  ✓ items renders
+  ✓ lots renders
+  ✓ counts renders
+  ✓ production renders
+  ✓ purchasing renders
+  ✓ crm renders
+  ✓ support renders
+  ✓ sales renders
+  ✓ planning renders
+  ✓ quality renders
+  ✓ reports renders
+  ✓ admin renders
+
+=== SEKMELER / TABS ===
+  ✓ purchasing exposes 5 tabs
+  ✓   purchasing › Siparişler
+  ✓   purchasing › Tedarikçiler
+  ✓   purchasing › Talepler
+  ✓   purchasing › Teklifler
+  ✓   purchasing › Faturalar
+  ✓ crm exposes 3 tabs
+  ✓   crm › Huni
+  ✓   crm › Fırsatlar
+  ✓   crm › Ziyaretler
+  ✓ sales exposes 5 tabs
+  ✓   sales › Satış Siparişleri
+  ✓   sales › Sevkiyatlar
+  ✓   sales › Müşteriler
+  ✓   sales › Faturalar
+  ✓   sales › Kârlılık
+  ✓ planning exposes 5 tabs
+  ✓   planning › MRP
+  ✓   planning › Kapasite
+  ✓   planning › İş Merkezleri
+  ✓   planning › Rotalar
+  ✓   planning › Vardiya & OEE
+  ✓ quality exposes 6 tabs
+  ✓   quality › Muayeneler
+  ✓   quality › Uygunsuzluklar
+  ✓   quality › DÖF / CAPA
+  ✓   quality › Cihaz / Kalibrasyon
+  ✓   quality › Muayene Planları
+  ✓   quality › İzlenebilirlik
+  ✓ reports exposes 10 tabs
+  ✓   reports › Stok Değerleme
+  ✓   reports › Trendler
+  ✓   reports › Ölü Stok
+  ✓   reports › Devir Hızı
+  ✓   reports › ABC Analizi
+  ✓   reports › Sipariş Önerileri
+  ✓   reports › Tedarikçi Performansı
+  ✓   reports › Kalite KPI
+  ✓   reports › Üretim Maliyetleri
+  ✓   reports › Özel Rapor
+  ✓ admin exposes 11 tabs
+  ✓   admin › Kullanıcılar
+  ✓   admin › Depolar
+  ✓   admin › Döviz Kurları
+  ✓   admin › Onay & Bildirim Kuralları
+  ✓   admin › Denetim Kaydı
+  ✓   admin › Ayarlar
+  ✓   admin › Veri Aktarımı
+  ✓   admin › Belge Şablonları
+  ✓   admin › Veri Sağlığı
+  ✓   admin › Muhasebe Aktarımı
+  ✓   admin › Webhook'lar
+
+=== DİYALOGLAR / DIALOGS ===
+  ✓ item card opens
+  ✓ new item form opens
+  ✓ stock-in dialog opens
+  ✓ lot traceability dialog opens
+  ✓ lot status dialog opens
+  ✓ lot transfer dialog opens
+  ✓ new count dialog opens
+  ✓ count sheet opens
+  ✓ production order detail opens
+  ✓ new production form opens
+  ✓ purchase order detail opens
+  ✓ new purchase order form opens
+  ✓ supplier detail opens
+  ✓ sales order detail opens
+  ✓ new sales order form opens
+  ✓ shipment form opens (lot picking)
+  ✓ inspection detail opens
+  ✓ inspection result dialog opens
+  ✓ new user form opens
+
+=== BİLDİRİM PANELİ / NOTIFICATIONS ===
+  ✓ notification panel opens and loads
+
+=== DİL DEĞİŞTİRME / LANGUAGE SWITCH ===
+  ✓ switching to English re-labels the navigation
+  ✓ language switch throws nothing
+
+=== GRAFİKLER / CHARTS ===
+  ✓ dashboard and report charts are constructed
+
+=== YAKALANAN JS HATALARI / UNCAUGHT JS ERRORS ===
+  ✓ no uncaught errors during the whole walkthrough
+
+====================================================
+GEÇTİ / PASSED: 111    KALDI / FAILED: 0
+====================================================
+
+
+########## security (izole, taze veritabanı) ##########
+=== KİMLİK DOĞRULAMA / AUTHENTICATION ===
+  ✓ kimliksiz istek reddediliyor
+  ✓ bozuk token reddediliyor
+  ✓ boş token reddediliyor
+  ✓ Bearer öneki olmayan başlık reddediliyor
+  ✓ imzası bozulmuş token reddediliyor
+  ✓ payload değiştirilmiş token reddediliyor (rol yükseltme)
+  ✓ alg:none token reddediliyor
+
+=== YETKİLENDİRME / AUTHORISATION ===
+  ✓ görüntüleyici kullanıcı listesine erişemiyor
+  ✓ operatör kullanıcı oluşturamıyor
+  ✓ operatör kendi rolünü yükseltemiyor
+  ✓ görüntüleyici stok değiştiremiyor
+  ✓ operatör MRP çalıştıramıyor
+  ✓ son yönetici rolü düşürülemiyor
+  ✓ kullanıcı kendini silemiyor
+
+=== SQL ENJEKSİYONU / SQL INJECTION ===
+  ✓ arama alanında SQL enjeksiyonu çalışmıyor
+  ✓ enjeksiyon denemelerinden sonra tablolar duruyor
+  ✓ giriş formunda SQL enjeksiyonu ile oturum açılamıyor
+
+=== GİRDİ DOĞRULAMA / INPUT VALIDATION ===
+  ✓ negatif miktar reddediliyor
+  ✓ tip uyuşmazlığı reddediliyor
+  ✓ bozuk JSON gövdesi 500 üretmiyor
+  ✓ aşırı uzun metin reddediliyor veya kesiliyor
+  ✓ zayıf şifre kabul edilmiyor
+  ✓ bilinmeyen uç nokta 404 dönüyor (yığın izi sızdırmıyor)
+
+=== XSS ===
+  ✓ XSS içeren girdi kabul ediliyor ama veri olarak
+  ✓ API yanıtı JSON olarak dönüyor (HTML değil)
+  ✓ arayüzde HTML kaçış fonksiyonu var
+  ✓ kaçış tüm tehlikeli karakterleri kapsıyor
+  ✓ XSS payload'ları DOM'da element oluşturmuyor (5 deneme)
+  ✓ kaçışlanan payload kullanıcıya metin olarak gösteriliyor
+
+=== CSV ENJEKSİYONU / CSV FORMULA INJECTION ===
+  ✓ CSV dışa aktarımda formül enjeksiyonu etkisiz hale getiriliyor (5 deneme)
+
+=== SIR SIZINTISI / SECRET LEAKAGE ===
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+  ✓ kullanıcı yanıtında şifre özeti yok
+  ✓ kullanıcı listesinde şifre özeti yok
+  ✓ hata yanıtlarında yığın izi yok
+
+=== OTURUM YÖNETİMİ / SESSION MANAGEMENT ===
+  ✓ geçerli token çalışıyor
+  ✓ çıkış sonrası token geçersiz (sunucu tarafı iptal)
+
+=== GÜVENLİK BAŞLIKLARI / SECURITY HEADERS ===
+  ✓ X-Content-Type-Options: nosniff
+  ✓ X-Frame-Options ayarlı (clickjacking)
+  ✓ Referrer-Policy ayarlı
+  ✓ Content-Security-Policy tanımlı
+  ✓ sunucu sürümü sızdırılmıyor (X-Powered-By)
+
+=== KABA KUVVET KORUMASI / BRUTE FORCE ===
+  ✓ ardışık başarısız girişler engelleniyor
+
+=== YAPILANDIRMA / CONFIGURATION ===
+  ✓ sağlık ucu kimlik istemiyor (izleme için)
+  ✓ sağlık ucu hassas bilgi vermiyor
+  ✓ JWT sırrı koda gömülü değil
+  ✓ JWT_SECRET tanımsızken üretimde sunucu açılmıyor
+  ✓ .env.example gerçek sır içermiyor
+  ✓ .env sürüm kontrolünden hariç tutulmuş
+  ✓ veritabanı sürüm kontrolünden hariç tutulmuş
+
+=== DIŞ KAYNAK BÜTÜNLÜĞÜ / SUBRESOURCE INTEGRITY ===
+  ✓ index.html: https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js integrity taşıyor
+  ✓ index.html: https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js gerçekten erişilebilir (200)
+  ✓ api-docs.html: https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.29.1/swagger-ui.min.css integrity taşıyor
+  ✓ api-docs.html: https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.29.1/swagger-ui.min.css gerçekten erişilebilir (200)
+  ✓ api-docs.html: https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.29.1/swagger-ui-bundle.min.js integrity taşıyor
+  ✓ api-docs.html: https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.29.1/swagger-ui-bundle.min.js gerçekten erişilebilir (200)
+
+=== DOSYA YÜKLEME / FILE UPLOAD ===
+  ✓ yüklenen dosya türü beyaz listeyle sınırlı
+  ✓ dosya boyutu sınırlı
+  ✓ istemci dosya adı diske yazılmıyor (path traversal)
+  ✓ indirme yolu yükleme klasörüyle sınırlı
+  ✓ tehlikeli uzantılı ama geçerli MIME'li dosya kabul ediliyor
+  ✓ diskteki dosya MIME'den türetilen uzantıyı taşıyor (.png), istemcinin ".php" uzantısını DEĞİL
+
+=== ŞİFRE SAKLAMA / PASSWORD STORAGE ===
+  ✓ şifreler bcrypt ile saklanıyor
+  ✓ bcrypt maliyet katsayısı yeterli (≥12)
+  ✓ şifre sıfırlama oturumları iptal ediyor
+
+=== BİLGİ İFŞASI / INFORMATION DISCLOSURE ===
+  ✓ giriş hatası kullanıcı varlığını ele vermiyor
+
+========================================================
+GEÇTİ / PASSED: 64   UYARI / WARN: 0   AÇIK / FAIL: 0
+========================================================
+
+Not: Bu denetim uygulama katmanını sınar. Ağ, işletim sistemi, TLS
+yapılandırması ve fiziksel erişim kapsam dışıdır; canlıya almadan önce
+bağımsız bir sızma testi yaptırılması önerilir.
+
+
+########## load (izole, taze veritabanı) ##########
+Yük testi / Load test — eşzamanlılık: 10, süre: 10 sn
+
+  ✓ oturum açıldı
+  ✓ test ürünü bulundu
+
+=== 1. OKUMA YÜKÜ / READ LOAD ===
+  items?pageSize=25            n= 1750  ort=   10.2ms  p50=   9.4  p95=   14.9  p99=   28.3  maks=   54.7
+  stock/lots?pageSize=25       n= 1758  ort=    9.3ms  p50=   8.6  p95=   13.7  p99=   22.2  maks=   56.4
+  reports/summary              n= 1688  ort=    9.9ms  p50=   9.1  p95=   14.5  p99=   22.7  maks=   56.1
+  purchasing/orders?pageSize=2 n= 1744  ort=    9.6ms  p50=   8.9  p95=     14  p99=   20.1  maks=   54.4
+  sales/orders?pageSize=25     n= 1739  ort=    9.2ms  p50=   8.5  p95=   13.4  p99=   20.6  maks=   57.7
+  reports/valuation            n= 1781  ort=    9.2ms  p50=   8.5  p95=   13.4  p99=     20  maks=   54.3
+
+  Toplam / total: 10460 istek, 1046 istek/sn, 0 hata
+  ✓ okuma isteklerinde hata yok
+  ✓ okuma p95 < 500 ms
+  ✓ okuma p99 < 1500 ms
+  ✓ okuma verimi ≥ 50 istek/sn
+  ✓ panel özeti p95 < 800 ms
+
+=== 2. EŞZAMANLI YAZMA / CONCURRENT WRITES ===
+  stok girişi / stock-in       n=   60  ort=   63.4ms  p50=  63.6  p95=  103.1  p99=  109.6  maks=  109.6
+  60 yazma 0.1 sn'de, 513 yazma/sn, 0 hata
+  ✓ eşzamanlı yazmalarda hata yok
+  ✓ stok toplamı tam olarak doğru (kayıp güncelleme yok)
+  ✓ her yazma kendi partisini oluşturdu
+  ✓ parti numaraları tekilleşmedi / çakışmadı
+  ✓ her yazma hareket kaydı bıraktı
+  ✓ yazma p95 < 1000 ms
+
+=== 3. BELGE NUMARASI YARIŞI / DOCUMENT NUMBER RACE ===
+  ✓ eşzamanlı siparişlerin hepsi oluştu
+  ✓ sipariş numaraları tekil (yarış yok)
+
+=== 4. HIZ SINIRLAMA / RATE LIMITING ===
+  ✓ başarısız giriş denemeleri sınırlanıyor
+
+=== 5. YÜK SONRASI TUTARLILIK / INTEGRITY AFTER LOAD ===
+  ✓ sunucu ayakta ve sağlıklı
+  ✓ raporlar hâlâ hesaplanabiliyor
+  ✓ değerleme raporu yeni partileri içeriyor
+
+============================================================
+GEÇTİ / PASSED: 19    KALDI / FAILED: 0
+============================================================
+
+Not: SQLite tek yazarlıdır — yazmalar sıraya girer. Bu, onlarca eşzamanlı
+kullanıcı için yeterlidir; yüzlerce eşzamanlı YAZMA gerekiyorsa PostgreSQL'e
+geçilmelidir. Okuma tarafı WAL sayesinde yazmalardan etkilenmez.
+
+
+########## multitenancy (izole, taze veritabanı) ##########
+
+=== ŞEMA / SCHEMA ===
+  ✓ sessions: company_id sütunu var
+  ✓ item_bom: company_id sütunu var
+  ✓ raw_materials: company_id sütunu var
+  ✓ stock_lots: company_id sütunu var
+  ✓ movements: company_id sütunu var
+  ✓ stock_counts: company_id sütunu var
+  ✓ stock_count_lines: company_id sütunu var
+  ✓ purchase_requests: company_id sütunu var
+  ✓ purchase_request_lines: company_id sütunu var
+  ✓ rfqs: company_id sütunu var
+  ✓ rfq_lines: company_id sütunu var
+  ✓ rfq_quotes: company_id sütunu var
+  ✓ purchase_orders: company_id sütunu var
+  ✓ po_items: company_id sütunu var
+  ✓ po_revisions: company_id sütunu var
+  ✓ po_receipts: company_id sütunu var
+  ✓ po_receipt_lines: company_id sütunu var
+  ✓ landed_costs: company_id sütunu var
+  ✓ supplier_invoices: company_id sütunu var
+  ✓ supplier_returns: company_id sütunu var
+  ✓ supplier_price_history: company_id sütunu var
+  ✓ sales_orders: company_id sütunu var
+  ✓ sales_order_lines: company_id sütunu var
+  ✓ shipments: company_id sütunu var
+  ✓ shipment_items: company_id sütunu var
+  ✓ shipment_crates: company_id sütunu var
+  ✓ customer_invoices: company_id sütunu var
+  ✓ customer_invoice_lines: company_id sütunu var
+  ✓ production_orders: company_id sütunu var
+  ✓ production_order_components: company_id sütunu var
+  ✓ production_consumption: company_id sütunu var
+  ✓ shifts: company_id sütunu var
+  ✓ work_center_shifts: company_id sütunu var
+  ✓ calendar_exceptions: company_id sütunu var
+  ✓ routings: company_id sütunu var
+  ✓ production_operations: company_id sütunu var
+  ✓ mrp_runs: company_id sütunu var
+  ✓ mrp_suggestions: company_id sütunu var
+  ✓ shift_logs: company_id sütunu var
+  ✓ inspections: company_id sütunu var
+  ✓ inspection_lines: company_id sütunu var
+  ✓ inspection_plans: company_id sütunu var
+  ✓ ncrs: company_id sütunu var
+  ✓ capas: company_id sütunu var
+  ✓ documents: company_id sütunu var
+  ✓ equipment: company_id sütunu var
+  ✓ calibrations: company_id sütunu var
+  ✓ import_batches: company_id sütunu var
+  ✓ import_rows: company_id sütunu var
+  ✓ audit_log: company_id sütunu var
+  ✓ approval_rules: company_id sütunu var
+  ✓ notification_rules: company_id sütunu var
+  ✓ notifications: company_id sütunu var
+  ✓ exchange_rates: company_id sütunu var
+  ✓ users: company_id sütunu var
+  ✓ warehouses: company_id sütunu var
+  ✓ suppliers: company_id sütunu var
+  ✓ customers: company_id sütunu var
+  ✓ items: company_id sütunu var
+  ✓ work_centers: company_id sütunu var
+  ✓ document_templates: company_id sütunu var
+
+=== NULL KALMADI / NO NULLS ANYWHERE (document_templates hariç) ===
+  ✓ sessions: NULL company_id yok
+  ✓ item_bom: NULL company_id yok
+  ✓ raw_materials: NULL company_id yok
+  ✓ stock_lots: NULL company_id yok
+  ✓ movements: NULL company_id yok
+  ✓ stock_counts: NULL company_id yok
+  ✓ stock_count_lines: NULL company_id yok
+  ✓ purchase_requests: NULL company_id yok
+  ✓ purchase_request_lines: NULL company_id yok
+  ✓ rfqs: NULL company_id yok
+  ✓ rfq_lines: NULL company_id yok
+  ✓ rfq_quotes: NULL company_id yok
+  ✓ purchase_orders: NULL company_id yok
+  ✓ po_items: NULL company_id yok
+  ✓ po_revisions: NULL company_id yok
+  ✓ po_receipts: NULL company_id yok
+  ✓ po_receipt_lines: NULL company_id yok
+  ✓ landed_costs: NULL company_id yok
+  ✓ supplier_invoices: NULL company_id yok
+  ✓ supplier_returns: NULL company_id yok
+  ✓ supplier_price_history: NULL company_id yok
+  ✓ sales_orders: NULL company_id yok
+  ✓ sales_order_lines: NULL company_id yok
+  ✓ shipments: NULL company_id yok
+  ✓ shipment_items: NULL company_id yok
+  ✓ shipment_crates: NULL company_id yok
+  ✓ customer_invoices: NULL company_id yok
+  ✓ customer_invoice_lines: NULL company_id yok
+  ✓ production_orders: NULL company_id yok
+  ✓ production_order_components: NULL company_id yok
+  ✓ production_consumption: NULL company_id yok
+  ✓ shifts: NULL company_id yok
+  ✓ work_center_shifts: NULL company_id yok
+  ✓ calendar_exceptions: NULL company_id yok
+  ✓ routings: NULL company_id yok
+  ✓ production_operations: NULL company_id yok
+  ✓ mrp_runs: NULL company_id yok
+  ✓ mrp_suggestions: NULL company_id yok
+  ✓ shift_logs: NULL company_id yok
+  ✓ inspections: NULL company_id yok
+  ✓ inspection_lines: NULL company_id yok
+  ✓ inspection_plans: NULL company_id yok
+  ✓ ncrs: NULL company_id yok
+  ✓ capas: NULL company_id yok
+  ✓ documents: NULL company_id yok
+  ✓ equipment: NULL company_id yok
+  ✓ calibrations: NULL company_id yok
+  ✓ import_batches: NULL company_id yok
+  ✓ import_rows: NULL company_id yok
+  ✓ audit_log: NULL company_id yok
+  ✓ approval_rules: NULL company_id yok
+  ✓ notification_rules: NULL company_id yok
+  ✓ notifications: NULL company_id yok
+  ✓ exchange_rates: NULL company_id yok
+  ✓ users: NULL company_id yok
+  ✓ warehouses: NULL company_id yok
+  ✓ suppliers: NULL company_id yok
+  ✓ customers: NULL company_id yok
+  ✓ items: NULL company_id yok
+  ✓ work_centers: NULL company_id yok
+  ✓ document_templates: varsayılan şablonlar hâlâ NULL (kasıtlı, tüm firmalar için geçerli)
+
+=== BÜTÜNLÜK / INTEGRITY UNCHANGED ===
+  ✓ yabancı anahtar hatası yok
+
+=== CANLI ROTALAR ARTIK COMPANY_ID YAZIYOR / LIVE ROUTES NOW WRITE IT ===
+  ✓ depo oluşturuldu
+  ✓ yeni depo company_id=1 aldı (daha önce NULL kalıyordu)
+  ✓ tedarikçi oluşturuldu
+  ✓ yeni tedarikçi company_id=1 aldı
+  ✓ müşteri oluşturuldu
+  ✓ yeni müşteri company_id=1 aldı
+  ✓ kullanıcı oluşturuldu
+  ✓ yeni kullanıcı company_id=1 aldı
+  ✓ ürün oluşturuldu
+  ✓ yeni ürün company_id=1 aldı
+
+=== JWT / req.user companyId (atıl — henüz filtrelemede kullanılmıyor) ===
+  ✓ JWT companyId taşıyor
+  ✓ /auth/me hâlâ eskisi gibi çalışıyor (companyId sızdırmıyor, sözleşme bozulmadı)
+
+=== AŞAMA B — AYNI ŞİRKETTE TEKRAR HÂLÂ REDDEDİLİYOR / SAME-COMPANY DUPES STILL REJECTED ===
+  ✓ aynı şirkette aynı kullanıcı adı hâlâ reddediliyor (409)
+  ✓ iş merkezi oluşturuldu
+  ✓ aynı şirkette aynı iş merkezi kodu hâlâ reddediliyor (409)
+
+=== AŞAMA B — İZOLASYON KANITI / ISOLATION PROOF (doğrudan SQL, arayüz yok) ===
+  ✓ farklı şirkette AYNI kullanıcı adı çakışmadan eklenebiliyor
+  ✓ farklı şirkette AYNI iş merkezi kodu çakışmadan eklenebiliyor
+  ✓ farklı şirkette AYNI vardiya kodu çakışmadan eklenebiliyor
+  ✓ aynı şirkette aynı vardiya kodu hâlâ reddediliyor
+
+====================================================
+GEÇTİ / PASSED: 142    KALDI / FAILED: 0
+====================================================
+
+
+########## accounting-export (izole, taze veritabanı) ##########
+
+=== HESAP KODU EŞLEMESİ / ACCOUNT CODE MAPPINGS ===
+  ✓ 6 varsayılan eşleme geldi
+  ✓ satış geliri varsayılan kodu 600
+
+=== SATIŞ FATURASINDAN YEVMİYE / JOURNAL FROM SALES INVOICE ===
+  ✓ satış faturası oluşturuldu
+  ✓ alt toplam doğru (10x100)
+  ✓ KDV doğru (%20)
+
+=== ALIŞ FATURASINDAN YEVMİYE / JOURNAL FROM PURCHASE INVOICE ===
+  ✓ tohum verideki PO ve teslimat bulundu
+  ✓ alış faturası oluşturuldu ve eşleşti
+
+=== DIŞA AKTARIM / EXPORT ===
+  ✓ dışa aktarım başarılı
+  ✓ borç toplamı = alacak toplamı
+  ✓ en az iki faturanın satırları geldi (satış + alış)
+  ✓ satış faturası 3 satır üretti (alıcı+gelir+KDV)
+  ✓ alıcı hesabına (120) borç yazıldı, tutar = brüt (1200)
+  ✓ satış hesabına (600) alacak yazıldı, tutar = net (1000)
+  ✓ KDV hesabına (391) alacak yazıldı, tutar = 200
+  ✓ alış faturası 3 satır üretti (stok+KDV+satıcı)
+  ✓ satıcı hesabına (320) alacak yazıldı
+  ✓ stok hesabına (153) borç yazıldı, tutar = net (45300)
+
+=== HATA DURUMLARI / ERROR CASES ===
+  ✓ geçersiz tarih aralığı reddediliyor (400)
+  ✓ görüntüleyici dışa aktarım yapamıyor (403)
+
+=== HESAP KODU EŞLEMESİ GÜNCELLEME / MAPPING UPDATE ===
+  ✓ eşleme güncellendi
+  ✓ güncellenen kod geri okunuyor
+  ✓ diğer eşlemeler değişmedi
+
+====================================================
+GEÇTİ / PASSED: 22    KALDI / FAILED: 0
+====================================================
+
+
+########## labels (izole, taze veritabanı) ##########
+
+=== ZPL ÜRETİCİ / ZPL GENERATOR ===
+  ✓ etiket ^XA ile başlıyor
+  ✓ etiket ^XZ ile bitiyor
+  ✓ UTF-8 komutu var (Türkçe karakterler için)
+  ✓ Code128 barkod komutu var
+  ✓ barkod verisi alanda geçiyor
+  ✓ başlık metni geçiyor
+  ✓ ürün kodu geçiyor
+  ✓ ek satır geçiyor
+  ✓ varsayılan tek kopya (^PQ1)
+  ✓ kopya sayısı ^PQ komutuna yansıyor
+  ✓ ^ karakteri alan verisinde kaçışlanıyor
+  ✓ barkod verisi olmadan hata verir (sessizce boş etiket basmaz)
+
+=== ZPL ÖNİZLEME/İNDİRME / ZPL PREVIEW-DOWNLOAD ===
+  ✓ ürün etiketi indirilebiliyor
+  ✓ doğru içerik tipi (text/plain)
+  ✓ indirilen dosya gerçek ZPL komutu içeriyor
+  ✓ parti etiketi indirilebiliyor
+  ✓ parti etiketinde parti verisi var
+  ✓ görüntüleyici de önizleme indirebiliyor (salt-okunur, zararsız)
+  ✓ olmayan ürün için 404
+
+=== AĞ YAZICISINA GÖNDERİM / NETWORK PRINT ===
+  ✓ yazıcı ayarlanmamışken açık hata (400)
+  ✓ görüntüleyici yazdıramıyor (403)
+  ✓ ulaşılamayan yazıcı için açık hata (502)
+  ✓ hata mesajı yazdırma başarısızlığını açıklıyor
+
+====================================================
+GEÇTİ / PASSED: 23    KALDI / FAILED: 0
+====================================================
+
+
+########## webhooks (izole, taze veritabanı) ##########
+
+=== YETKİ / PERMISSIONS ===
+  ✓ yönetici olmayan webhook listeleyemiyor (403)
+  ✓ yönetici olmayan webhook oluşturamıyor (403)
+
+=== OLAY KATALOĞU / EVENT CATALOG ===
+  ✓ olay kataloğu geldi
+
+=== OLUŞTURMA / CREATE ===
+  ✓ geçersiz URL reddediliyor (422)
+  ✓ boş olay listesi reddediliyor (422)
+  ✓ webhook oluşturuldu (201)
+  ✓ oluşturma yanıtı gizli anahtarı bir kez döndürüyor
+
+=== LİSTELEME — GİZLİ ANAHTAR GİZLİ / LIST — SECRET HIDDEN ===
+  ✓ liste yanıtında secret alanı YOK
+  ✓ liste doğru olayları gösteriyor
+
+=== TEST GÖNDERİMİ / TEST PING ===
+  ✓ test bildirimi başarılı raporlanıyor
+  ✓ alıcı gerçekten bir istek aldı
+  ✓ imza doğrulanabiliyor (HMAC-SHA256)
+  ✓ olay başlığı doğru
+
+=== GERÇEK İŞ OLAYI / REAL BUSINESS EVENT ===
+  ✓ NCR oluşturuldu
+  ✓ NCR açılınca webhook tetiklendi
+  ✓ olay adı doğru
+  ✓ olay verisi gerçek NCR alanlarını taşıyor
+
+=== TESLİMAT GEÇMİŞİ / DELIVERY LOG ===
+  ✓ teslimat listesi zarf döndürüyor
+  ✓ kayıtlı teslimat başarılı işaretli
+
+=== BAŞARISIZ TESLİMAT VE YENİDEN DENEME / FAILED DELIVERY + RETRY ===
+  ✓ ulaşılamayan uç için açık başarısızlık raporu
+  ✓ başarısız teslimat kaydedildi (sessizce kaybolmadı)
+  ✓ yeniden deneme çalışıyor (aynı şekilde başarısız olsa da)
+
+=== OTOMATİK YENİDEN DENEME KUYRUĞU / AUTO-RETRY QUEUE ===
+  ✓ ilk başarısızlık otomatik kuyruğa alınmış (nextRetryAt dolu)
+  ✓ izole webhook'ta tam olarak bir başarısız kayıt var
+  ✓ kuyruk tetikleme çalışıyor (admin)
+  ✓ otomatik yeniden deneme GERÇEKTEN yeni bir teslimat denemesi yaptı
+  ✓ otomatik denemenin retryCount'u arttı (1)
+  ✓ ilk denemenin nextRetryAt'i temizlendi (iki kez işlenmesin diye)
+  ✓ yönetici olmayan kuyruğu elle tetikleyemiyor (403)
+
+=== SİLME / DELETE ===
+  ✓ webhook silinebiliyor (204)
+  ✓ ikinci test webhook'u silinebiliyor
+  ✓ silinen webhook artık listede yok
+
+====================================================
+GEÇTİ / PASSED: 32    KALDI / FAILED: 0
+====================================================
+
+
+########## openapi (izole, taze veritabanı) ##########
+
+=== ŞEMA ERİŞİMİ / SCHEMA ACCESS ===
+  ✓ kimlik doğrulama olmadan erişilebiliyor (200)
+  ✓ OpenAPI 3.0 belgesi
+  ✓ başlık ve sürüm var
+  ✓ en az bir güvenlik şeması tanımlı (bearerAuth)
+
+=== ANA KAYNAKLAR BELGELENMİŞ / CORE RESOURCES DOCUMENTED ===
+  ✓ beklenen tüm uçlar mevcut
+
+=== $REF BÜTÜNLÜĞÜ / $REF INTEGRITY (en değerli kontrol) ===
+  ✓ en az bir $ref bulundu (kontrolün anlamlı olması için)
+  ✓ her $ref var olan bir şemaya işaret ediyor
+
+=== HER YOL EN AZ BİR YANITTA ŞEMA TANIMLIYOR / EVERY OPERATION HAS RESPONSES ===
+  ✓ her operasyonun yanıtı ve etiketi var
+
+=== DOKÜMAN SAYFASI / DOCS PAGE ===
+  ✓ interaktif doküman sayfası servis ediliyor
+  ✓ sayfa openapi.json'a işaret ediyor
+
+====================================================
+GEÇTİ / PASSED: 10    KALDI / FAILED: 0
+====================================================
+
+
+########## pwa (izole, taze veritabanı) ##########
+
+=== MANIFEST ===
+  ✓ manifest kimlik doğrulamasız erişilebiliyor (200)
+  ✓ start_url mobil terminale işaret ediyor
+  ✓ display standalone (kurulabilir)
+  ✓ en az iki simge boyutu tanımlı (192 ve 512)
+  ✓ simge yolları gerçekten /icons altında
+  ✓ tema rengi tanımlı
+
+=== SERVICE WORKER ===
+  ✓ sw.js servis ediliyor (200)
+  ✓ JS içerik tipi
+  ✓ önbellek listesi (SHELL_URLS) bulunabiliyor
+  ✓ terminal sayfası önbellek listesinde
+  ✓ terminal betiği ve IndexedDB modülü önbellek listesinde
+  ✓ ÖNBELLEK LİSTESİ HİÇ /api YOLU İÇERMİYOR (en kritik kontrol — API verisi asla bayatlamamalı)
+  ✓ fetch işleyicisi API isteklerine dokunmuyor (yalnızca ağa bırakıyor)
+  ✓ eski önbellek sürümleri activate'te temizleniyor
+
+=== SİMGELER ===
+  ✓ /icons/icon-192.png servis ediliyor (200)
+  ✓ /icons/icon-192.png PNG içerik tipi
+  ✓ /icons/icon-192.png geçerli bir PNG (sihirli bayt eşleşiyor)
+  ✓ /icons/icon-192.png boş/bozuk değil (>500 bayt)
+  ✓ /icons/icon-512.png servis ediliyor (200)
+  ✓ /icons/icon-512.png PNG içerik tipi
+  ✓ /icons/icon-512.png geçerli bir PNG (sihirli bayt eşleşiyor)
+  ✓ /icons/icon-512.png boş/bozuk değil (>500 bayt)
+  ✓ /icons/apple-touch-icon.png servis ediliyor (200)
+  ✓ /icons/apple-touch-icon.png PNG içerik tipi
+  ✓ /icons/apple-touch-icon.png geçerli bir PNG (sihirli bayt eşleşiyor)
+  ✓ /icons/apple-touch-icon.png boş/bozuk değil (>500 bayt)
+
+=== TERMİNAL SAYFASI KABLOLAMASI / MOBILE.HTML WIRING ===
+  ✓ manifest bağlantısı var
+  ✓ apple-touch-icon bağlantısı var (iOS ana ekrana ekleme)
+  ✓ mobile-db.js, mobile.js'DEN ÖNCE yükleniyor (sıra önemli — MobileDB tanımlı olmalı)
+
+=== CSP UYUMLULUĞU / CSP COMPATIBILITY ===
+  ✓ CSP service worker kaydını engellemiyor
+  ✓ CSP manifest servisini engellemiyor (default-src veya manifest-src 'self' içeriyor)
+
+====================================================
+GEÇTİ / PASSED: 31    KALDI / FAILED: 0
+====================================================
+
+Not: Gerçek bir tarayıcıda kurulum/çevrimdışı açılış denenmedi — bu paket
+yalnızca sunucu tarafı servis edilen dosyaları ve statik sw.js/manifest
+içeriğini doğrular. Gerçek "Add to Home Screen" ve çevrimdışı yeniden
+açılış Browser panelinde ayrıca elle doğrulanmalı.
+
+
+########## crm (izole, taze veritabanı) ##########
+
+=== YETKİ / PERMISSIONS ===
+  ✓ görüntüleyici fırsat oluşturamıyor (403)
+
+=== OLUŞTURMA / CREATE ===
+  ✓ fırsat oluşturuldu (201)
+  ✓ fırsat numarası üretildi (FRS- ile başlıyor)
+  ✓ yeni fırsat "new" aşamasında başlıyor
+  ✓ kalemler kaydedildi
+
+=== YENİ ADAY (MÜŞTERİ OLMADAN) / NEW LEAD (NO CUSTOMER) ===
+  ✓ müşteri kimliği olmadan da fırsat oluşturulabiliyor (yeni aday)
+  ✓ customerId boş kalıyor
+
+=== LİSTE VE HUNİ / LIST AND PIPELINE ===
+  ✓ liste zarfı doğru
+  ✓ aşama filtresi çalışıyor
+  ✓ huni 4 aktif aşama döndürüyor (lost hariç)
+  ✓ huni doğru fırsatları gruplamış
+  ✓ huni toplam tahmini değeri hesaplıyor
+
+=== AŞAMA GEÇİŞİ / STAGE TRANSITIONS ===
+  ✓ kaybedilme sebebi olmadan reddediliyor (422)
+  ✓ iletişime geçildi aşamasına ilerletildi
+  ✓ kazanıldı olarak işaretlendi
+  ✓ kapanış zamanı damgalandı
+  ✓ kapanmış fırsat yeniden açılamıyor (409)
+  ✓ kapanmış fırsat düzenlenemiyor (409)
+
+=== KAYBEDİLDİ AKIŞI / LOST FLOW ===
+  ✓ sebep verilince kaybedildi olarak işaretlenebiliyor
+  ✓ kaybedilme sebebi kaydedildi
+
+=== SATIŞ SİPARİŞİNE DÖNÜŞTÜRME / CONVERT TO SALES ORDER ===
+  ✓ kazanılmamış (kaybedilmiş) fırsat dönüştürülemiyor (409)
+  ✓ kazanılmış fırsat dönüştürüldü (201)
+  ✓ gerçek bir satış siparişi oluştu (SAT- ile başlıyor)
+  ✓ oluşan sipariş doğru müşteriyi taşıyor
+  ✓ oluşan sipariş fırsatın kalemini taşıyor
+  ✓ fırsat dönüştürülmüş sipariş kimliğini taşıyor
+  ✓ aynı fırsat ikinci kez dönüştürülemiyor (409)
+
+=== MÜŞTERİSİZ ADAYI DÖNÜŞTÜRME / CONVERTING A CUSTOMER-LESS LEAD ===
+  ✓ müşteri belirtilmeden dönüştürme reddediliyor (422)
+  ✓ dönüştürme sırasında müşteri belirtilince başarılı oluyor
+
+=== BOŞ KALEM / NO LINES ===
+  ✓ kalemsiz fırsat dönüştürülemiyor (422)
+
+=== WEBHOOK OLAYI / WEBHOOK EVENT ===
+  ✓ opportunity.won olay kataloğunda
+
+====================================================
+GEÇTİ / PASSED: 31    KALDI / FAILED: 0
+====================================================
+
+
+########## pivot (izole, taze veritabanı) ##########
+
+=== META / WHITELIST ===
+  ✓ meta kimlik doğrulaması yeterli (viewer okuyabiliyor)
+  ✓ 4 veri kaynağı da listede (movements/sales/purchasing/quality)
+  ✓ movements boyut listesi geliyor
+  ✓ movements ölçü listesi geliyor
+  ✓ hareket tipi listesi geliyor
+
+=== PIVOT ÇALIŞTIRMA / RUN PIVOT ===
+  ✓ görüntüleyici de pivot çalıştırabiliyor (salt okunur)
+  ✓ en az bir satır dönüyor (tohum verisi hareket içeriyor)
+  ✓ sonuç dim/val alanlarını taşıyor
+
+=== GÜVENLİK — SQL ENJEKSİYONU / SQL INJECTION ===
+  ✓ bilinmeyen boyut reddediliyor (400) — enjeksiyon SQL'e hiç ulaşmıyor
+  ✓ bilinmeyen ölçü reddediliyor (400)
+  ✓ bilinmeyen hareket tipi filtresi reddediliyor (400)
+  ✓ enjeksiyon denemelerinden sonra veritabanı sağlam (users tablosu duruyor)
+
+=== FİLTRELER / FILTERS ===
+  ✓ tek tipe filtrelenince tek satır dönüyor
+
+=== YENİ VERİ KAYNAKLARI / NEW DATA SOURCES (satış, satın alma, kalite) ===
+  ✓ satış pivotu çalışıyor
+  ✓ satın alma pivotu çalışıyor
+  ✓ kalite pivotu çalışıyor
+  ✓ bilinmeyen veri kaynağı reddediliyor (400)
+  ✓ sales kaynağında movements'a özel "warehouse" boyutu reddediliyor (400)
+
+=== KAYITLI RAPORLAR / SAVED REPORTS ===
+  ✓ kayıtlı rapor oluşturuldu (201)
+  ✓ filtreler geri okunuyor
+  ✓ varsayılan veri kaynağı movements
+  ✓ sales veri kaynaklı rapor kaydedilip geri okunuyor
+  ✓ geçersiz boyutla kayıt reddediliyor (400)
+  ✓ görüntüleyici de kayıtlı raporları görebiliyor
+
+=== SİLME YETKİSİ / DELETE PERMISSION ===
+  ✓ görüntüleyici de kendi raporunu oluşturabiliyor (salt okunur bir tercih, iş verisi değil)
+  ✓ yönetici başkasının raporunu silebiliyor
+  ✓ operatör (yönetici olmayan) başkasının raporunu SİLEMİYOR (403)
+  ✓ sahibi kendi raporunu silebiliyor
+  ✓ temizlik: test raporu silindi
+
+====================================================
+GEÇTİ / PASSED: 29    KALDI / FAILED: 0
+====================================================
+
+
+########## support (izole, taze veritabanı) ##########
+
+=== YETKİ / PERMISSIONS ===
+  ✓ görüntüleyici talep oluşturamıyor (403)
+  ✓ görüntüleyici listeyi görebiliyor
+
+=== OLUŞTURMA / CREATE ===
+  ✓ konu (subject) zorunlu (422)
+  ✓ talep oluşturuldu
+  ✓ talep numarası DST formatında
+  ✓ talep açık durumda başlıyor
+  ✓ öncelik doğru kaydedildi
+  ✓ var olmayan müşteri reddediliyor (404)
+
+=== LİSTE / FİLTRE ===
+  ✓ liste sayfalanıyor
+  ✓ en az bir şikayet listeleniyor
+  ✓ sonuçlar önceliğe göre sıralı (acil önce)
+
+=== GÜNCELLEME / UPDATE ===
+  ✓ talep güncellendi
+
+=== YORUM / COMMENTS ===
+  ✓ yorum eklendi
+  ✓ yorum talep detayında görünüyor
+
+=== DURUM GEÇİŞİ / STATUS TRANSITIONS ===
+  ✓ çözüldü işaretlemek için açıklama zorunlu (422)
+  ✓ talep çözüldü olarak işaretlendi
+  ✓ çözüm zamanı damgalandı
+  ✓ talep kapatıldı
+  ✓ kapanmış talep yeniden açılamıyor (409)
+  ✓ kapanmış talep düzenlenemiyor (409)
+
+=== UYGUNSUZLUĞA DÖNÜŞTÜRME / CONVERT TO NCR ===
+  ✓ sadece şikayet kategorisi uygunsuzluğa dönüştürülebiliyor (409)
+  ✓ kayıtlı müşterisi olmayan talep dönüştürülemiyor (422)
+  ✓ uygunsuzluğa dönüştürüldü
+  ✓ NCR gerçekten oluştu ve doğru müşteriyi taşıyor
+  ✓ NCR kaynağı "customer"
+  ✓ NCR şiddeti doğru aktarıldı
+  ✓ talepte oluşan NCR referansı görünüyor
+  ✓ aynı talep ikinci kez dönüştürülemiyor (409)
+
+=== İZ KAYDI / AUDIT TRAIL ===
+  ✓ denetim kaydına yazıldı
+
+====================================================
+GEÇTİ / PASSED: 29    KALDI / FAILED: 0
+====================================================
+
+
+########## visits (izole, taze veritabanı) ##########
+
+=== YETKİ / PERMISSIONS ===
+  ✓ görüntüleyici ziyaret oluşturamıyor (403)
+  ✓ operatör listeyi görebiliyor
+
+=== OLUŞTURMA / CREATE ===
+  ✓ var olmayan müşteri reddediliyor (404)
+  ✓ var olmayan fırsat reddediliyor (404)
+  ✓ konum bilgisi olmadan da ziyaret oluşturulabiliyor
+  ✓ konum alanları boş kaydediliyor (GPS reddedilmiş senaryosu)
+  ✓ konumlu ve fırsata bağlı ziyaret oluşturuldu
+  ✓ konum doğru kaydedildi
+  ✓ fırsat ilişkisi kuruldu
+  ✓ takip tarihi kaydedildi
+  ✓ geçersiz enlem reddediliyor (422)
+
+=== LİSTE / FİLTRE ===
+  ✓ fırsata göre filtreleme çalışıyor
+  ✓ müşteriye göre filtreleme en az iki ziyaret döndürüyor
+
+=== DETAY / GÜNCELLEME ===
+  ✓ ziyaret detayı görüntüleniyor, ziyaret eden kullanıcı adı görünüyor
+  ✓ ziyaret notu güncellendi
+
+=== SİLME / DELETE (yalnızca yönetici) ===
+  ✓ operatör ziyaret silemiyor (403)
+  ✓ yönetici ziyareti silebiliyor
+  ✓ silinen ziyaret artık bulunamıyor (404)
+
+=== İZ KAYDI / AUDIT TRAIL ===
+  ✓ denetim kaydına yazıldı
+
+====================================================
+GEÇTİ / PASSED: 19    KALDI / FAILED: 0
+====================================================
+
+
+########## kvkk (izole, taze veritabanı) ##########
+
+=== MÜŞTERİ ANONİMLEŞTİRME / CUSTOMER ANONYMIZATION ===
+  ✓ müşteri oluşturuldu
+  ✓ görüntüleyici anonimleştiremiyor (403)
+  ✓ operatör anonimleştiremiyor (403)
+  ✓ yönetici (manager) de anonimleştiremiyor (403 — yalnızca admin)
+  ✓ admin anonimleştirebiliyor
+  ✓ ad anonim bir değere değişti
+  ✓ iletişim bilgileri silindi
+  ✓ VKN/TCKN silindi
+  ✓ müşteri pasifleştirildi
+  ✓ anonymized_at damgalandı
+  ✓ ikinci kez anonimleştirme reddediliyor (409 — geri döndürülemezlik)
+
+=== MÜŞTERİ VERİ DIŞA AKTARIM / DATA EXPORT ===
+  ✓ görüntüleyici veri raporu göremiyor (403)
+  ✓ admin veri raporu alabiliyor
+  ✓ rapor kişisel veriyi içeriyor
+  ✓ rapor ilişkili kayıt bölümlerini içeriyor
+
+=== TEDARİKÇİ ANONİMLEŞTİRME / SUPPLIER ANONYMIZATION ===
+  ✓ tedarikçi oluşturuldu
+  ✓ operatör tedarikçiyi anonimleştiremiyor (403)
+  ✓ admin tedarikçiyi anonimleştirebiliyor
+  ✓ banka bilgisi silindi
+  ✓ VKN silindi
+  ✓ ikinci kez anonimleştirme reddediliyor (409)
+  ✓ tedarikçi veri raporu alınabiliyor
+
+=== KULLANICI ANONİMLEŞTİRME / USER ANONYMIZATION ===
+  ✓ test kullanıcısı oluşturuldu
+  ✓ gerçek kendi hesabını anonimleştirme reddediliyor (400)
+  ✓ son yönetici anonimleştirilemiyor (409/400)
+  ✓ operatör kullanıcı anonimleştiremiyor (403)
+  ✓ admin başka bir kullanıcıyı anonimleştirebiliyor
+  ✓ kullanıcı adı anonim değere değişti
+  ✓ kullanıcı pasifleştirildi
+  ✓ anonimleştirilen kullanıcı artık giriş yapamıyor
+  ✓ kullanıcı veri raporu alınabiliyor
+
+=== SAKLAMA SÜRESİ TARAMASI / RETENTION SWEEP ===
+  ✓ varsayılan olarak devre dışı (enabled=false)
+  ✓ devre dışıyken hiçbir şey anonimleştirmiyor
+  ✓ yeni müşteri aktif ve deactivated_at boş (ön koşul)
+  ✓ tarama etkin görünüyor
+  ✓ 0 yıl saklama süresiyle pasifleştirilmiş kayıt anonimleştirildi
+  ✓ süpürülen müşteri gerçekten anonimleşti
+  ✓ hiç pasifleştirilmemiş (aktif) müşteri tarama ile dokunulmuyor
+  ✓ yeniden devre dışı bırakılınca tarama çalışmıyor
+
+====================================================
+GEÇTİ / PASSED: 39    KALDI / FAILED: 0
+====================================================
+
+
+########## approval-limit (izole, taze veritabanı) ##########
+
+=== ONAY LİMİTİ SINIR DURUMU / APPROVAL LIMIT BOUNDARY ===
+  ✓ ₺300.000 tutarında sipariş oluşturuldu (onay bekliyor)
+  ✓ Müdür kendi limitinin üstündeki siparişi onaylayamıyor (403)
+  ✓ Reddedilen onay denemesi sonrası sipariş hâlâ onay bekliyor durumunda
+  ✓ Yönetici (admin) aynı siparişi limit kontrolüne takılmadan onaylayabiliyor
+  ✓ Sipariş onaylandı durumuna geçti
+
+==================================================
+GEÇTİ / PASSED: 5    KALDI / FAILED: 0
+==================================================
+
+
+########## concurrency-races (izole, taze veritabanı) ##########
+
+=== EŞZAMANLI ONAY YARIŞI / CONCURRENT APPROVAL RACE ===
+  ✓ ₺150.000 tutarında sipariş oluşturuldu (onay bekliyor)
+  ✓ tam olarak biri onayı kazandı (200), diğeri temiz reddedildi (400)
+  ✓ kaybeden istek "onay bekliyor durumunda değil" hatası aldı (çift onay değil)
+  ✓ sipariş tam olarak bir kez onaylanmış durumda (bozulmamış)
+
+=== EŞZAMANLI FAZLA TESLİM YARIŞI / CONCURRENT OVER-RECEIPT RACE ===
+  ✓ ₺500 tutarında (onay gerektirmeyen) ikinci sipariş oluşturuldu
+  ✓ tam olarak bir teslim alma kabul edildi (201), diğeri tolerans aşımıyla reddedildi (400)
+  ✓ reddedilen istek "fazla teslim toleransı aşıldı" hatası aldı
+  ✓ teslim alınan miktar TAM OLARAK 6 (12 değil — çift yazım yok)
+  ✓ sipariş "kısmen teslim alındı" durumunda (10'un 6'sı geldi)
+
+============================================================
+GEÇTİ / PASSED: 9    KALDI / FAILED: 0
+============================================================
+
+
+########## search (izole, taze veritabanı) ##########
+
+=== GENEL ARAMA / GLOBAL SEARCH ===
+  ✓ kimlik doğrulaması olmadan reddediliyor (401)
+  ✓ tek harfli sorgu boş sonuç döner (gürültü değil)
+  ✓ ürün adına göre bulunuyor
+  ✓ ürün koduna göre de bulunuyor
+  ✓ müşteri adına göre bulunuyor
+  ✓ tedarikçi adına göre bulunuyor
+  ✓ satış siparişi numarasına göre bulunuyor
+  ✓ satış siparişi sonucu müşteri adını da taşıyor
+  ✓ satın alma siparişi numarasına göre bulunuyor
+  ✓ parti numarasına göre bulunuyor
+  ✓ parti sonucu üst sınırı aşmıyor (≤6)
+  ✓ eşleşme yoksa tüm kategoriler boş dizi döner (hata değil)
+  ✓ görüntüleyici de arayabiliyor (salt okunur, mevcut liste ekranlarıyla tutarlı)
+
+==================================================
+GEÇTİ / PASSED: 13    KALDI / FAILED: 0
+==================================================
+
+
+########## visual-audit ##########
+=== PALET / PALETTE ===
+  --bg: #1B1E21
+  --panel: #24282C
+  --panel-2: #22262A
+  --panel-3: #303539
+  --border: #4E555C
+  --border-soft: #3A4046
+  --border-input: #6B747C
+  --text: #ECE9E2
+  --text-muted: #9AA0A6
+  --text-faint: #9199A0
+  --accent: #F2A900
+  --danger: #EE7C72
+  --success: #6FA97A
+  --info: #7FA6D9
+  --purple: #A88BD0
+
+=== METİN KONTRASTI (WCAG 2.1) ===
+  ✓ gövde metni / body text 13.81:1 (min 4.5)
+  ✓ panel üzerinde metin / text on panel 12.24:1 (min 4.5)
+  ✓ ikincil metin / muted text 5.62:1 (min 4.5)
+  ✓ soluk metin / faint text 5.14:1 (min 4.5)
+  ✓ tablo başlığı / table header 5.27:1 (min 3)
+  ✓ vurgu rengi metin / accent text 7.39:1 (min 4.5)
+  ✓ hata metni / danger text 5.49:1 (min 4.5)
+  ✓ başarı metni / success text 5.39:1 (min 4.5)
+  ✓ bilgi metni / info text 5.91:1 (min 4.5)
+  ✓ mor metin / purple text 5.14:1 (min 4.5)
+
+=== BUTON KONTRASTI / BUTTON CONTRAST ===
+  ✓ birincil buton / primary button 8.73:1
+  ✓ kullanıcı rozeti / user avatar 8.73:1
+  ✓ bildirim rozeti / nav badge 6.62:1
+
+=== ARAYÜZ SINIRLARI / NON-TEXT CONTRAST ===
+  · dekoratif ayırıcı / decorative separator 1.96:1 (eşik uygulanmaz / not gated)
+  ✓ form alanı kenarlığı / input border 3.20:1 (min 3)
+  ✓ form alanı kenarlığı (panel) / input border on panel 3.12:1 (min 3)
+  ✓ odak halkası / focus ring 8.33:1 (min 3)
+
+=== DOKUNMA HEDEFLERİ / TOUCH TARGETS ===
+  ✓ ikon buton ≥24px / icon button
+  ✓ dokunmatikte ikon buton ≥44px / ≥44px on touch devices
+  ✓ küçük buton yüksekliği ≥24px / small button height
+  ✓ sekme çipi yüksekliği ≥24px / tab chip height
+
+=== YAZI BOYUTLARI / FONT SIZES ===
+  ✓ 11px altında yazı yok / no text under 11px
+  ✓ gövde yazı tipi tanımlı / body font defined
+
+=== DUYARLI TASARIM / RESPONSIVE ===
+  ✓ mobil kırılma noktası var / mobile breakpoint exists
+  ✓ tablet kırılma noktası var / tablet breakpoint exists
+  ✓ kenar çubuğu mobilde yığılıyor / sidebar stacks on mobile
+  ✓ form satırları mobilde tek sütun / form rows collapse
+  ✓ geniş tablolar yatay kaydırılabilir / wide tables scroll
+  ✓ viewport meta etiketi var / viewport meta present
+
+=== ERİŞİLEBİLİRLİK / ACCESSIBILITY ===
+  ✓ klavye odak göstergesi tanımlı / focus-visible styled
+  ✓ sayfa dili tanımlı / html lang set
+  ✓ karakter kodlaması UTF-8 / charset utf-8
+  ✓ ikon butonlarda erişilebilir ad / icon buttons have a name
+  ✓ hareket azaltma tercihi / prefers-reduced-motion
+
+=== RENGE BAĞIMLILIK / COLOUR RELIANCE ===
+  ✓ stok durumu renkle birlikte metin gösteriyor / status has text
+
+====================================================
+GEÇTİ / PASSED: 34   UYARI / WARN: 0   HATA / FAIL: 0
+====================================================
+
+Not: Bu denetim ölçülebilir eşikleri kontrol eder. Hizalama, boşluk dengesi ve
+genel görsel bütünlük hâlâ gerçek bir tarayıcıda insan gözüyle bakılmalıdır.
+
+
+########## backup-restore ##########
+=== HAZIRLIK / SETUP ===
+  geçici klasör / temp dir: C:\Users\ilker\AppData\Local\Temp\depo-restore-UMMaED
+Örnek veriler yüklendi / Seed data loaded.
+Kullanıcılar / Users: admin/Admin123!  mudur/Mudur123!  operator/Operator123!  kalite/Kalite123!  viewer/Viewer123!
+  ✓ veritabanı kuruldu ve dolduruldu
+
+=== 1. YEDEK ALMA / BACKUP ===
+  ✓ yedek dosyası oluştu
+  ✓ yedek boş değil
+  ✓ yedek doğrulamayı geçti
+  ✓ yedekte bütünlük hatası yok
+  ✓ yedekte yetim kayıt yok
+  ✓ yedek migration kaydı taşıyor
+  ✓ yedekteki stok değeri kaynakla aynı
+
+=== OFF-SITE SENKRONİZASYON KANCASI / OFFSITE SYNC HOOK ===
+  ✓ offsite kancası tetiklendi
+  ✓ offsite kancası başarılı raporlandı
+  ✓ offsite komutu gerçek yedek dosya yolunu aldı
+
+=== OFF-SITE BAŞARISIZLIK AÇIKÇA GÖRÜNMELİ / FAILURE MUST BE VISIBLE ===
+[backup] off-site senkronizasyon başarısız / offsite sync failed: Command failed: node -e "process.exit(1)"
+
+  ✓ offsite başarısız olsa da yerel yedek oluşuyor
+  ✓ offsite başarısızlığı sessizce yutulmuyor
+
+=== 2. YEDEK SONRASI DEĞİŞİKLİK / CHANGES AFTER BACKUP ===
+  ✓ yedek sonrası yeni kayıt eklendi
+
+=== 3. VERİ KAYBI SİMÜLASYONU / DATA LOSS ===
+  ✓ stok verisi silindi
+  ✓ kayıp gerçekten yaşandı (stok değeri sıfır)
+
+=== 4. GERİ YÜKLEME / RESTORE ===
+  ✓ geri yükleme tamamlandı
+  ✓ önceki veritabanı güvenlik kopyası olarak saklandı
+  ✓ geri yüklenen dosya doğrulamayı geçti
+
+=== 5. VERİ BÜTÜNLÜĞÜ / INTEGRITY AFTER RESTORE ===
+  ✓ ürünler geri geldi
+  ✓ partiler geri geldi
+  ✓ hareketler geri geldi
+  ✓ kullanıcılar korundu
+  ✓ stok değeri kuruşuna kadar aynı
+  ✓ yedek sonrası eklenen kayıt geri gelmedi (beklenen davranış)
+  ✓ geri yüklenen veritabanında bütünlük hatası yok
+  ✓ geri yüklenen veritabanında yetim kayıt yok
+  ✓ reçete ilişkileri korundu
+  ✓ üretim partisi ve soy ağacı korundu
+  ✓ denetim kaydı korundu
+
+=== 6. BOZUK YEDEK REDDİ / CORRUPT BACKUP IS REFUSED ===
+  ✓ bozuk dosya doğrulamayı geçemiyor
+  ✓ bozuk yedek geri yüklenmiyor
+  ✓ reddedilen geri yükleme mevcut veriye dokunmadı
+  ✓ boş dosya reddediliyor
+  ✓ olmayan dosya reddediliyor
+
+=== 7. ROTASYON / ROTATION ===
+  ✓ eski yedekler temizlendi (keep=3)
+  ✓ yedek listesi en yeniden eskiye sıralı
+
+====================================================
+GEÇTİ / PASSED: 37    KALDI / FAILED: 0
+====================================================
+
+
+########## email ##########
+=== SMTP KAPALIYKEN / WITH SMTP DISABLED ===
+Örnek veriler yüklendi / Seed data loaded.
+Kullanıcılar / Users: admin/Admin123!  mudur/Mudur123!  operator/Operator123!  kalite/Kalite123!  viewer/Viewer123!
+  ✓ SMTP tanımsızken yapılandırılmamış görünüyor
+  ✓ SMTP yokken gönderim başarısız dönüyor
+  ✓ başarısızlık sebebi kaydediliyor (sessiz düşmüyor)
+  ✓ başarısızlık zamanı damgalanıyor
+
+=== GERÇEK SMTP SUNUCUSUNA GÖNDERİM / REAL DELIVERY ===
+  ✓ SMTP tanımlandığında yapılandırılmış görünüyor
+  ✓ e-posta gönderildi
+  ✓ alıcı kabul edildi
+  ✓ sunucu mesajı gerçekten aldı
+  ✓ gönderen adresi doğru
+  ✓ alıcı adresi doğru
+  ✓ konu başlığı iletildi
+  ✓ mesaj gövdesi iletildi
+  ✓ Türkçe karakterler korundu (MIME çözümü sonrası)
+  ✓ başarılı gönderim zamanı kaydedildi
+  ✓ başarı sonrası hata kaydı temizlendi
+
+=== UYARI KURALLARINDAN E-POSTA / ALERTS DISPATCHED BY EMAIL ===
+  ✓ uyarı taraması uyarı üretti
+  ✓ bekleyen uyarılar e-postaya dönüştü
+  ✓ sunucuya yeni mesajlar ulaştı
+  ✓ uyarı e-postası iki alıcıya da gitti
+  ✓ konu [Dream Plus] ile etiketlendi
+  ✓ aynı uyarı tekrar gönderilmiyor
+  ✓ gönderilen uyarılar damgalandı
+
+=== SUNUCU REDDEDERSE / WHEN THE SERVER REJECTS ===
+[mail] gönderilemedi / send failed: Message failed: 550 Mesaj reddedildi
+  ✓ reddedilen mesaj başarısız dönüyor
+  ✓ red sebebi kaydediliyor
+
+=== SUNUCU ERİŞİLEMEZSE / WHEN THE SERVER IS UNREACHABLE ===
+[mail] gönderilemedi / send failed: connect ECONNREFUSED 127.0.0.1:1
+  ✓ erişilemeyen sunucuda gönderim başarısız
+  ✓ zaman aşımı süresi sınırlı (asılı kalmıyor)
+  ✓ erişim hatası kaydediliyor
+
+=== ZAMANLAYICI DAYANIKLILIĞI / SCHEDULER RESILIENCE ===
+  ✓ zamanlayıcı SMTP hatasına rağmen başlıyor
+
+====================================================
+GEÇTİ / PASSED: 28    KALDI / FAILED: 0
+====================================================
+
+
+########## barcode ##########
+  ✓ UI modülü yüklendi
+  ✓ onBarcodeScan dışa aktarıldı
+
+=== USB OKUYUCU ALGILAMA / SCANNER DETECTION ===
+  ✓ hızlı yazılan barkod yakalandı
+  ✓ insan hızında yazış barkod sayılmıyor
+  ✓ çok kısa dizi barkod sayılmıyor (min 6)
+  ✓ harf içeren barkod (lot no) yakalanıyor
+  ✓ Enter gelmeden tetiklenmiyor
+  ✓ duraklamadan sonra basılan Enter yarım diziyi kabul etmiyor
+
+=== FORM ALANLARIYLA ÇAKIŞMA / NO INTERFERENCE WITH TYPING ===
+  ✓ normal bir alana hızlı yazarken devreye girmiyor
+  ✓ barkod hedefi işaretli alanda çalışıyor
+
+=== DİNLEYİCİ TEMİZLİĞİ / LISTENER CLEANUP ===
+  ✓ durdurulduktan sonra dinlemiyor
+  ✓ iki dinleyici iki kez tetikler (bu yüzden temizlik şart)
+
+=== KAMERA YOKKEN / WITHOUT A CAMERA ===
+  ✓ BarcodeDetector bu ortamda yok (beklenen)
+  ✓ kod BarcodeDetector varlığını kontrol ediyor
+  ✓ kamera yoksa elle giriş yolu açıklanıyor
+  ✓ kamera izni reddedilirse ayrı mesaj var
+  ✓ kamera akışı kapatılıyor (getTracks/stop)
+  ✓ tarama döngüsü temizleniyor (clearInterval)
+
+=== BARKOD BİÇİMLERİ / SUPPORTED FORMATS ===
+  ✓ EAN-13 destekleniyor (perakende standardı)
+  ✓ Code 128 destekleniyor (lojistik standardı)
+  ✓ QR kod destekleniyor
+
+====================================================
+GEÇTİ / PASSED: 21    KALDI / FAILED: 0
+====================================================
+
+Not: Gerçek kamera ile okuma bu ortamda test edilemez. Kameralı okuma
+Chrome/Edge'de BarcodeDetector API ile çalışır; Safari ve Firefox desteklemez,
+o tarayıcılarda USB okuyucu veya elle giriş devreye girer.
+
+
+########## dates ##########
+
+=== toLocalDateStr / today ===
+  ✓ today() YYYY-MM-DD biçiminde
+  ✓ today() yerel takvim gününü veriyor
+  ✓ toLocalDateStr belirli bir zaman damgasını doğru çeviriyor
+
+=== addDays — gün/ay/yıl sınırları ===
+  ✓ bir gün ekleme
+  ✓ bir gün çıkarma
+  ✓ ay sonu geçişi
+  ✓ yıl sonu geçişi
+  ✓ artık yıl — 29 Şubat
+  ✓ artık olmayan yıl — Şubat 28 gün
+  ✓ 0 gün ekleme aynı tarihi veriyor
+  ✓ 180 gün ileri makul bir tarih veriyor
+
+=== isoWeekday ===
+  ✓ Pazartesi → 1
+  ✓ Cuma → 5
+  ✓ Cumartesi → 6
+  ✓ Pazar → 7 (JS'in 0'ı değil)
+
+=== daysBetween ===
+  ✓ ardışık günler arasında 1 gün
+  ✓ aynı gün için 0
+  ✓ geriye doğru negatif
+  ✓ ay sınırı üzerinden doğru fark
+
+=== round-trip tutarlılığı (asıl bulunan hatanın regresyon testi) ===
+  ✓ ardışık +1 gün ilerlemesi asla aynı günde takılmıyor
+
+====================================================
+GEÇTİ / PASSED: 20    KALDI / FAILED: 0
+====================================================
+
+
+########## setup-upgrade ##########
+=== TEMİZ KURULUM / CLEAN SETUP ===
+Kurulum yapılamadı:
+
+  ✗ Şifre: En az 8 karakter olmalı
+
+Örnek:
+  ADMIN_PASSWORD='Gucl3Sifre!' npm run setup -- \
+    --company "Örnek Metal A.Ş." --admin-user mehmet --warehouse "Merkez Depo"
+
+  ✓ zayıf şifre kurulumda reddediliyor
+Kurulum yapılamadı:
+
+  ✗ Şifre: Bu şifre çok yaygın, başka bir şey seçin
+
+Örnek:
+  ADMIN_PASSWORD='Gucl3Sifre!' npm run setup -- \
+    --company "Örnek Metal A.Ş." --admin-user mehmet --warehouse "Merkez Depo"
+
+  ✓ yaygın şifre reddediliyor
+Kurulum yapılamadı:
+
+  ✗ Firma unvanı gerekli (--company)
+  ✗ Kullanıcı adı: En az 3 karakter olmalı
+
+Örnek:
+  ADMIN_PASSWORD='Gucl3Sifre!' npm run setup -- \
+    --company "Örnek Metal A.Ş." --admin-user mehmet --warehouse "Merkez Depo"
+
+  ✓ firma unvanı olmadan kurulum yapılmıyor
+Kurulum yapılamadı:
+
+  ✗ Kullanıcı adı: Yalnızca harf, rakam, nokta, alt çizgi ve tire
+
+Örnek:
+  ADMIN_PASSWORD='Gucl3Sifre!' npm run setup -- \
+    --company "Örnek Metal A.Ş." --admin-user mehmet --warehouse "Merkez Depo"
+
+  ✓ geçersiz kullanıcı adı reddediliyor
+  ✓ kurulum tamamlanıyor
+  ✓ kurulum sonrası ne yapılacağı anlatılıyor
+  ✓ firma kaydı oluştu
+  ✓ yönetici hesabı oluştu
+  ✓ depo oluştu
+  ✓ demo kullanıcıları yok
+  ✓ demo ürünleri yok
+  ✓ demo tedarikçileri yok
+  ✓ demo stoğu yok
+  ✓ para birimi ayarı yazıldı
+  ✓ kur tablosu boş bırakılmadı
+  ✓ belge şablonları hazır geliyor
+  ✓ tüm migration'lar uygulandı
+  ✓ şifre bcrypt ile saklandı
+  ✓ şifre doğrulanabiliyor
+  ✓ bcrypt maliyeti yeterli (≥12)
+Bu veritabanında zaten kullanıcı var — kurulum yapılmış görünüyor.
+Yeniden kurmak isterseniz önce yedek alın ve --force kullanın.
+
+  npm run backup
+  npm run setup -- --force
+
+  ✓ ikinci kurulum reddediliyor
+  ✓ reddederken önce yedek alması söyleniyor
+  ✓ reddedilen kurulum veriye dokunmadı
+
+=== YÜKSELTME / UPGRADE ===
+  ✓ güncel veritabanında yapacak bir şey yok diyor
+  ✓ deneme modu bekleyen migration'ı listeliyor
+  ✓ deneme modu değişiklik yapmadığını söylüyor
+  ✓ deneme modu gerçekten hiçbir şey değiştirmedi
+  ✓ yükseltme tamamlandı
+  ✓ yükseltme önce yedek alıyor
+  ✓ alınan yedek doğrulanıyor
+  ✓ sonuç doğrulanıyor
+  ✓ geri dönüş komutu gösteriliyor
+  ✓ migration uygulandı
+  ✓ migration kaydedildi
+  ✓ veriler korundu
+  ✓ yükseltme öncesi yedek etiketli saklandı
+
+=== BOZUK MIGRATION'DA GERİ DÖNÜŞ / ROLLBACK ===
+
+✗ Yükseltme başarısız: Bu migration kasıtlı olarak başarısız
+→ Yedeğe geri dönülüyor…
+  ✓ Veritabanı yükseltme öncesi haline döndürüldü.
+    Sistem eski sürümle çalışmaya devam edebilir.
+
+  ✓ bozuk migration yükseltmeyi durduruyor
+  ✓ geri dönüş yapıldığı bildiriliyor
+  ✓ eski sürümle çalışmaya devam edilebileceği söyleniyor
+  ✓ veritabanı yükseltme öncesi haline döndü
+  ✓ yarım kalan tablo geride bırakılmadı
+  ✓ migration kaydı geri alındı
+  ✓ bütünlük bozulmadı
+
+=== ÇALIŞAN SUNUCU KORUMASI / RUNNING SERVER GUARD ===
+
+✗ Sunucu çalışıyor görünüyor (WAL dosyası dolu).
+  Yükseltmeden önce sunucuyu durdurun. Çalışırken şema değiştirmek
+  açık işlemleri bozar ve veri kaybettirir.
+
+  Yine de devam etmek için: npm run upgrade -- --force
+
+  ✓ sunucu çalışırken yükseltme engelleniyor
+  ✓ zorlama seçeneği açıkça sunuluyor
+
+====================================================
+GEÇTİ / PASSED: 45    KALDI / FAILED: 0
+====================================================
+
+
+########## license ##########
+=== İMZA DOĞRULAMA (birim) / SIGNATURE VERIFICATION (unit) ===
+  ✓ süresiz lisans geçerli
+  ✓ süresiz lisansta gün sayısı yok
+  ✓ ileri tarihli lisans geçerli
+  ✓ kalan gün doğru hesaplandı
+  ✓ süresi dolmuş lisans reddediliyor
+  ✓ süresi dolma sebebi açıkça bildiriliyor
+  ✓ tahrif edilmiş içerik (imza uyuşmuyor) reddediliyor
+  ✓ yanlış özel anahtarla imzalanan lisans reddediliyor (yalnızca gerçek genel anahtar kabul ediliyor)
+  ✓ boş girdi biçim hatasıyla reddediliyor
+  ✓ imza alanı eksikse reddediliyor
+
+=== SUNUCU AÇILIŞI / SERVER STARTUP ===
+  ✓ LICENSE_FILE tanımsızken sunucu normal açılıyor (bugünkü varsayılan)
+  ✓ LICENSE_FILE tanımlı ama dosya yoksa sunucu açılmıyor
+  ✓ hata mesajı dosyanın bulunamadığını söylüyor
+  ✓ süresi dolmuş lisansla sunucu açılmıyor
+  ✓ hata mesajı süre dolduğunu söylüyor
+  ✓ geçerli süresiz lisansla sunucu normal açılıyor
+  ✓ geçerli ileri tarihli lisansla sunucu normal açılıyor
+
+====================================================
+GEÇTİ / PASSED: 17    KALDI / FAILED: 0
+====================================================
+
+
+==================== ÖZET / SUMMARY ====================
+✓ e2e
+✓ contract
+✓ import
+✓ templates
+✓ mobile
+✓ data-health
+✓ planning
+✓ ui-smoke
+✓ security
+✓ load
+✓ multitenancy
+✓ accounting-export
+✓ labels
+✓ webhooks
+✓ openapi
+✓ pwa
+✓ crm
+✓ pivot
+✓ support
+✓ visits
+✓ kvkk
+✓ approval-limit
+✓ concurrency-races
+✓ search
+✓ visual-audit
+✓ backup-restore
+✓ email
+✓ barcode
+✓ dates
+✓ setup-upgrade
+✓ license
+==========================================================

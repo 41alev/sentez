@@ -7,6 +7,18 @@ const path = require('path');
 const rateLimit = require('express-rate-limit');
 const pino = require('pino');
 
+// Configuration failures must not create a database or apply migrations.
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  console.error('JWT_SECRET tanımlı değil / JWT_SECRET is required in production');
+  process.exit(1);
+}
+require('./lib/license').checkOnStartup();
+
+// Acquire before opening or migrating the application database.
+const startupDbPath = process.env.DB_PATH || path.join(process.env.DATA_DIR || path.join(__dirname, '..', 'data'), 'depo-takip.sqlite');
+const releaseMaintenanceLock = require('./lib/maintenance-lock').acquireMaintenanceLock(startupDbPath);
+process.on('exit', releaseMaintenanceLock);
+
 const { runMigrations } = require('./migrate');
 const db = require('./db');
 const { AppError } = require('./lib/core');
@@ -49,12 +61,6 @@ runMigrations({ silent: false });
  * Üretimde sessizce güvensiz bir varsayılanla açılmak yerine, aynen boş
  * veritabanı / lisans kontrolündeki gibi açıkça durup yönlendirir.
  */
-if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
-  console.error('\n  JWT_SECRET tanımlı değil — üretimde herkesçe bilinen bir varsayılan anahtarla açılamaz.');
-  console.error('  JWT_SECRET is not set — refusing to start in production with a publicly known default key.\n');
-  console.error('  .env dosyasına uzun, rastgele bir JWT_SECRET ekleyin (bkz. docs/KURULUM.md).\n');
-  process.exit(1);
-}
 
 /**
  * Demo verisi ASLA kendiliğinden yüklenmez.
@@ -73,7 +79,6 @@ if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
  * geçersiz/süresi dolmuşsa sunucu bilinçli olarak açılmaz — hemen aşağıdaki
  * "boş veritabanı" kontrolüyle aynı desen.
  */
-require('./lib/license').checkOnStartup();
 
 const userCount = require('./db').prepare('SELECT COUNT(*) c FROM users').get().c;
 if (userCount === 0) {

@@ -1,0 +1,1640 @@
+[
+  {
+    "file": "server/routes/accounting.js",
+    "line": 17,
+    "method": "GET",
+    "route": "/mappings",
+    "declaration": "router.get('/mappings', MANAGER, (req, res) => {"
+  },
+  {
+    "file": "server/routes/accounting.js",
+    "line": 31,
+    "method": "PUT",
+    "route": "/mappings",
+    "declaration": "router.put('/mappings', MANAGER, validate(mappingSchema), (req, res) => {"
+  },
+  {
+    "file": "server/routes/accounting.js",
+    "line": 47,
+    "method": "GET",
+    "route": "/export",
+    "declaration": "router.get('/export', MANAGER, validateQuery(z.object({"
+  },
+  {
+    "file": "server/routes/admin.js",
+    "line": 21,
+    "method": "GET",
+    "route": "/users",
+    "declaration": "router.get('/users', ADMIN, (req, res) => {"
+  },
+  {
+    "file": "server/routes/admin.js",
+    "line": 50,
+    "method": "POST",
+    "route": "/users",
+    "declaration": "router.post('/users', ADMIN, validate(userCreateSchema), (req, res) => {"
+  },
+  {
+    "file": "server/routes/admin.js",
+    "line": 63,
+    "method": "PUT",
+    "route": "/users/:id",
+    "declaration": "router.put('/users/:id', ADMIN, (req, res) => {"
+  },
+  {
+    "file": "server/routes/admin.js",
+    "line": 101,
+    "method": "POST",
+    "route": "/users/:id/unlock",
+    "declaration": "router.post('/users/:id/unlock', ADMIN, (req, res) => {"
+  },
+  {
+    "file": "server/routes/admin.js",
+    "line": 108,
+    "method": "DELETE",
+    "route": "/users/:id",
+    "declaration": "router.delete('/users/:id', ADMIN, (req, res) => {"
+  },
+  {
+    "file": "server/routes/admin.js",
+    "line": 125,
+    "method": "POST",
+    "route": "/users/:id/anonymize",
+    "declaration": "router.post('/users/:id/anonymize', ADMIN, (req, res) => {"
+  },
+  {
+    "file": "server/routes/admin.js",
+    "line": 130,
+    "method": "GET",
+    "route": "/users/:id/data-export",
+    "declaration": "router.get('/users/:id/data-export', ADMIN, (req, res) => {"
+  },
+  {
+    "file": "server/routes/admin.js",
+    "line": 135,
+    "method": "POST",
+    "route": "/data-retention/run",
+    "declaration": "router.post('/data-retention/run', ADMIN, (req, res) => {"
+  },
+  {
+    "file": "server/routes/admin.js",
+    "line": 143,
+    "method": "GET",
+    "route": "/warehouses",
+    "declaration": "router.get('/warehouses', (req, res) => {"
+  },
+  {
+    "file": "server/routes/admin.js",
+    "line": 147,
+    "method": "POST",
+    "route": "/warehouses",
+    "declaration": "router.post('/warehouses', MANAGER, validate(z.object({"
+  },
+  {
+    "file": "server/routes/admin.js",
+    "line": 162,
+    "method": "PUT",
+    "route": "/warehouses/:id",
+    "declaration": "router.put('/warehouses/:id', MANAGER, (req, res) => {"
+  },
+  {
+    "file": "server/routes/admin.js",
+    "line": 179,
+    "method": "GET",
+    "route": "/settings",
+    "declaration": "router.get('/settings', (req, res) => {"
+  },
+  {
+    "file": "server/routes/admin.js",
+    "line": 199,
+    "method": "PUT",
+    "route": "/settings",
+    "declaration": "router.put('/settings', MANAGER, (req, res) => {"
+  },
+  {
+    "file": "server/routes/admin.js",
+    "line": 216,
+    "method": "GET",
+    "route": "/exchange-rates",
+    "declaration": "router.get('/exchange-rates', (req, res) => {"
+  },
+  {
+    "file": "server/routes/admin.js",
+    "line": 225,
+    "method": "GET",
+    "route": "/exchange-rates/current",
+    "declaration": "router.get('/exchange-rates/current', (req, res) => {"
+  },
+  {
+    "file": "server/routes/admin.js",
+    "line": 234,
+    "method": "POST",
+    "route": "/exchange-rates",
+    "declaration": "router.post('/exchange-rates', MANAGER, validate(z.object({"
+  },
+  {
+    "file": "server/routes/admin.js",
+    "line": 256,
+    "method": "GET",
+    "route": "/approval-rules",
+    "declaration": "router.get('/approval-rules', (req, res) => {"
+  },
+  {
+    "file": "server/routes/admin.js",
+    "line": 260,
+    "method": "POST",
+    "route": "/approval-rules",
+    "declaration": "router.post('/approval-rules', ADMIN, validate(z.object({"
+  },
+  {
+    "file": "server/routes/admin.js",
+    "line": 272,
+    "method": "DELETE",
+    "route": "/approval-rules/:id",
+    "declaration": "router.delete('/approval-rules/:id', ADMIN, (req, res) => {"
+  },
+  {
+    "file": "server/routes/admin.js",
+    "line": 280,
+    "method": "GET",
+    "route": "/notification-rules",
+    "declaration": "router.get('/notification-rules', (req, res) => {"
+  },
+  {
+    "file": "server/routes/admin.js",
+    "line": 284,
+    "method": "POST",
+    "route": "/notification-rules",
+    "declaration": "router.post('/notification-rules', MANAGER, validate(z.object({"
+  },
+  {
+    "file": "server/routes/admin.js",
+    "line": 297,
+    "method": "DELETE",
+    "route": "/notification-rules/:id",
+    "declaration": "router.delete('/notification-rules/:id', MANAGER, (req, res) => {"
+  },
+  {
+    "file": "server/routes/admin.js",
+    "line": 304,
+    "method": "GET",
+    "route": "/audit",
+    "declaration": "router.get('/audit', (req, res) => {"
+  },
+  {
+    "file": "server/routes/auth.js",
+    "line": 19,
+    "method": "POST",
+    "route": "/login",
+    "declaration": "router.post('/login', validate(loginSchema), (req, res) => {"
+  },
+  {
+    "file": "server/routes/auth.js",
+    "line": 59,
+    "method": "POST",
+    "route": "/logout",
+    "declaration": "router.post('/logout', requireAuth, (req, res) => {"
+  },
+  {
+    "file": "server/routes/auth.js",
+    "line": 65,
+    "method": "GET",
+    "route": "/me",
+    "declaration": "router.get('/me', requireAuth, (req, res) => {"
+  },
+  {
+    "file": "server/routes/auth.js",
+    "line": 83,
+    "method": "POST",
+    "route": "/change-password",
+    "declaration": "router.post('/change-password', requireAuth, validate(changePwSchema), (req, res) => {"
+  },
+  {
+    "file": "server/routes/auth.js",
+    "line": 97,
+    "method": "GET",
+    "route": "/sessions",
+    "declaration": "router.get('/sessions', requireAuth, (req, res) => {"
+  },
+  {
+    "file": "server/routes/crm.js",
+    "line": 45,
+    "method": "GET",
+    "route": "/opportunities",
+    "declaration": "router.get('/opportunities', (req, res) => {"
+  },
+  {
+    "file": "server/routes/crm.js",
+    "line": 59,
+    "method": "GET",
+    "route": "/opportunities/pipeline",
+    "declaration": "router.get('/opportunities/pipeline', (req, res) => {"
+  },
+  {
+    "file": "server/routes/crm.js",
+    "line": 71,
+    "method": "GET",
+    "route": "/opportunities/:id",
+    "declaration": "router.get('/opportunities/:id', (req, res) => {"
+  },
+  {
+    "file": "server/routes/crm.js",
+    "line": 96,
+    "method": "POST",
+    "route": "/opportunities",
+    "declaration": "router.post('/opportunities', WRITE, validate(oppSchema), (req, res) => {"
+  },
+  {
+    "file": "server/routes/crm.js",
+    "line": 124,
+    "method": "PUT",
+    "route": "/opportunities/:id",
+    "declaration": "router.put('/opportunities/:id', WRITE, validate(oppUpdateSchema), (req, res) => {"
+  },
+  {
+    "file": "server/routes/crm.js",
+    "line": 148,
+    "method": "POST",
+    "route": "/opportunities/:id/stage",
+    "declaration": "router.post('/opportunities/:id/stage', WRITE, validate(stageSchema), (req, res) => {"
+  },
+  {
+    "file": "server/routes/crm.js",
+    "line": 171,
+    "method": "POST",
+    "route": "/opportunities/:id/convert",
+    "declaration": "router.post('/opportunities/:id/convert', WRITE, validate(convertSchema), (req, res) => {"
+  },
+  {
+    "file": "server/routes/data-health.js",
+    "line": 17,
+    "method": "GET",
+    "route": "/report",
+    "declaration": "router.get('/report', (req, res) => {"
+  },
+  {
+    "file": "server/routes/data-health.js",
+    "line": 21,
+    "method": "GET",
+    "route": "/check/:id",
+    "declaration": "router.get('/check/:id', (req, res) => {"
+  },
+  {
+    "file": "server/routes/data-health.js",
+    "line": 28,
+    "method": "POST",
+    "route": "/check/:id/fix",
+    "declaration": "router.post('/check/:id/fix', MANAGER, (req, res) => {"
+  },
+  {
+    "file": "server/routes/data-health.js",
+    "line": 107,
+    "method": "GET",
+    "route": "/merge/:type/preview",
+    "declaration": "router.get('/merge/:type/preview', MANAGER, (req, res) => {"
+  },
+  {
+    "file": "server/routes/data-health.js",
+    "line": 129,
+    "method": "POST",
+    "route": "/merge/:type",
+    "declaration": "router.post('/merge/:type', MANAGER, validate(z.object({"
+  },
+  {
+    "file": "server/routes/data-health.js",
+    "line": 197,
+    "method": "POST",
+    "route": "/bulk-update/items",
+    "declaration": "router.post('/bulk-update/items', MANAGER, validate(z.object({"
+  },
+  {
+    "file": "server/routes/data-health.js",
+    "line": 241,
+    "method": "GET",
+    "route": "/system",
+    "declaration": "router.get('/system', MANAGER, (req, res) => {"
+  },
+  {
+    "file": "server/routes/docs.js",
+    "line": 12,
+    "method": "GET",
+    "route": "/openapi.json",
+    "declaration": "router.get('/openapi.json', (req, res) => {"
+  },
+  {
+    "file": "server/routes/documents.js",
+    "line": 65,
+    "method": "GET",
+    "route": "/",
+    "declaration": "router.get('/', (req, res) => {"
+  },
+  {
+    "file": "server/routes/documents.js",
+    "line": 90,
+    "method": "POST",
+    "route": "/",
+    "declaration": "router.post('/', WRITE, upload.single('file'), (req, res) => {"
+  },
+  {
+    "file": "server/routes/documents.js",
+    "line": 124,
+    "method": "GET",
+    "route": "/:id/download",
+    "declaration": "router.get('/:id/download', (req, res) => {"
+  },
+  {
+    "file": "server/routes/documents.js",
+    "line": 139,
+    "method": "POST",
+    "route": "/:id/revise",
+    "declaration": "router.post('/:id/revise', MANAGER, upload.single('file'), (req, res) => {"
+  },
+  {
+    "file": "server/routes/documents.js",
+    "line": 164,
+    "method": "DELETE",
+    "route": "/:id",
+    "declaration": "router.delete('/:id', MANAGER, (req, res) => {"
+  },
+  {
+    "file": "server/routes/import.js",
+    "line": 34,
+    "method": "GET",
+    "route": "/types",
+    "declaration": "router.get('/types', (req, res) => {"
+  },
+  {
+    "file": "server/routes/import.js",
+    "line": 49,
+    "method": "GET",
+    "route": "/template/:type",
+    "declaration": "router.get('/template/:type', MANAGER, async (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/import.js",
+    "line": 63,
+    "method": "POST",
+    "route": "/preview",
+    "declaration": "router.post('/preview', MANAGER, upload.single('file'), async (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/import.js",
+    "line": 84,
+    "method": "GET",
+    "route": "/batches/:id/rows",
+    "declaration": "router.get('/batches/:id/rows', (req, res) => {"
+  },
+  {
+    "file": "server/routes/import.js",
+    "line": 104,
+    "method": "POST",
+    "route": "/batches/:id/commit",
+    "declaration": "router.post('/batches/:id/commit', MANAGER, (req, res) => {"
+  },
+  {
+    "file": "server/routes/import.js",
+    "line": 113,
+    "method": "POST",
+    "route": "/batches/:id/revert",
+    "declaration": "router.post('/batches/:id/revert', MANAGER, (req, res) => {"
+  },
+  {
+    "file": "server/routes/import.js",
+    "line": 124,
+    "method": "DELETE",
+    "route": "/batches/:id",
+    "declaration": "router.delete('/batches/:id', MANAGER, (req, res) => {"
+  },
+  {
+    "file": "server/routes/import.js",
+    "line": 136,
+    "method": "GET",
+    "route": "/batches",
+    "declaration": "router.get('/batches', (req, res) => {"
+  },
+  {
+    "file": "server/routes/import.js",
+    "line": 159,
+    "method": "GET",
+    "route": "/batches/:id",
+    "declaration": "router.get('/batches/:id', (req, res) => {"
+  },
+  {
+    "file": "server/routes/items.js",
+    "line": 64,
+    "method": "GET",
+    "route": "/",
+    "declaration": "router.get('/', validateQuery(listQuery), (req, res) => {"
+  },
+  {
+    "file": "server/routes/items.js",
+    "line": 101,
+    "method": "GET",
+    "route": "/:id",
+    "declaration": "router.get('/:id', (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/items.js",
+    "line": 113,
+    "method": "GET",
+    "route": "/barcode/:code",
+    "declaration": "router.get('/barcode/:code', (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/items.js",
+    "line": 188,
+    "method": "POST",
+    "route": "/",
+    "declaration": "router.post('/', requirePermission('stock.write'), validate(itemSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/items.js",
+    "line": 231,
+    "method": "PUT",
+    "route": "/:id",
+    "declaration": "router.put('/:id', requirePermission('stock.write'), validate(itemSchema.partial()), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/items.js",
+    "line": 279,
+    "method": "DELETE",
+    "route": "/:id",
+    "declaration": "router.delete('/:id', requirePermission('stock.delete'), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/labels.js",
+    "line": 51,
+    "method": "GET",
+    "route": "/item/:id/zpl",
+    "declaration": "router.get('/item/:id/zpl', (req, res) => {"
+  },
+  {
+    "file": "server/routes/labels.js",
+    "line": 58,
+    "method": "GET",
+    "route": "/lot/:id/zpl",
+    "declaration": "router.get('/lot/:id/zpl', (req, res) => {"
+  },
+  {
+    "file": "server/routes/labels.js",
+    "line": 96,
+    "method": "POST",
+    "route": "/print",
+    "declaration": "router.post('/print', WRITE, validate(printSchema), async (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/mobile.js",
+    "line": 28,
+    "method": "GET",
+    "route": "/resolve",
+    "declaration": "router.get('/resolve', (req, res) => {"
+  },
+  {
+    "file": "server/routes/mobile.js",
+    "line": 154,
+    "method": "GET",
+    "route": "/tasks",
+    "declaration": "router.get('/tasks', (req, res) => {"
+  },
+  {
+    "file": "server/routes/mobile.js",
+    "line": 202,
+    "method": "GET",
+    "route": "/pick-list/:soId",
+    "declaration": "router.get('/pick-list/:soId', (req, res) => {"
+  },
+  {
+    "file": "server/routes/mobile.js",
+    "line": 251,
+    "method": "GET",
+    "route": "/issue-list/:orderId",
+    "declaration": "router.get('/issue-list/:orderId', (req, res) => {"
+  },
+  {
+    "file": "server/routes/mobile.js",
+    "line": 290,
+    "method": "POST",
+    "route": "/sync",
+    "declaration": "router.post('/sync', requireRole('admin', 'manager', 'operator', 'quality'), async (req, res) => {"
+  },
+  {
+    "file": "server/routes/notifications.js",
+    "line": 11,
+    "method": "GET",
+    "route": "/",
+    "declaration": "router.get('/', (req, res) => {"
+  },
+  {
+    "file": "server/routes/notifications.js",
+    "line": 27,
+    "method": "POST",
+    "route": "/:id/read",
+    "declaration": "router.post('/:id/read', (req, res) => {"
+  },
+  {
+    "file": "server/routes/notifications.js",
+    "line": 32,
+    "method": "POST",
+    "route": "/read-all",
+    "declaration": "router.post('/read-all', (req, res) => {"
+  },
+  {
+    "file": "server/routes/notifications.js",
+    "line": 38,
+    "method": "POST",
+    "route": "/scan",
+    "declaration": "router.post('/scan', requireRole('admin', 'manager'), (req, res) => {"
+  },
+  {
+    "file": "server/routes/notifications.js",
+    "line": 45,
+    "method": "GET",
+    "route": "/mail-status",
+    "declaration": "router.get('/mail-status', requireRole('admin', 'manager'), (req, res) => {"
+  },
+  {
+    "file": "server/routes/notifications.js",
+    "line": 58,
+    "method": "POST",
+    "route": "/test-mail",
+    "declaration": "router.post('/test-mail', requireRole('admin'), async (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/planning.js",
+    "line": 20,
+    "method": "GET",
+    "route": "/work-centers",
+    "declaration": "router.get('/work-centers', (req, res) => {"
+  },
+  {
+    "file": "server/routes/planning.js",
+    "line": 48,
+    "method": "POST",
+    "route": "/work-centers",
+    "declaration": "router.post('/work-centers', MANAGER, validate(wcSchema), (req, res) => {"
+  },
+  {
+    "file": "server/routes/planning.js",
+    "line": 67,
+    "method": "PUT",
+    "route": "/work-centers/:id",
+    "declaration": "router.put('/work-centers/:id', MANAGER, validate(wcSchema.partial()), (req, res) => {"
+  },
+  {
+    "file": "server/routes/planning.js",
+    "line": 90,
+    "method": "DELETE",
+    "route": "/work-centers/:id",
+    "declaration": "router.delete('/work-centers/:id', MANAGER, (req, res) => {"
+  },
+  {
+    "file": "server/routes/planning.js",
+    "line": 101,
+    "method": "GET",
+    "route": "/shifts",
+    "declaration": "router.get('/shifts', (req, res) => {"
+  },
+  {
+    "file": "server/routes/planning.js",
+    "line": 110,
+    "method": "POST",
+    "route": "/shifts",
+    "declaration": "router.post('/shifts', MANAGER, validate(z.object({"
+  },
+  {
+    "file": "server/routes/planning.js",
+    "line": 125,
+    "method": "GET",
+    "route": "/calendar-exceptions",
+    "declaration": "router.get('/calendar-exceptions', (req, res) => {"
+  },
+  {
+    "file": "server/routes/planning.js",
+    "line": 130,
+    "method": "POST",
+    "route": "/calendar-exceptions",
+    "declaration": "router.post('/calendar-exceptions', MANAGER, validate(z.object({"
+  },
+  {
+    "file": "server/routes/planning.js",
+    "line": 144,
+    "method": "DELETE",
+    "route": "/calendar-exceptions/:id",
+    "declaration": "router.delete('/calendar-exceptions/:id', MANAGER, (req, res) => {"
+  },
+  {
+    "file": "server/routes/planning.js",
+    "line": 151,
+    "method": "GET",
+    "route": "/routings/:itemId",
+    "declaration": "router.get('/routings/:itemId', (req, res) => {"
+  },
+  {
+    "file": "server/routes/planning.js",
+    "line": 164,
+    "method": "PUT",
+    "route": "/routings/:itemId",
+    "declaration": "router.put('/routings/:itemId', MANAGER, validate(z.object({"
+  },
+  {
+    "file": "server/routes/planning.js",
+    "line": 197,
+    "method": "GET",
+    "route": "/capacity",
+    "declaration": "router.get('/capacity', (req, res) => {"
+  },
+  {
+    "file": "server/routes/planning.js",
+    "line": 206,
+    "method": "POST",
+    "route": "/schedule/:orderId",
+    "declaration": "router.post('/schedule/:orderId', WRITE, validate(z.object({ startFrom: z.string().max(1000).optional() })), (req, res) => {"
+  },
+  {
+    "file": "server/routes/planning.js",
+    "line": 213,
+    "method": "GET",
+    "route": "/operations",
+    "declaration": "router.get('/operations', (req, res) => {"
+  },
+  {
+    "file": "server/routes/planning.js",
+    "line": 238,
+    "method": "POST",
+    "route": "/operations/:id/:action",
+    "declaration": "router.post('/operations/:id/:action', WRITE, (req, res) => {"
+  },
+  {
+    "file": "server/routes/planning.js",
+    "line": 266,
+    "method": "GET",
+    "route": "/shift-logs",
+    "declaration": "router.get('/shift-logs', (req, res) => {"
+  },
+  {
+    "file": "server/routes/planning.js",
+    "line": 288,
+    "method": "POST",
+    "route": "/shift-logs",
+    "declaration": "router.post('/shift-logs', WRITE, validate(z.object({"
+  },
+  {
+    "file": "server/routes/planning.js",
+    "line": 323,
+    "method": "GET",
+    "route": "/oee",
+    "declaration": "router.get('/oee', (req, res) => {"
+  },
+  {
+    "file": "server/routes/planning.js",
+    "line": 331,
+    "method": "GET",
+    "route": "/mrp/runs",
+    "declaration": "router.get('/mrp/runs', (req, res) => {"
+  },
+  {
+    "file": "server/routes/planning.js",
+    "line": 341,
+    "method": "POST",
+    "route": "/mrp/run",
+    "declaration": "router.post('/mrp/run', MANAGER, validate(z.object({"
+  },
+  {
+    "file": "server/routes/planning.js",
+    "line": 353,
+    "method": "GET",
+    "route": "/mrp/suggestions",
+    "declaration": "router.get('/mrp/suggestions', (req, res) => {"
+  },
+  {
+    "file": "server/routes/planning.js",
+    "line": 384,
+    "method": "POST",
+    "route": "/mrp/suggestions/:id/convert",
+    "declaration": "router.post('/mrp/suggestions/:id/convert', MANAGER, (req, res) => {"
+  },
+  {
+    "file": "server/routes/planning.js",
+    "line": 393,
+    "method": "POST",
+    "route": "/mrp/suggestions/:id/dismiss",
+    "declaration": "router.post('/mrp/suggestions/:id/dismiss', MANAGER, (req, res) => {"
+  },
+  {
+    "file": "server/routes/production.js",
+    "line": 33,
+    "method": "GET",
+    "route": "/",
+    "declaration": "router.get('/', validateQuery(pageQuery.extend({ status: z.string().max(1000).optional() })), (req, res) => {"
+  },
+  {
+    "file": "server/routes/production.js",
+    "line": 54,
+    "method": "GET",
+    "route": "/requirements-preview",
+    "declaration": "router.get('/requirements-preview', validateQuery(z.object({"
+  },
+  {
+    "file": "server/routes/production.js",
+    "line": 75,
+    "method": "GET",
+    "route": "/:id",
+    "declaration": "router.get('/:id', (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/production.js",
+    "line": 84,
+    "method": "GET",
+    "route": "/:id/requirements",
+    "declaration": "router.get('/:id/requirements', (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/production.js",
+    "line": 127,
+    "method": "POST",
+    "route": "/",
+    "declaration": "router.post('/', requirePermission('production.write'), validate(createSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/production.js",
+    "line": 177,
+    "method": "POST",
+    "route": "/:id/complete",
+    "declaration": "router.post('/:id/complete', requirePermission('production.write'), validate(completeSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/production.js",
+    "line": 258,
+    "method": "DELETE",
+    "route": "/:id",
+    "declaration": "router.delete('/:id', requirePermission('stock.delete'), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 36,
+    "method": "GET",
+    "route": "/suppliers",
+    "declaration": "router.get('/suppliers', validateQuery(pageQuery), (req, res) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 59,
+    "method": "GET",
+    "route": "/suppliers/:id",
+    "declaration": "router.get('/suppliers/:id', (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 97,
+    "method": "POST",
+    "route": "/suppliers",
+    "declaration": "router.post('/suppliers', requirePermission('purchase.write'), validate(supplierSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 111,
+    "method": "PUT",
+    "route": "/suppliers/:id",
+    "declaration": "router.put('/suppliers/:id', requirePermission('purchase.write'), validate(supplierSchema.partial()), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 134,
+    "method": "DELETE",
+    "route": "/suppliers/:id",
+    "declaration": "router.delete('/suppliers/:id', requirePermission('stock.delete'), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 145,
+    "method": "POST",
+    "route": "/suppliers/:id/anonymize",
+    "declaration": "router.post('/suppliers/:id/anonymize', requireRole('admin'), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 150,
+    "method": "GET",
+    "route": "/suppliers/:id/data-export",
+    "declaration": "router.get('/suppliers/:id/data-export', requireRole('admin'), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 168,
+    "method": "GET",
+    "route": "/requests",
+    "declaration": "router.get('/requests', (req, res) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 178,
+    "method": "POST",
+    "route": "/requests",
+    "declaration": "router.post('/requests', requirePermission('purchase.write'), validate(prSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 198,
+    "method": "POST",
+    "route": "/requests/:id/approve",
+    "declaration": "router.post('/requests/:id/approve', requirePermission('purchase.approve'), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 210,
+    "method": "POST",
+    "route": "/requests/:id/reject",
+    "declaration": "router.post('/requests/:id/reject', requirePermission('purchase.approve'), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 230,
+    "method": "GET",
+    "route": "/rfqs",
+    "declaration": "router.get('/rfqs', (req, res) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 245,
+    "method": "POST",
+    "route": "/rfqs",
+    "declaration": "router.post('/rfqs', requirePermission('purchase.write'), validate(rfqSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 275,
+    "method": "POST",
+    "route": "/rfqs/:id/quotes",
+    "declaration": "router.post('/rfqs/:id/quotes', requirePermission('purchase.write'), validate(quoteSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 292,
+    "method": "GET",
+    "route": "/rfqs/:id/compare",
+    "declaration": "router.get('/rfqs/:id/compare', (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 345,
+    "method": "GET",
+    "route": "/orders",
+    "declaration": "router.get('/orders', validateQuery(pageQuery.extend({ status: z.string().max(1000).optional(), supplierId: z.coerce.number().optional() })), (req, res) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 358,
+    "method": "GET",
+    "route": "/orders/:id",
+    "declaration": "router.get('/orders/:id', (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 385,
+    "method": "POST",
+    "route": "/orders",
+    "declaration": "router.post('/orders', requirePermission('purchase.write'), validate(poSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 440,
+    "method": "POST",
+    "route": "/orders/:id/approve",
+    "declaration": "router.post('/orders/:id/approve', requirePermission('purchase.approve'), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 461,
+    "method": "POST",
+    "route": "/orders/:id/reject",
+    "declaration": "router.post('/orders/:id/reject', requirePermission('purchase.approve'), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 490,
+    "method": "POST",
+    "route": "/orders/:id/receipts",
+    "declaration": "router.post('/orders/:id/receipts', requirePermission('purchase.write'), validate(receiptSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 554,
+    "method": "GET",
+    "route": "/receipts/:id",
+    "declaration": "router.get('/receipts/:id', (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 584,
+    "method": "POST",
+    "route": "/receipts/:id/landed-costs",
+    "declaration": "router.post('/receipts/:id/landed-costs', requirePermission('purchase.write'), validate(landedSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 615,
+    "method": "POST",
+    "route": "/invoices",
+    "declaration": "router.post('/invoices', requirePermission('purchase.write'), validate(invoiceSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 649,
+    "method": "GET",
+    "route": "/invoices",
+    "declaration": "router.get('/invoices', (req, res) => {"
+  },
+  {
+    "file": "server/routes/purchasing.js",
+    "line": 668,
+    "method": "POST",
+    "route": "/returns",
+    "declaration": "router.post('/returns', requirePermission('purchase.write'), validate(returnSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/quality.js",
+    "line": 28,
+    "method": "GET",
+    "route": "/plans",
+    "declaration": "router.get('/plans', (req, res) => {"
+  },
+  {
+    "file": "server/routes/quality.js",
+    "line": 37,
+    "method": "POST",
+    "route": "/plans",
+    "declaration": "router.post('/plans', requirePermission('quality.write'), validate(planSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/quality.js",
+    "line": 48,
+    "method": "DELETE",
+    "route": "/plans/:id",
+    "declaration": "router.delete('/plans/:id', requirePermission('quality.write'), (req, res) => {"
+  },
+  {
+    "file": "server/routes/quality.js",
+    "line": 72,
+    "method": "GET",
+    "route": "/inspections",
+    "declaration": "router.get('/inspections', validateQuery(pageQuery.extend({ result: z.string().max(1000).optional(), type: z.string().max(1000).optional() })), (req, res) => {"
+  },
+  {
+    "file": "server/routes/quality.js",
+    "line": 85,
+    "method": "GET",
+    "route": "/inspections/:id",
+    "declaration": "router.get('/inspections/:id', (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/quality.js",
+    "line": 105,
+    "method": "POST",
+    "route": "/inspections",
+    "declaration": "router.post('/inspections', requirePermission('quality.write'), validate(inspectionSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/quality.js",
+    "line": 161,
+    "method": "POST",
+    "route": "/inspections/:id/result",
+    "declaration": "router.post('/inspections/:id/result', requirePermission('quality.write'), validate(resultSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/quality.js",
+    "line": 244,
+    "method": "GET",
+    "route": "/ncrs",
+    "declaration": "router.get('/ncrs', validateQuery(pageQuery.extend({ status: z.string().max(1000).optional(), supplierId: z.coerce.number().optional() })), (req, res) => {"
+  },
+  {
+    "file": "server/routes/quality.js",
+    "line": 268,
+    "method": "POST",
+    "route": "/ncrs",
+    "declaration": "router.post('/ncrs', requirePermission('quality.write'), validate(ncrSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/quality.js",
+    "line": 297,
+    "method": "POST",
+    "route": "/ncrs/:id/disposition",
+    "declaration": "router.post('/ncrs/:id/disposition', requirePermission('quality.write'), validate(dispositionSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/quality.js",
+    "line": 327,
+    "method": "POST",
+    "route": "/ncrs/:id/close",
+    "declaration": "router.post('/ncrs/:id/close', requirePermission('quality.write'), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/quality.js",
+    "line": 347,
+    "method": "GET",
+    "route": "/capas",
+    "declaration": "router.get('/capas', (req, res) => {"
+  },
+  {
+    "file": "server/routes/quality.js",
+    "line": 358,
+    "method": "POST",
+    "route": "/capas",
+    "declaration": "router.post('/capas', requirePermission('quality.write'), validate(capaSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/quality.js",
+    "line": 374,
+    "method": "POST",
+    "route": "/capas/:id/close",
+    "declaration": "router.post('/capas/:id/close', requirePermission('quality.write'), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/quality.js",
+    "line": 396,
+    "method": "GET",
+    "route": "/equipment",
+    "declaration": "router.get('/equipment', (req, res) => {"
+  },
+  {
+    "file": "server/routes/quality.js",
+    "line": 409,
+    "method": "POST",
+    "route": "/equipment",
+    "declaration": "router.post('/equipment', requirePermission('quality.write'), validate(equipSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/quality.js",
+    "line": 434,
+    "method": "POST",
+    "route": "/equipment/:id/calibrations",
+    "declaration": "router.post('/equipment/:id/calibrations', requirePermission('quality.write'), validate(calSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/quality.js",
+    "line": 459,
+    "method": "GET",
+    "route": "/trace/backward/:lotId",
+    "declaration": "router.get('/trace/backward/:lotId', (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/quality.js",
+    "line": 467,
+    "method": "GET",
+    "route": "/trace/forward/:lotId",
+    "declaration": "router.get('/trace/forward/:lotId', (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/quality.js",
+    "line": 475,
+    "method": "GET",
+    "route": "/recall/:lotId",
+    "declaration": "router.get('/recall/:lotId', (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/reports.js",
+    "line": 24,
+    "method": "GET",
+    "route": "/summary",
+    "declaration": "router.get('/summary', (req, res) => {"
+  },
+  {
+    "file": "server/routes/reports.js",
+    "line": 99,
+    "method": "GET",
+    "route": "/trends",
+    "declaration": "router.get('/trends', (req, res) => {"
+  },
+  {
+    "file": "server/routes/reports.js",
+    "line": 138,
+    "method": "GET",
+    "route": "/dead-stock",
+    "declaration": "router.get('/dead-stock', (req, res) => {"
+  },
+  {
+    "file": "server/routes/reports.js",
+    "line": 178,
+    "method": "GET",
+    "route": "/turnover",
+    "declaration": "router.get('/turnover', (req, res) => {"
+  },
+  {
+    "file": "server/routes/reports.js",
+    "line": 204,
+    "method": "GET",
+    "route": "/abc",
+    "declaration": "router.get('/abc', (req, res) => {"
+  },
+  {
+    "file": "server/routes/reports.js",
+    "line": 233,
+    "method": "GET",
+    "route": "/reorder-suggestions",
+    "declaration": "router.get('/reorder-suggestions', (req, res) => {"
+  },
+  {
+    "file": "server/routes/reports.js",
+    "line": 267,
+    "method": "GET",
+    "route": "/supplier-performance",
+    "declaration": "router.get('/supplier-performance', (req, res) => {"
+  },
+  {
+    "file": "server/routes/reports.js",
+    "line": 315,
+    "method": "GET",
+    "route": "/price-history/:itemId",
+    "declaration": "router.get('/price-history/:itemId', (req, res) => {"
+  },
+  {
+    "file": "server/routes/reports.js",
+    "line": 327,
+    "method": "GET",
+    "route": "/quality-kpis",
+    "declaration": "router.get('/quality-kpis', (req, res) => {"
+  },
+  {
+    "file": "server/routes/reports.js",
+    "line": 360,
+    "method": "GET",
+    "route": "/production-costs",
+    "declaration": "router.get('/production-costs', (req, res) => {"
+  },
+  {
+    "file": "server/routes/reports.js",
+    "line": 373,
+    "method": "GET",
+    "route": "/valuation",
+    "declaration": "router.get('/valuation', (req, res) => {"
+  },
+  {
+    "file": "server/routes/reports.js",
+    "line": 396,
+    "method": "GET",
+    "route": "/pivot-meta",
+    "declaration": "router.get('/pivot-meta', (req, res) => res.json(pivot.meta()));"
+  },
+  {
+    "file": "server/routes/reports.js",
+    "line": 410,
+    "method": "POST",
+    "route": "/pivot",
+    "declaration": "router.post('/pivot', validate(pivotSchema), (req, res) => {"
+  },
+  {
+    "file": "server/routes/reports.js",
+    "line": 424,
+    "method": "GET",
+    "route": "/saved",
+    "declaration": "router.get('/saved', (req, res) => {"
+  },
+  {
+    "file": "server/routes/reports.js",
+    "line": 436,
+    "method": "POST",
+    "route": "/saved",
+    "declaration": "router.post('/saved', validate(savedReportSchema), (req, res) => {"
+  },
+  {
+    "file": "server/routes/reports.js",
+    "line": 450,
+    "method": "DELETE",
+    "route": "/saved/:id",
+    "declaration": "router.delete('/saved/:id', (req, res) => {"
+  },
+  {
+    "file": "server/routes/sales.js",
+    "line": 31,
+    "method": "GET",
+    "route": "/customers",
+    "declaration": "router.get('/customers', (req, res) => {"
+  },
+  {
+    "file": "server/routes/sales.js",
+    "line": 40,
+    "method": "GET",
+    "route": "/customers/:id",
+    "declaration": "router.get('/customers/:id', (req, res) => {"
+  },
+  {
+    "file": "server/routes/sales.js",
+    "line": 49,
+    "method": "POST",
+    "route": "/customers",
+    "declaration": "router.post('/customers', ADMIN, validate(customerSchema), (req, res) => {"
+  },
+  {
+    "file": "server/routes/sales.js",
+    "line": 59,
+    "method": "PUT",
+    "route": "/customers/:id",
+    "declaration": "router.put('/customers/:id', ADMIN, validate(customerSchema.partial()), (req, res) => {"
+  },
+  {
+    "file": "server/routes/sales.js",
+    "line": 75,
+    "method": "DELETE",
+    "route": "/customers/:id",
+    "declaration": "router.delete('/customers/:id', requireRole('admin'), (req, res) => {"
+  },
+  {
+    "file": "server/routes/sales.js",
+    "line": 84,
+    "method": "POST",
+    "route": "/customers/:id/anonymize",
+    "declaration": "router.post('/customers/:id/anonymize', requireRole('admin'), (req, res) => {"
+  },
+  {
+    "file": "server/routes/sales.js",
+    "line": 89,
+    "method": "GET",
+    "route": "/customers/:id/data-export",
+    "declaration": "router.get('/customers/:id/data-export', requireRole('admin'), (req, res) => {"
+  },
+  {
+    "file": "server/routes/sales.js",
+    "line": 108,
+    "method": "GET",
+    "route": "/orders",
+    "declaration": "router.get('/orders', (req, res) => {"
+  },
+  {
+    "file": "server/routes/sales.js",
+    "line": 120,
+    "method": "GET",
+    "route": "/orders/:id",
+    "declaration": "router.get('/orders/:id', (req, res) => {"
+  },
+  {
+    "file": "server/routes/sales.js",
+    "line": 137,
+    "method": "POST",
+    "route": "/orders",
+    "declaration": "router.post('/orders', WRITE, validate(soSchema), (req, res) => {"
+  },
+  {
+    "file": "server/routes/sales.js",
+    "line": 145,
+    "method": "POST",
+    "route": "/orders/:id/cancel",
+    "declaration": "router.post('/orders/:id/cancel', ADMIN, (req, res) => {"
+  },
+  {
+    "file": "server/routes/sales.js",
+    "line": 168,
+    "method": "GET",
+    "route": "/shipments",
+    "declaration": "router.get('/shipments', (req, res) => {"
+  },
+  {
+    "file": "server/routes/sales.js",
+    "line": 180,
+    "method": "GET",
+    "route": "/shipments/:id",
+    "declaration": "router.get('/shipments/:id', (req, res) => {"
+  },
+  {
+    "file": "server/routes/sales.js",
+    "line": 204,
+    "method": "POST",
+    "route": "/shipments",
+    "declaration": "router.post('/shipments', WRITE, validate(shipmentSchema), (req, res) => {"
+  },
+  {
+    "file": "server/routes/sales.js",
+    "line": 267,
+    "method": "PATCH",
+    "route": "/shipments/:id/status",
+    "declaration": "router.patch('/shipments/:id/status', WRITE, (req, res) => {"
+  },
+  {
+    "file": "server/routes/sales.js",
+    "line": 279,
+    "method": "DELETE",
+    "route": "/shipments/:id",
+    "declaration": "router.delete('/shipments/:id', requireRole('admin'), (req, res) => {"
+  },
+  {
+    "file": "server/routes/sales.js",
+    "line": 290,
+    "method": "GET",
+    "route": "/invoices",
+    "declaration": "router.get('/invoices', (req, res) => {"
+  },
+  {
+    "file": "server/routes/sales.js",
+    "line": 320,
+    "method": "POST",
+    "route": "/invoices",
+    "declaration": "router.post('/invoices', WRITE, validate(invoiceSchema), (req, res) => {"
+  },
+  {
+    "file": "server/routes/sales.js",
+    "line": 395,
+    "method": "GET",
+    "route": "/invoices/:id",
+    "declaration": "router.get('/invoices/:id', (req, res) => {"
+  },
+  {
+    "file": "server/routes/sales.js",
+    "line": 414,
+    "method": "POST",
+    "route": "/invoices/:id/pay",
+    "declaration": "router.post('/invoices/:id/pay', WRITE, (req, res) => {"
+  },
+  {
+    "file": "server/routes/sales.js",
+    "line": 429,
+    "method": "GET",
+    "route": "/profitability",
+    "declaration": "router.get('/profitability', (req, res) => {"
+  },
+  {
+    "file": "server/routes/search.js",
+    "line": 23,
+    "method": "GET",
+    "route": "/",
+    "declaration": "router.get('/', (req, res) => {"
+  },
+  {
+    "file": "server/routes/stock.js",
+    "line": 21,
+    "method": "GET",
+    "route": "/lots",
+    "declaration": "router.get('/lots', validateQuery(lotQuery), (req, res) => {"
+  },
+  {
+    "file": "server/routes/stock.js",
+    "line": 57,
+    "method": "GET",
+    "route": "/movements",
+    "declaration": "router.get('/movements', validateQuery(movQuery), (req, res) => {"
+  },
+  {
+    "file": "server/routes/stock.js",
+    "line": 93,
+    "method": "POST",
+    "route": "/move",
+    "declaration": "router.post('/move', requirePermission('stock.write'), validate(moveSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/stock.js",
+    "line": 131,
+    "method": "POST",
+    "route": "/lot-status",
+    "declaration": "router.post('/lot-status', requirePermission('stock.status'), validate(statusSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/stock.js",
+    "line": 155,
+    "method": "POST",
+    "route": "/transfer",
+    "declaration": "router.post('/transfer', requirePermission('stock.write'), validate(transferSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/stock.js",
+    "line": 172,
+    "method": "GET",
+    "route": "/counts",
+    "declaration": "router.get('/counts', (req, res) => {"
+  },
+  {
+    "file": "server/routes/stock.js",
+    "line": 186,
+    "method": "GET",
+    "route": "/counts/:id",
+    "declaration": "router.get('/counts/:id', (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/stock.js",
+    "line": 210,
+    "method": "POST",
+    "route": "/counts",
+    "declaration": "router.post('/counts', requirePermission('count.write'), validate(countCreateSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/stock.js",
+    "line": 241,
+    "method": "PUT",
+    "route": "/counts/:id/lines",
+    "declaration": "router.put('/counts/:id/lines', requirePermission('count.write'), validate(countLinesSchema), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/stock.js",
+    "line": 257,
+    "method": "POST",
+    "route": "/counts/:id/approve",
+    "declaration": "router.post('/counts/:id/approve', requirePermission('count.approve'), (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/support.js",
+    "line": 45,
+    "method": "GET",
+    "route": "/",
+    "declaration": "router.get('/', (req, res) => {"
+  },
+  {
+    "file": "server/routes/support.js",
+    "line": 61,
+    "method": "GET",
+    "route": "/:id",
+    "declaration": "router.get('/:id', (req, res) => {"
+  },
+  {
+    "file": "server/routes/support.js",
+    "line": 88,
+    "method": "POST",
+    "route": "/",
+    "declaration": "router.post('/', WRITE, validate(ticketSchema), (req, res) => {"
+  },
+  {
+    "file": "server/routes/support.js",
+    "line": 113,
+    "method": "PUT",
+    "route": "/:id",
+    "declaration": "router.put('/:id', WRITE, validate(ticketUpdateSchema), (req, res) => {"
+  },
+  {
+    "file": "server/routes/support.js",
+    "line": 137,
+    "method": "POST",
+    "route": "/:id/status",
+    "declaration": "router.post('/:id/status', WRITE, validate(statusSchema), (req, res) => {"
+  },
+  {
+    "file": "server/routes/support.js",
+    "line": 158,
+    "method": "POST",
+    "route": "/:id/comments",
+    "declaration": "router.post('/:id/comments', WRITE, validate(z.object({ comment: z.string().min(1).max(5000) })), (req, res) => {"
+  },
+  {
+    "file": "server/routes/support.js",
+    "line": 176,
+    "method": "POST",
+    "route": "/:id/to-ncr",
+    "declaration": "router.post('/:id/to-ncr', WRITE, validate(toNcrSchema), (req, res) => {"
+  },
+  {
+    "file": "server/routes/templates.js",
+    "line": 46,
+    "method": "GET",
+    "route": "/",
+    "declaration": "router.get('/', (req, res) => {"
+  },
+  {
+    "file": "server/routes/templates.js",
+    "line": 51,
+    "method": "GET",
+    "route": "/:docType",
+    "declaration": "router.get('/:docType', (req, res) => {"
+  },
+  {
+    "file": "server/routes/templates.js",
+    "line": 85,
+    "method": "PUT",
+    "route": "/:docType",
+    "declaration": "router.put('/:docType', MANAGER, validate(templateSchema), (req, res) => {"
+  },
+  {
+    "file": "server/routes/templates.js",
+    "line": 111,
+    "method": "POST",
+    "route": "/:docType/reset",
+    "declaration": "router.post('/:docType/reset', MANAGER, (req, res) => {"
+  },
+  {
+    "file": "server/routes/templates.js",
+    "line": 131,
+    "method": "GET",
+    "route": "/branding/current",
+    "declaration": "router.get('/branding/current', (req, res) => {"
+  },
+  {
+    "file": "server/routes/templates.js",
+    "line": 144,
+    "method": "PUT",
+    "route": "/branding/current",
+    "declaration": "router.put('/branding/current', MANAGER, validate(z.object({"
+  },
+  {
+    "file": "server/routes/templates.js",
+    "line": 168,
+    "method": "POST",
+    "route": "/branding/logo",
+    "declaration": "router.post('/branding/logo', MANAGER, logoUpload.single('logo'), (req, res) => {"
+  },
+  {
+    "file": "server/routes/templates.js",
+    "line": 179,
+    "method": "DELETE",
+    "route": "/branding/logo",
+    "declaration": "router.delete('/branding/logo', MANAGER, (req, res) => {"
+  },
+  {
+    "file": "server/routes/visits.js",
+    "line": 38,
+    "method": "GET",
+    "route": "/",
+    "declaration": "router.get('/', (req, res) => {"
+  },
+  {
+    "file": "server/routes/visits.js",
+    "line": 58,
+    "method": "GET",
+    "route": "/:id",
+    "declaration": "router.get('/:id', (req, res) => {"
+  },
+  {
+    "file": "server/routes/visits.js",
+    "line": 82,
+    "method": "POST",
+    "route": "/",
+    "declaration": "router.post('/', WRITE, validate(visitSchema), (req, res) => {"
+  },
+  {
+    "file": "server/routes/visits.js",
+    "line": 105,
+    "method": "PUT",
+    "route": "/:id",
+    "declaration": "router.put('/:id', WRITE, validate(visitUpdateSchema), (req, res) => {"
+  },
+  {
+    "file": "server/routes/visits.js",
+    "line": 121,
+    "method": "DELETE",
+    "route": "/:id",
+    "declaration": "router.delete('/:id', MANAGER, (req, res) => {"
+  },
+  {
+    "file": "server/routes/webhooks.js",
+    "line": 26,
+    "method": "GET",
+    "route": "/",
+    "declaration": "router.get('/', ADMIN, (req, res) => {"
+  },
+  {
+    "file": "server/routes/webhooks.js",
+    "line": 31,
+    "method": "GET",
+    "route": "/events",
+    "declaration": "router.get('/events', ADMIN, (req, res) => res.json(EVENT_CATALOG));"
+  },
+  {
+    "file": "server/routes/webhooks.js",
+    "line": 39,
+    "method": "POST",
+    "route": "/process-retry-queue",
+    "declaration": "router.post('/process-retry-queue', ADMIN, (req, res) => {"
+  },
+  {
+    "file": "server/routes/webhooks.js",
+    "line": 50,
+    "method": "POST",
+    "route": "/",
+    "declaration": "router.post('/', ADMIN, validate(createSchema), (req, res) => {"
+  },
+  {
+    "file": "server/routes/webhooks.js",
+    "line": 63,
+    "method": "PUT",
+    "route": "/:id",
+    "declaration": "router.put('/:id', ADMIN, (req, res) => {"
+  },
+  {
+    "file": "server/routes/webhooks.js",
+    "line": 83,
+    "method": "POST",
+    "route": "/:id/regenerate-secret",
+    "declaration": "router.post('/:id/regenerate-secret', ADMIN, (req, res) => {"
+  },
+  {
+    "file": "server/routes/webhooks.js",
+    "line": 92,
+    "method": "DELETE",
+    "route": "/:id",
+    "declaration": "router.delete('/:id', ADMIN, (req, res) => {"
+  },
+  {
+    "file": "server/routes/webhooks.js",
+    "line": 101,
+    "method": "GET",
+    "route": "/:id/deliveries",
+    "declaration": "router.get('/:id/deliveries', ADMIN, (req, res) => {"
+  },
+  {
+    "file": "server/routes/webhooks.js",
+    "line": 116,
+    "method": "POST",
+    "route": "/:id/deliveries/:deliveryId/retry",
+    "declaration": "router.post('/:id/deliveries/:deliveryId/retry', ADMIN, async (req, res, next) => {"
+  },
+  {
+    "file": "server/routes/webhooks.js",
+    "line": 128,
+    "method": "POST",
+    "route": "/:id/test",
+    "declaration": "router.post('/:id/test', ADMIN, async (req, res, next) => {"
+  }
+]

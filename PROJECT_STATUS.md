@@ -1,5 +1,22 @@
 # PROJECT_STATUS.md
 
+## 20 Eylül 2026 — kalıcı kayıt ve bakım güvenliği
+
+Önceki stok, finans, mobil, yetki ve test izolasyonu düzeltmeleri `933cf79`
+Git commit'inde kalıcı kayda alındı. Özel ortam/veri dosyaları ve kullanıcının
+`.claude/` ile `CLAUDE.md` dosyaları bu kayda eklenmedi.
+
+S05: Sunucu, upgrade ve restore ortak SQLite bakım kilidini kullanıyor.
+Çalışan sunucuda `--force` bile restore/upgrade başlatamıyor; süreç ölünce
+işletim sistemi kilidi bırakıyor. Restore boş olmayan WAL'ı ayrıca reddediyor.
+S06: JWT_SECRET ve lisans kontrolü DB açılışı/migration öncesine taşındı.
+Backup/restore/upgrade CLI komutları .env veri yolu ayarlarını yüklüyor.
+Çalışan sunucu, zorla restore/upgrade, çöken süreçten sonra kilit alma ve
+geçersiz başlangıcın veritabanı oluşturmaması `maintenance-safety` ile sınandı.
+
+Tam dosya yedeği/geri yükleme (S04), geç maliyet mutabakatı ve önceki açık işler
+henüz tamamlanmadı. Satışa hazır onayı verilmedi.
+
 ## 20 Eylül 2026 — mali doğruluk geliştirmeleri
 
 Doğrulama tamamlandı: 35 test paketi ve 35 Chromium testi geçti (35,6 sn);

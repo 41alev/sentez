@@ -1,0 +1,11 @@
+Dream Plus — 19 Eylül 2026 teknik incelemesi
+
+1. TEKNIK-ANALIZ.html dosyasını tarayıcıda açın. Yazdır düğmesiyle PDF olarak da kaydedebilirsiniz.
+2. Yazılımcıya bu klasörün tamamını ve kaynak kodun ilgili sürümünü verin. Bu paket kaynak kodu veya gerçek veriyi içermez.
+3. GELISTIRME-IS-LISTESI.csv dosyasını Excel ile açıp sorumlu, tarih ve durum sütunlarını doldurun. UTF-8 ve noktalı virgül ayırıcı kullanılmıştır.
+4. Önce P0 güvenli paketleme/test izolasyonu, sonra P1 veri bütünlüğü sorunlarını kapatın.
+5. Her madde için rapordaki kabul koşuluna uygun kalıcı test isteyin.
+
+Kanıtlar mevcut testlerin ve 25 ek tanı senaryosunun çıktılarıdır. Tanı betiği bugları gözlemler; düzeltildiğini assert eden regresyon paketi değildir. Gerçek proje data klasöründe eski test komutlarını çalıştırmayın: veri silme riski vardır. Güvenli yeniden üretim raporun 11. bölümünde.
+
+İnceleme sınırı: 199 dosya envanteri, 196 metin dosyasında tam yapısal tarama, kritik akışlarda ayrıntılı inceleme. Bütün satırlar için tek tek doğruluk ispatı veya tüm ekranların manuel kabulü değildir. Uygulama kodunda düzeltme yapılmamıştır.

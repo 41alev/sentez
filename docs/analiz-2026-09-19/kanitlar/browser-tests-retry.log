@@ -1,0 +1,77 @@
+[WebServer] ◇ injected env (0) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+[WebServer] Migration uygulandı / applied: 001_initial_schema.js
+[WebServer] Migration uygulandı / applied: 002_einvoice.js
+[WebServer] Migration uygulandı / applied: 003_planning.js
+[WebServer] Migration uygulandı / applied: 004_import.js
+[WebServer] Migration uygulandı / applied: 005_templates.js
+[WebServer] Migration uygulandı / applied: 006_multitenancy_prep.js
+[WebServer] Migration uygulandı / applied: 007_scoped_uniqueness.js
+[WebServer] Migration uygulandı / applied: 008_accounting_bridge.js
+[WebServer] Migration uygulandı / applied: 009_webhooks.js
+[WebServer] Migration uygulandı / applied: 010_crm.js
+[WebServer] Migration uygulandı / applied: 011_saved_reports.js
+[WebServer] Migration uygulandı / applied: 012_webhook_retry.js
+[WebServer] Migration uygulandı / applied: 013_pivot_datasources.js
+[WebServer] Migration uygulandı / applied: 014_support_and_visits.js
+[WebServer] Migration uygulandı / applied: 015_invoice_return_reference.js
+[WebServer] Migration uygulandı / applied: 016_kvkk_anonymization.js
+[WebServer] Migration uygulandı / applied: 017_remove_einvoice_module.js
+[WebServer] Örnek veriler yüklendi / Seed data loaded.
+[WebServer] Kullanıcılar / Users: admin/Admin123!  mudur/Mudur123!  operator/Operator123!  kalite/Kalite123!  viewer/Viewer123!
+[WebServer] (node:17600) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:17600) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] [07:52:27.996] INFO (17600): Dream Plus çalışıyor / running at http://localhost:3000
+
+Running 33 tests using 1 worker
+
+(node:10952) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] [07:52:32.850] WARN (17600):
+[WebServer]     requestId: "6211e9ba-6760-4def-8482-8a937db27782"
+[WebServer]     method: "POST"
+[WebServer]     url: "/api/auth/login"
+[WebServer]     status: 401
+[WebServer]     ms: 72
+  ok  1 [chromium] › test\e2e-browser\admin-audit-log.spec.js:15:3 › Yönetim — Denetim Kaydı null rol sızdırmıyor › başarısız giriş denemesi satırında literal "null" görünmüyor (3.8s)
+  ok  2 [chromium] › test\e2e-browser\counts-quality-role.spec.js:21:3 › Sayım — Kalite rolü gerçekten sayım oluşturup kaydedebiliyor › kalite kullanıcısı yeni sayım açıp bir satırı kaydedebiliyor (930ms)
+  ok  3 [chromium] › test\e2e-browser\crm.spec.js:6:3 › CRM — fırsat oluşturma ve satış siparişine dönüştürme › fırsat oluşturulup kazanılıp gerçek bir siparişe dönüştürülüyor (1.5s)
+  ok  4 [chromium] › test\e2e-browser\global-search.spec.js:14:3 › Genel arama — kenar çubuğundaki arama kutusu › müşteri araması gerçek sonuç gösterip doğru ekrana götürüyor (1.1s)
+  ok  5 [chromium] › test\e2e-browser\global-search.spec.js:27:3 › Genel arama — kenar çubuğundaki arama kutusu › ürün araması ve parti araması gerçek verilerle sonuç veriyor (1.4s)
+  ok  6 [chromium] › test\e2e-browser\global-search.spec.js:37:3 › Genel arama — kenar çubuğundaki arama kutusu › sonuç yoksa "sonuç bulunamadı" gösteriliyor, Escape kapatıyor (1.0s)
+  ok  7 [chromium] › test\e2e-browser\items.spec.js:6:3 › Ürünler — stok girişi (uçtan uca gerçek sunucuya karşı) › stok girişi diyaloğu gerçek miktarı sunucuya yazıyor (894ms)
+  ok  8 [chromium] › test\e2e-browser\login.spec.js:6:3 › Giriş ve temel gezinme › giriş yapılabiliyor ve panel gerçek veriyle render oluyor (663ms)
+[WebServer] [07:52:41.316] WARN (17600):
+[WebServer]     requestId: "7b9bd070-da52-4dcb-b166-0638069e1e31"
+[WebServer]     method: "POST"
+[WebServer]     url: "/api/auth/login"
+[WebServer]     status: 401
+[WebServer]     ms: 65
+  ok  9 [chromium] › test\e2e-browser\login.spec.js:16:3 › Giriş ve temel gezinme › yanlış şifre reddediliyor (550ms)
+  ok 10 [chromium] › test\e2e-browser\login.spec.js:25:3 › Giriş ve temel gezinme › görüntüleyici rolünde Yönetim sekmesi gizli (734ms)
+  ok 11 [chromium] › test\e2e-browser\login.spec.js:30:3 › Giriş ve temel gezinme › kalite rolünde Yönetim sekmesi gizli (671ms)
+  ok 12 [chromium] › test\e2e-browser\login.spec.js:41:5 › Giriş ve temel gezinme › items ekranı hatasız render oluyor (733ms)
+  ok 13 [chromium] › test\e2e-browser\login.spec.js:41:5 › Giriş ve temel gezinme › lots ekranı hatasız render oluyor (717ms)
+  ok 14 [chromium] › test\e2e-browser\login.spec.js:41:5 › Giriş ve temel gezinme › crm ekranı hatasız render oluyor (767ms)
+  ok 15 [chromium] › test\e2e-browser\login.spec.js:41:5 › Giriş ve temel gezinme › sales ekranı hatasız render oluyor (731ms)
+  ok 16 [chromium] › test\e2e-browser\login.spec.js:41:5 › Giriş ve temel gezinme › reports ekranı hatasız render oluyor (713ms)
+  ok 17 [chromium] › test\e2e-browser\lots-traceability.spec.js:23:3 › Partiler — izlenebilirlik raporu gerçek verilerle doluyor › geriye/ileriye izleme ve geri çağırma raporu doğru bilgiyi gösteriyor (887ms)
+  ok 18 [chromium] › test\e2e-browser\mobile-count.spec.js:19:3 › Depo Terminali — Sayım gerçekten sunucuya kaydediyor › mobilde sayılan bir kalem sunucuya yazılıyor (no such column hatası değil) (1.5s)
+  ok 19 [chromium] › test\e2e-browser\mobile-offline-queue.spec.js:19:3 › Depo Terminali — çevrimdışı kuyruk gerçekten çalışıyor › çevrimdışıyken sayım kuyruğa alınıyor, bağlantı gelince otomatik gönderiliyor (1.5s)
+  ok 20 [chromium] › test\e2e-browser\mobile-receiving.spec.js:21:3 › Depo Terminali — Mal Kabul gerçekten sunucuya kaydediyor › SA-2026-003 siparişindeki kalem teslim alınıp sunucuya yazılıyor (422 değil) (684ms)
+  ok 21 [chromium] › test\e2e-browser\mobile.spec.js:5:3 › Depo Terminali — gerçek tarayıcı CSS/layout regresyonu › hidden öznitelikli elemanlar GERÇEKTEN görünmez (Aşama 6 regresyon testi) (138ms)
+  ok 22 [chromium] › test\e2e-browser\mobile.spec.js:22:3 › Depo Terminali — gerçek tarayıcı CSS/layout regresyonu › giriş yapıp barkod okutarak ürün ekranına ulaşılıyor (648ms)
+  ok 23 [chromium] › test\e2e-browser\permission-matrix.spec.js:14:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Müdür sevkiyat silme butonunu görmüyor (DELETE /shipments yalnızca gerçek admin) (788ms)
+  ok 24 [chromium] › test\e2e-browser\permission-matrix.spec.js:30:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Kalite kullanıcısı bir ürüne doküman yükleme butonunu görüyor (778ms)
+  ok 25 [chromium] › test\e2e-browser\permission-matrix.spec.js:46:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Müdür parti durum değiştirme butonunu görmüyor (POST /lot-status yalnızca admin+kalite) (731ms)
+  ok 26 [chromium] › test\e2e-browser\permission-matrix.spec.js:65:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Kalite kullanıcısı parti durum değiştirme butonunu görüyor (762ms)
+  ok 27 [chromium] › test\e2e-browser\permission-matrix.spec.js:73:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Müdür Webhook sekmesini açınca "yalnızca yöneticilere açık" görüyor, 403 hatası değil (783ms)
+  ok 28 [chromium] › test\e2e-browser\permission-matrix.spec.js:86:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Müdür kendi kaydettiği raporu silebiliyor (sahibi olduğu için) (930ms)
+  ok 29 [chromium] › test\e2e-browser\permission-matrix.spec.js:104:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Operatör #admin hash'ine doğrudan gidince Yönetim ekranını GÖREMİYOR (gizli sekme = yetki değil) (684ms)
+  ok 30 [chromium] › test\e2e-browser\permission-matrix.spec.js:125:3 › Yetki matrisi — frontend can() backend PERMISSIONS ile eşleşiyor › Başkasının kayıtlı raporunu Operatör silemiyor (799ms)
+  ok 31 [chromium] › test\e2e-browser\print-output-content.spec.js:22:3 › Yazdırma çıktıları — gerçek belge içeriği › sevkiyat irsaliyesi çıktısı GERÇEK sevkiyat verisini içeriyor (şablon değil) (916ms)
+  ok 32 [chromium] › test\e2e-browser\purchasing-compare-quotes.spec.js:20:3 › Satın Alma — teklif karşılaştırma gerçek verilerle doluyor › 3 teklifli RFQ karşılaştırma tablosu doğru fiyat/tedarikçi/en iyi fiyatı gösteriyor (878ms)
+  ok 33 [chromium] › test\e2e-browser\purchasing-invoices.spec.js:20:3 › Satın Alma — fatura 3'lü eşleştirme gerçek verilerle doluyor › yeni fatura girildiğinde tedarikçi adı ve fark notu doğru gösteriliyor (968ms)
+
+  33 passed (34.3s)

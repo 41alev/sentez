@@ -1,5 +1,9 @@
 # Dream Plus — satışa hazırlık uygulama kaydı
 
+## 20 Eylül 2026 — bakım güvenliği ve kalıcı kayıt
+
+Önceki değişiklikler `933cf79` Git commit'inde kaydedildi. S05 için sunucu/restore/upgrade arasında süreçler arası bakım kilidi eklendi. `--force` çalışan sunucu kilidini aşamaz; restore ayrıca dolu WAL dosyasını reddeder. S06 kapsamında üretim anahtarı ve lisans doğrulaması migration öncesine alındı. CLI bakım komutları `.env` veri yolu ayarlarını okur. S04 kapsamındaki dosyaları da içeren otomatik tam yedek ve geri yükleme çalışması açık kalıyor.
+
 ## 20 Eylül 2026 — mali kayıt geliştirmeleri
 
 Son doğrulama: 35 test paketi ve 35 Chromium testi geçti; derleme ve tip kontrolü başarılı; lint 0 hata/29 uyarı. 020–022 geçişleri yedek kopyada denendikten sonra yerel kuruluma uygulandı. Sunucu `http://localhost:3000` adresinde güncel kodla çalışıyor; sağlık ve veritabanı bütünlüğü başarılı, bekleyen migration yok. Durdurulmuş sunucu yedeği: `C:\Erp\backups\pre-financial-final-2026-09-20T01-22-33-424Z`. Mevcut veride 1 tarihsel ek maliyet mutabakat bekliyor; eksik satın alma satırı kuru yok.

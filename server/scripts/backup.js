@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
+if (require.main === module) require('dotenv').config({ quiet: true });
 const db = require('../db');
 
 /**

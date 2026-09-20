@@ -126,7 +126,7 @@ Geri yükleme, yedeği önce doğrular (SQLite başlığı, bütünlük, yabanc�
 sonra üzerine yazar. Yazma sonrası doğrulama başarısız olursa eski veritabanı
 otomatik geri alınır.
 
-> **Sunucuyu durdurmadan geri yükleme yapmayın.** Script WAL dosyasına bakıp uyarır.
+> **Sunucuyu durdurmadan geri yükleme yapmayın.** Sunucu, yükseltme ve geri yükleme aynı bakım kilidini kullanır. Çalışan sunucuda geri yükleme/yükseltme `--force` ile bile engellenir. Geri yükleme ayrıca boş olmayan WAL dosyasını reddeder. Beklenmedik kapanıştan sonra önce aynı sürüm sunucuyu açıp normal şekilde kapatarak WAL kurtarmasını tamamlayın. `.maintenance-lock.sqlite` dosyasını çalışan süreç varken silmeyin; süreç kapandığında kilit otomatik bırakılır.
 
 **Yedekleri başka bir makineye kopyalayın.** Aynı diskte duran yedek, disk
 arızasında, yangında veya hırsızlıkta işe yaramaz.
