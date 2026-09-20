@@ -1,5 +1,17 @@
 # PROJECT_STATUS.md
 
+## 20 Eylül 2026 — kullanıcı isteğiyle çalışma durduruldu / devir
+
+Mevcut bakım güvenliği işi tamamlandı. Kullanıcı yeni işe geçilmemesini istedi;
+yeni geliştirme başlatılmadı. Başka bir yazılımcıya verilecek güncel belge:
+[DEVIR-VE-KALAN-ISLER-2026-09-20.md](docs/DEVIR-VE-KALAN-ISLER-2026-09-20.md).
+Belgede tamamlananlar, kısmi çözümler, 12 adımlı kalan iş sırası, kabul
+ölçütleri, yedekler ve test kanıtları var. Son kontrolde eski arka plan süreci
+kapanmıştı; mevcut sürüm yeniden başlatıldı ve `/health` başarılı yanıt verdi
+(DB bağlı, bekleyen migration 0). Windows servisi henüz kurulmadığından
+bu başlatma bilgisayar yeniden açılınca otomatik çalışma garantisi değildir.
+Devam için kullanıcı geri dönüşü beklenecek; otomasyon kurulmadı.
+
 ## 20 Eylül 2026 — kalıcı kayıt ve bakım güvenliği
 
 Bakım değişiklikleri ve inceleme raporu `55f1d87` commit'inde kaydedildi.

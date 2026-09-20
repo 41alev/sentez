@@ -1,5 +1,7 @@
 # Dream Plus — satışa hazırlık uygulama kaydı
 
+**Devir notu:** Kullanıcı 20 Eylül 2026 tarihinde mevcut işin tamamlanıp yeni geliştirmeye geçilmeden durulmasını istedi. Güncel ve adım adım kalan işler [devir belgesindedir](DEVIR-VE-KALAN-ISLER-2026-09-20.md). Aşağıdaki bölümler kronolojik kayıttır; en son durum için devir belgesini esas alın.
+
 ## 20 Eylül 2026 — bakım güvenliği ve kalıcı kayıt
 
 Bakım koruması `55f1d87` commit'inde; önceki düzeltmeler `933cf79` commit'inde kalıcıdır. 36 test paketi ve 35 Chromium testi geçti; tip kontrolü başarılı; lint 0 hata/29 uyarı. Yerel uygulama bu kodla yeniden başlatıldı; sağlık kontrolü başarılı ve bekleyen migration yok.
