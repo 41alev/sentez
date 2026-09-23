@@ -19,6 +19,7 @@ function createSalesOrder(req, input) {
   return db.txImmediate(() => {
     const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(input.customerId);
     if (!customer) throw new AppError('Müşteri bulunamadı / Customer not found', 404);
+    if (!customer.is_active || customer.anonymized_at) throw new AppError('Pasif müşteriye sipariş açılamaz / Customer is inactive', 409);
     const findItem = db.prepare('SELECT name,is_active,deleted_at FROM items WHERE id=?');
     const itemLines = input.lines.map(line => {
       const item = findItem.get(line.itemId);

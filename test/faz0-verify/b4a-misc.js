@@ -8,7 +8,7 @@ const { start, api, ok, snap, check, info, statusIn, finish, state } = require('
 const assert = require('node:assert/strict');
 
 (async () => {
-  await start({ WEBHOOK_RETRY_BASE_MS: '50' });
+  await start({ WEBHOOK_RETRY_BASE_MS: '50', WEBHOOK_ALLOW_PRIVATE: '1' });
   const db = state.db;
   const whs = db.prepare('SELECT id FROM warehouses ORDER BY id').all().map(w => w.id);
   const sups = db.prepare('SELECT id FROM suppliers WHERE is_approved=1 ORDER BY id').all().map(s => s.id);

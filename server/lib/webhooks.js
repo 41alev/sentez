@@ -2,12 +2,9 @@
 /**
  * Webhook gönderim motoru.
  *
- * `dispatchEvent(name, data)` iş işlemi commit olduktan HEMEN SONRA, ilgili
- * route handler'dan çağrılır (asla bir DB transaction'ının İÇİNDEN — burada
- * yapılan `fetch` senkron SQLite transaction'ını bloke eder / bozar).
- * Gönderim "fire and forget"tir: route'un yanıtını bloke etmez, ama HER
- * denemenin sonucu (başarı/hata) `webhook_deliveries`e yazılır — sessizce
- * kaybolan bir teslimat olmaz.
+ * `dispatchEvent` yalnızca olayı kalıcı outbox'a yazar; iş değişikliğiyle aynı
+ * transaction içinden çağrılır. Ağ gönderimi commit sonrasında ayrı çalışır.
+ * Alıcı aynı olay kimliğini tekrar görebilir; X-Webhook-Id ile deduplicate eder.
  *
  * İmza: `X-Webhook-Signature: sha256=<hex>`, gövdenin HMAC-SHA256'sı,
  * webhook'a özel gizli anahtarla — GitHub/Stripe'ın kullandığı aynı desen,
@@ -16,6 +13,7 @@
 const crypto = require('crypto');
 const db = require('../db');
 const { uuid } = require('./core');
+const { postWebhook } = require('./webhook-target');
 
 const SEND_TIMEOUT_MS = 8000;
 
@@ -58,41 +56,30 @@ function activeSubscribersFor(event, companyId = 1) {
  *   otomatik kuyruk sayacını sıfırdan başlatması doğrudur). Otomatik kuyruk
  *   (bkz. processRetryQueue) bir önceki denemenin retry_count + 1'ini geçer.
  */
-async function sendDelivery(webhook, event, data, retryCount = 0) {
-  const body = JSON.stringify({ event, timestamp: new Date().toISOString(), data });
+async function sendDelivery(webhook, event, data, retryCount = 0, options = {}) {
+  const body = options.body || JSON.stringify({ event, timestamp: new Date().toISOString(), data });
   const signature = crypto.createHmac('sha256', webhook.secret).update(body).digest('hex');
   const start = Date.now();
   let statusCode = null, success = false, error = null;
 
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), SEND_TIMEOUT_MS);
-    try {
-      const res = await fetch(webhook.url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Webhook-Event': event,
-          'X-Webhook-Signature': `sha256=${signature}`
-        },
-        body,
-        signal: controller.signal
-      });
-      statusCode = res.status;
-      success = res.ok;
-      if (!res.ok) error = `HTTP ${res.status}`;
-    } finally {
-      clearTimeout(timer);
-    }
+    statusCode = await postWebhook(webhook.url, body, {
+      'Content-Type': 'application/json', 'X-Webhook-Event': event,
+      'X-Webhook-Signature': `sha256=${signature}`,
+      ...(options.eventId ? { 'X-Webhook-Id': options.eventId } : {})
+    }, SEND_TIMEOUT_MS);
+    success = statusCode >= 200 && statusCode < 300;
+    if (!success) error = `HTTP ${statusCode}`;
   } catch (e) {
-    error = e.name === 'AbortError' ? 'Zaman aşımı / Timed out' : e.message;
+    error = e.message;
   }
 
   // Başarısızsa VE hâlâ otomatik deneme hakkı varsa bir sonraki deneme zamanı
   // hesaplanır; başarılıysa veya hak tükendiyse next_retry_at NULL kalır —
   // processRetryQueue bu kaydı bir daha hiç görmez (dead-letter, elle
   // "yeniden dene" ile hâlâ mümkün).
-  const nextRetryAt = (!success && retryCount < MAX_AUTO_RETRIES) ? Date.now() + nextRetryDelay(retryCount) : null;
+  const nextRetryAt = (!success && options.scheduleRetry !== false && retryCount < MAX_AUTO_RETRIES)
+    ? Date.now() + nextRetryDelay(retryCount) : null;
 
   db.prepare(`INSERT INTO webhook_deliveries (id, webhook_id, event, payload, status_code, success, error, duration_ms, attempted_at, retry_count, next_retry_at)
     VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
@@ -101,13 +88,56 @@ async function sendDelivery(webhook, event, data, retryCount = 0) {
   return { success, statusCode, error };
 }
 
-/** İş işlemi tamamlandıktan sonra çağrılır — asla bir DB transaction'ı içinden. */
+/** Must be called inside the business transaction for no commit-to-queue gap. */
 function dispatchEvent(event, data, companyId = 1) {
   if (!EVENT_CATALOG.includes(event)) throw new Error(`Bilinmeyen webhook olayı / Unknown webhook event: ${event}`);
   const subs = activeSubscribersFor(event, companyId);
-  for (const wh of subs) {
-    sendDelivery(wh, event, data).catch(() => {}); // sendDelivery kendi hatasını zaten kaydediyor
-  }
+  db.tx(() => {
+    const insert = db.prepare(`INSERT INTO webhook_outbox
+      (id, webhook_id, company_id, event, payload, created_at, next_attempt_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)`);
+    for (const wh of subs) {
+      const id = uuid(); const now = Date.now();
+      insert.run(id, wh.id, companyId, event, JSON.stringify({ id, event, timestamp: new Date(now).toISOString(), data }), now, now);
+    }
+  });
+  if (subs.length) setImmediate(() => processOutbox().catch(e => console.error('[webhook-outbox] send failed:', e.message)));
+}
+
+let outboxRunning = false;
+async function processOutbox() {
+  if (outboxRunning) return;
+  outboxRunning = true;
+  try {
+    const now = Date.now();
+    const due = db.txImmediate(() => {
+      const rows = db.prepare(`SELECT o.*, w.url, w.secret, w.is_active FROM webhook_outbox o
+        JOIN webhooks w ON w.id = o.webhook_id
+        WHERE w.is_active = 1 AND o.delivered_at IS NULL AND o.next_attempt_at <= ?
+          AND (o.leased_until IS NULL OR o.leased_until <= ?)
+        ORDER BY o.created_at, o.id LIMIT 25`).all(now, now);
+      const claim = db.prepare(`UPDATE webhook_outbox SET leased_until = ?, attempt_count = attempt_count + 1
+        WHERE id = ? AND delivered_at IS NULL AND (leased_until IS NULL OR leased_until <= ?)`);
+      return rows.filter(row => claim.run(now + 30000, row.id, now).changes === 1);
+    });
+    for (const row of due) {
+      if (!db.prepare('SELECT is_active FROM webhooks WHERE id = ?').get(row.webhook_id)?.is_active) {
+        db.prepare('UPDATE webhook_outbox SET leased_until = NULL, attempt_count = attempt_count - 1 WHERE id = ?').run(row.id);
+        continue;
+      }
+      let result;
+      try {
+        result = await sendDelivery({ id: row.webhook_id, url: row.url, secret: row.secret }, row.event,
+          JSON.parse(row.payload).data, row.attempt_count, { body: row.payload, eventId: row.id, scheduleRetry: false });
+      } catch (e) { result = { success: false, error: e.message }; }
+      const attempts = row.attempt_count + 1;
+      db.prepare(`UPDATE webhook_outbox SET delivered_at = ?, next_attempt_at = ?, leased_until = NULL,
+        last_error = ? WHERE id = ?`).run(
+        result.success ? Date.now() : null,
+        !result.success && attempts <= MAX_AUTO_RETRIES ? Date.now() + nextRetryDelay(attempts - 1) : null,
+        result.success ? null : result.error, row.id);
+    }
+  } finally { outboxRunning = false; }
 }
 
 /**
@@ -137,15 +167,17 @@ function processRetryQueue() {
 let retryTimer = null;
 function startWebhookRetryScheduler() {
   if (retryTimer) return; // testler arka arkaya server başlatıp durdurabiliyor — çift zamanlayıcı kurulmasın
-  const tick = () => {
+const tick = () => {
     // Zamanlayıcı sunucuyu asla çökertmemeli (bkz. services/notifications.js
     // startScheduler — aynı desen): setInterval içindeki senkron bir hata
     // (ör. DB kilitliyken atılan bir istisna) yakalanmazsa süreç geneli
     // uncaughtException ile sonlanırdı.
-    try { processRetryQueue(); } catch (e) { console.error('[webhook-retry] tarama başarısız / scan failed:', e.message); }
+    try { processRetryQueue(); processOutbox().catch(e => console.error('[webhook-outbox] scan failed:', e.message)); }
+    catch (e) { console.error('[webhook-retry] tarama başarısız / scan failed:', e.message); }
   };
+  tick();
   retryTimer = setInterval(tick, 60000);
   retryTimer.unref?.(); // açık bir zamanlayıcı process'in kapanmasını engellemesin (testlerde graceful shutdown)
 }
 
-module.exports = { EVENT_CATALOG, dispatchEvent, sendDelivery, processRetryQueue, startWebhookRetryScheduler };
+module.exports = { EVENT_CATALOG, dispatchEvent, sendDelivery, processRetryQueue, processOutbox, startWebhookRetryScheduler };

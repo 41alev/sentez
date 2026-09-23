@@ -13,6 +13,7 @@
  */
 const http = require('http');
 const crypto = require('crypto');
+const { resolveTarget, isBlockedAddress } = require('../server/lib/webhook-target');
 
 const BASE = process.env.BASE || 'http://localhost:3000';
 let pass = 0, fail = 0;
@@ -50,6 +51,15 @@ function startReceiver() {
 }
 
 (async () => {
+  console.log('\n=== HEDEF POLİTİKASI / TARGET POLICY ===');
+  for (const [address, family] of [['127.0.0.1', 4], ['169.254.169.254', 4], ['10.0.0.1', 4], ['::1', 6], ['::ffff:127.0.0.1', 6]]) {
+    ok(`${address} özel adres olarak tanındı`, isBlockedAddress(address, family));
+  }
+  for (const url of ['http://example.com/x', 'file:///etc/passwd', 'https://127.0.0.1/x', 'https://[::1]/x']) {
+    let rejected = false;
+    try { await resolveTarget(url); } catch (e) { rejected = e.status === 422; }
+    ok(`${url} güvenli hedef değil (422)`, rejected);
+  }
   const login = async (u, p) => (await api('POST', '/api/auth/login', { body: { username: u, password: p } })).data.token;
   const admin = await login('admin', 'Admin123!');
   const manager = await login('mudur', 'Mudur123!');
@@ -110,7 +120,18 @@ function startReceiver() {
     const payload = JSON.parse(received[0].body);
     ok('olay adı doğru', payload.event === 'ncr.opened');
     ok('olay verisi gerçek NCR alanlarını taşıyor', payload.data.ncrNo === ncr.data.ncrNo);
+    ok('kalıcı olay kimliği gövde ve başlıkta aynı', typeof payload.id === 'string' && received[0].headers['x-webhook-id'] === payload.id);
   }
+
+  const outbox = await api('GET', `/api/webhooks/${webhookId}/outbox`, { token: admin });
+  const ncrEvent = outbox.data.data.find(e => e.event === 'ncr.opened');
+  ok('iş olayı kalıcı outbox kaydından teslim edilmiş', outbox.status === 200 && ncrEvent && ncrEvent.deliveredAt && ncrEvent.attemptCount === 1,
+    JSON.stringify(outbox.data));
+
+  const beforeRejected = outbox.data.total;
+  await api('POST', '/api/quality/ncrs', { token: admin, body: { source: 'yanlis', severity: 'major', description: 'reddedilmeli' } });
+  const afterRejected = await api('GET', `/api/webhooks/${webhookId}/outbox`, { token: admin });
+  ok('başarısız iş işlemi outbox kalıntısı bırakmıyor', afterRejected.data.total === beforeRejected);
 
   console.log('\n=== TESLİMAT GEÇMİŞİ / DELIVERY LOG ===');
   const deliveries = await api('GET', `/api/webhooks/${webhookId}/deliveries`, { token: admin });
@@ -161,6 +182,23 @@ function startReceiver() {
   const autoRetried = after.data.data.find(d => d.id !== before.data.data[0].id);
   ok('otomatik denemenin retryCount\'u arttı (1)', autoRetried && autoRetried.retryCount === 1, JSON.stringify(autoRetried));
   ok('ilk denemenin nextRetryAt\'i temizlendi (iki kez işlenmesin diye)', original && original.nextRetryAt === null);
+
+  await api('POST', '/api/quality/ncrs', {
+    token: admin, body: { source: 'internal', severity: 'minor', description: 'Outbox retry testi' }
+  });
+  await sleep(150);
+  const failedOutbox = await api('GET', `/api/webhooks/${deadId2}/outbox`, { token: admin });
+  const queuedEvent = failedOutbox.data.data.find(e => e.event === 'ncr.opened');
+  ok('iş olayı başarısızsa outbox içinde görünür ve yeniden denemeye planlanır',
+    queuedEvent && !queuedEvent.deliveredAt && queuedEvent.lastError && queuedEvent.nextAttemptAt,
+    JSON.stringify(failedOutbox.data));
+  await sleep(300);
+  await api('POST', '/api/webhooks/process-retry-queue', { token: admin });
+  await sleep(150);
+  const retriedOutbox = await api('GET', `/api/webhooks/${deadId2}/outbox`, { token: admin });
+  const retriedEvent = retriedOutbox.data.data.find(e => e.id === queuedEvent?.id);
+  ok('outbox başarısız iş olayını aynı olay kimliğiyle yeniden deniyor', retriedEvent && retriedEvent.attemptCount >= 2 && !retriedEvent.deliveredAt,
+    JSON.stringify(retriedEvent));
 
   ok('yönetici olmayan kuyruğu elle tetikleyemiyor (403)',
     (await api('POST', '/api/webhooks/process-retry-queue', { token: manager })).status === 403);

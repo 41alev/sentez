@@ -60,6 +60,7 @@ router.post('/customers', ADMIN, validate(customerSchema), (req, res) => {
 router.put('/customers/:id', ADMIN, validatePartial(customerSchema), (req, res) => {
   const before = db.prepare('SELECT * FROM customers WHERE id = ?').get(req.params.id);
   if (!before) throw new AppError('Müşteri bulunamadı / Customer not found', 404);
+  if (before.anonymized_at) throw new AppError('Anonimleştirilmiş müşteri düzenlenemez / Anonymized customer cannot be edited', 409);
   const b = req.valid;
   db.prepare(`UPDATE customers SET code=COALESCE(?,code), name=COALESCE(?,name), contact_person=COALESCE(?,contact_person),
     phone=COALESCE(?,phone), email=COALESCE(?,email), address=COALESCE(?,address), country=COALESCE(?,country),
@@ -76,6 +77,7 @@ router.put('/customers/:id', ADMIN, validatePartial(customerSchema), (req, res) 
 router.delete('/customers/:id', requireRole('admin'), (req, res) => {
   const c = db.prepare('SELECT * FROM customers WHERE id = ?').get(req.params.id);
   if (!c) throw new AppError('Müşteri bulunamadı / Customer not found', 404);
+  if (c.anonymized_at) throw new AppError('Anonimleştirilmiş müşteri düzenlenemez / Anonymized customer cannot be edited', 409);
   db.prepare('UPDATE customers SET is_active = 0, deactivated_at = COALESCE(deactivated_at, ?) WHERE id = ?').run(Date.now(), c.id);
   logAudit(req, 'auditCustomerDelete', { entityType: 'customer', entityId: c.id, detail: c.name });
   res.status(204).end();
@@ -138,9 +140,12 @@ const soSchema = z.object({
 
 router.post('/orders', WRITE, validate(soSchema), (req, res) => {
   const b = req.valid;
-  const result = createSalesOrder(req, b);
-  const serialized = serializeSO(result);
-  dispatchEvent('sales_order.created', serialized, companyIdOf(req));
+  const serialized = db.txImmediate(() => {
+    const result = createSalesOrder(req, b);
+    const order = serializeSO(result);
+    dispatchEvent('sales_order.created', order, companyIdOf(req));
+    return order;
+  });
   res.status(201).json(serialized);
 });
 
@@ -216,6 +221,11 @@ router.post('/shipments', WRITE, validate(shipmentSchema), (req, res) => {
     if (so && !['open', 'partially_shipped'].includes(so.status)) throw new AppError('Sipariş sevke açık değil / Order is not open for shipping', 409);
     if (so && b.customerId != null && b.customerId !== so.customer_id) throw new AppError('Sipariş müşterisi eşleşmiyor / Order customer mismatch', 422);
     const customerId = b.customerId || (so ? so.customer_id : null);
+    if (customerId) {
+      const customer = db.prepare('SELECT is_active, anonymized_at FROM customers WHERE id = ?').get(customerId);
+      if (!customer) throw new AppError('Müşteri bulunamadı / Customer not found', 404);
+      if (!customer.is_active || customer.anonymized_at) throw new AppError('Pasif müşteriye sevkiyat açılamaz / Customer is inactive', 409);
+    }
 
     db.prepare(`INSERT INTO shipments (id,shipment_no,so_id,customer_id,type,carrier,destination,status,date,incoterm,tracking_no,created_by)
       VALUES (?,?,?,?,?,?,?,'Hazırlanıyor',?,?,?,?)`)
@@ -276,14 +286,16 @@ router.post('/shipments', WRITE, validate(shipmentSchema), (req, res) => {
     }
 
     logAudit(req, 'auditShipAdd', { entityType: 'shipment', entityId: id, newValue: { shipmentNo, destination: b.destination }, detail: shipmentNo });
-    return db.prepare('SELECT * FROM shipments WHERE id = ?').get(id);
+    const row = db.prepare('SELECT * FROM shipments WHERE id = ?').get(id);
+    dispatchEvent('shipment.created', serializeShipment(row), companyIdOf(req));
+    return row;
   });
   const serialized = serializeShipment(result);
-  dispatchEvent('shipment.created', serialized, companyIdOf(req));
   res.status(201).json(serialized);
 });
 
 router.patch('/shipments/:id/status', WRITE, (req, res) => {
+  const serialized = db.txImmediate(() => {
   const s = db.prepare('SELECT * FROM shipments WHERE id = ?').get(req.params.id);
   if (!s) throw new AppError('Sevkiyat bulunamadı / Shipment not found', 404);
   const order = ['Hazırlanıyor', 'Yolda', 'Teslim Edildi'];
@@ -293,6 +305,8 @@ router.patch('/shipments/:id/status', WRITE, (req, res) => {
   logAudit(req, 'auditShipStatus', { entityType: 'shipment', entityId: s.id, oldValue: { status: s.status }, newValue: { status: next }, detail: s.shipment_no });
   const serialized = serializeShipment(db.prepare('SELECT * FROM shipments WHERE id = ?').get(s.id));
   dispatchEvent('shipment.status_changed', { ...serialized, previousStatus: s.status }, companyIdOf(req));
+  return serialized;
+  });
   res.json(serialized);
 });
 

@@ -137,7 +137,9 @@ async function main() {
   const q = await success('POST', '/items', { name: 'Quality disposition', openingQty: 10, openingUnitCost: 10 });
   const qlot = db.prepare('SELECT * FROM stock_lots WHERE item_id=?').get(q.id);
   db.prepare("UPDATE stock_lots SET status='quarantine' WHERE id=?").run(qlot.id);
+  await success('POST', '/quality/plans', { itemId: q.id, type: 'incoming', characteristic: 'Ölçüm', specMin: 1, specMax: 3 });
   const inspection = await success('POST', '/quality/inspections', { type: 'incoming', lotId: qlot.id });
+  const measuredLine = inspection.lines[0];
   const qualitySnapshot = snapshot();
   for (const body of [
     { result: 'accepted', acceptedQty: 1, rejectedQty: 9 },
@@ -145,12 +147,21 @@ async function main() {
     { result: 'rejected', acceptedQty: 1, rejectedQty: 9 },
     { result: 'accepted', lines: [{ id: 99999999, result: 'pass' }] }
   ]) {
-    assert.equal((await api('POST', `/quality/inspections/${inspection.id}/result`, body)).status, 422);
+    assert.equal((await api('POST', `/quality/inspections/${inspection.id}/result`, { ...body, signaturePassword: 'Admin123!' })).status, 422);
     assert.deepEqual(snapshot(), qualitySnapshot);
     assert.equal(db.prepare('SELECT result FROM inspections WHERE id=?').get(inspection.id).result, 'pending');
   }
+  assert.equal((await api('POST', `/quality/inspections/${inspection.id}/result`,
+    { result: 'conditional', acceptedQty: 1, rejectedQty: 9, signaturePassword: 'yanlis' })).status, 403);
+  assert.equal(db.prepare('SELECT result FROM inspections WHERE id=?').get(inspection.id).result, 'pending');
   const decision = await success('POST', `/quality/inspections/${inspection.id}/result`,
-    { result: 'conditional', acceptedQty: 1, rejectedQty: 9 });
+    { result: 'conditional', acceptedQty: 1, rejectedQty: 9, signaturePassword: 'Admin123!',
+      lines: [{ id: measuredLine.id, measuredValue: 2, result: 'pass' }] });
+  assert.equal((await success('GET', `/quality/inspections/${inspection.id}`)).signatureValid, true);
+  db.prepare('UPDATE inspection_lines SET measured_value = 3 WHERE id = ?').run(measuredLine.id);
+  assert.equal((await success('GET', `/quality/inspections/${inspection.id}`)).signatureValid, false);
+  db.prepare('UPDATE inspection_lines SET measured_value = 2 WHERE id = ?').run(measuredLine.id);
+  assert.equal((await success('GET', `/quality/inspections/${inspection.id}`)).signatureValid, true);
   assert.equal(db.prepare('SELECT qty FROM stock_lots WHERE id=?').get(qlot.id).qty, 1);
   assert.equal(db.prepare('SELECT status FROM stock_lots WHERE id=?').get(qlot.id).status, 'available');
   const ncr = db.prepare('SELECT * FROM ncrs WHERE id=?').get(decision.ncrId);

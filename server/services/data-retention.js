@@ -35,11 +35,11 @@ function runRetentionSweep() {
 
   const dueCustomers = db.prepare(`SELECT id FROM customers
     WHERE is_active = 0 AND anonymized_at IS NULL AND deactivated_at IS NOT NULL AND deactivated_at <= ?`).all(cutoff);
-  for (const c of dueCustomers) { try { kvkk.anonymizeCustomer(req, c.id); count++; } catch (e) { /* zaten anonimleştirilmiş vb. — atla */ } }
+  for (const c of dueCustomers) { try { kvkk.anonymizeCustomer(req, c.id); count++; } catch (e) { console.error('[data-retention] customer anonymization failed:', c.id, e); } }
 
   const dueSuppliers = db.prepare(`SELECT id FROM suppliers
     WHERE is_active = 0 AND anonymized_at IS NULL AND deactivated_at IS NOT NULL AND deactivated_at <= ?`).all(cutoff);
-  for (const s of dueSuppliers) { try { kvkk.anonymizeSupplier(req, s.id); count++; } catch (e) { /* atla */ } }
+  for (const s of dueSuppliers) { try { kvkk.anonymizeSupplier(req, s.id); count++; } catch (e) { console.error('[data-retention] supplier anonymization failed:', s.id, e); } }
 
   return { enabled: true, anonymized: count };
 }

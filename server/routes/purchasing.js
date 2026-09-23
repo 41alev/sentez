@@ -112,6 +112,7 @@ router.put('/suppliers/:id', requirePermission('purchase.write'), validatePartia
   try {
     const existing = db.prepare('SELECT * FROM suppliers WHERE id = ?').get(req.params.id);
     if (!existing) throw new AppError('Tedarikçi bulunamadı / Supplier not found', 404);
+    if (existing.anonymized_at) throw new AppError('Anonimleştirilmiş tedarikçi düzenlenemez / Anonymized supplier cannot be edited', 409);
     const b = req.body;
     db.prepare(`UPDATE suppliers SET code=@code,name=@name,contact_person=@cp,phone=@phone,email=@email,address=@address,
       country=@country,tax_no=@tax,currency=@currency,payment_terms_days=@pt,lead_time_days=@lt,incoterm=@inc,
@@ -135,6 +136,7 @@ router.delete('/suppliers/:id', requirePermission('stock.delete'), (req, res, ne
   try {
     const s = db.prepare('SELECT * FROM suppliers WHERE id = ?').get(req.params.id);
     if (!s) throw new AppError('Tedarikçi bulunamadı / Supplier not found', 404);
+    if (s.anonymized_at) throw new AppError('Anonimleştirilmiş tedarikçi düzenlenemez / Anonymized supplier cannot be edited', 409);
     db.prepare('UPDATE suppliers SET is_active = 0, deactivated_at = COALESCE(deactivated_at, ?) WHERE id = ?').run(Date.now(), s.id);
     logAudit(req, 'auditSupplierDelete', { entityType: 'supplier', entityId: s.id, detail: s.name });
     res.status(204).end();
@@ -387,6 +389,7 @@ router.post('/orders', requirePermission('purchase.write'), validate(poSchema), 
     const b = req.body;
     const supplier = db.prepare('SELECT * FROM suppliers WHERE id = ?').get(b.supplierId);
     if (!supplier) throw new AppError('Tedarikçi bulunamadı / Supplier not found', 404);
+    if (!supplier.is_active || supplier.anonymized_at) throw new AppError('Pasif tedarikçiye sipariş açılamaz / Supplier is inactive', 409);
     if (!supplier.is_approved) throw new AppError('Onaylı olmayan tedarikçiye sipariş açılamaz / Supplier is not approved');
 
     const result = db.txImmediate(() => {
@@ -442,19 +445,21 @@ router.post('/orders', requirePermission('purchase.write'), validate(poSchema), 
 
       logAudit(req, 'auditPOAdd', { entityType: 'purchase_order', entityId: poId,
         newValue: { poNo: no, totalBase, supplier: supplier.name }, detail: no });
+      const serialized = { ...serializePO(db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(poId)), approvalRequired: needsApproval };
+      dispatchEvent('purchase_order.created', serialized, companyIdOf(req));
 
       return { poId, needsApproval, rule, totalBase };
     });
 
     const row = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(result.poId);
     const serialized = { ...serializePO(row), approvalRequired: result.needsApproval };
-    dispatchEvent('purchase_order.created', serialized, companyIdOf(req));
     res.status(201).json(serialized);
   } catch (e) { next(e); }
 });
 
 router.post('/orders/:id/approve', requirePermission('purchase.approve'), (req, res, next) => {
   try {
+    db.txImmediate(() => {
     const po = db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(req.params.id);
     if (!po) throw new AppError('Sipariş bulunamadı / Order not found', 404);
     if (po.approval_status !== 'pending') throw new AppError('Bu sipariş onay bekliyor durumunda değil / Order is not pending approval');
@@ -474,6 +479,7 @@ router.post('/orders/:id/approve', requirePermission('purchase.approve'), (req, 
     logAudit(req, 'auditPOApprove', { entityType: 'purchase_order', entityId: po.id,
       oldValue: { status: po.status }, newValue: { status: 'approved' }, detail: po.po_no });
     dispatchEvent('purchase_order.approved', { id: po.id, poNo: po.po_no, totalBase: po.total_base }, companyIdOf(req));
+    });
     res.json({ ok: true });
   } catch (e) { next(e); }
 });
@@ -572,10 +578,11 @@ router.post('/orders/:id/receipts', requirePermission('purchase.write'), validat
       logAudit(req, 'auditPOReceive', { entityType: 'purchase_order', entityId: po.id,
         detail: `${po.po_no} · ${receiptNo} · ${created.length} kalem` });
 
-      return { receiptId, receiptNo, created, fullyReceived: remaining <= 1e-9 };
+      const result = { receiptId, receiptNo, created, fullyReceived: remaining <= 1e-9 };
+      dispatchEvent('purchase_order.received', { poId: po.id, poNo: po.po_no, ...result }, companyIdOf(req));
+      return result;
     });
 
-    dispatchEvent('purchase_order.received', { poId: po.id, poNo: po.po_no, ...result }, companyIdOf(req));
     res.status(201).json(result);
   } catch (e) { next(e); }
 });

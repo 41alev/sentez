@@ -1,6 +1,7 @@
 // @ts-nocheck
 const express = require('express');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const db = require('../db');
 const { AppError, uuid, nextNumber, logAudit } = require('../lib/core');
 const { today } = require('../lib/dates');
@@ -52,15 +53,25 @@ router.delete('/plans/:id', requirePermission('quality.write'), (req, res) => {
 });
 
 // ============================ INSPECTIONS ============================
+function approvalDigest(inspection, lines) {
+  const snapshot = [inspection.id, inspection.signed_by, inspection.signed_at,
+    inspection.result, inspection.accepted_qty, inspection.rejected_qty, inspection.notes,
+    lines.map(line => [line.id, line.characteristic, line.spec_min, line.spec_max,
+      line.spec_text, line.measured_value, line.measured_text, line.result, line.notes])];
+  return crypto.createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
+}
+
 function serializeInspection(r) {
+  const lines = db.prepare('SELECT * FROM inspection_lines WHERE inspection_id = ? ORDER BY id').all(r.id);
   return {
     id: r.id, inspectionNo: r.inspection_no, type: r.type, itemId: r.item_id, itemName: r.item_name,
     lotId: r.lot_id, lotNo: r.lot_no, receiptId: r.receipt_id, productionOrderId: r.production_order_id,
     supplierId: r.supplier_id, sampleSize: r.sample_size, inspectedQty: r.inspected_qty,
     acceptedQty: r.accepted_qty, rejectedQty: r.rejected_qty, aql: r.aql, result: r.result,
     inspectedBy: r.inspected_by, inspectedAt: r.inspected_at, signedBy: r.signed_by, signedAt: r.signed_at,
-    signatureHash: r.signature_hash, notes: r.notes,
-    lines: db.prepare('SELECT * FROM inspection_lines WHERE inspection_id = ?').all(r.id).map(l => ({
+    signatureHash: r.signature_hash, signatureValid: r.signature_hash && r.signature_hash.length === 64
+      ? approvalDigest(r, lines) === r.signature_hash : null, notes: r.notes,
+    lines: lines.map(l => ({
       id: l.id, characteristic: l.characteristic, specMin: l.spec_min, specMax: l.spec_max, specText: l.spec_text,
       measuredValue: l.measured_value, measuredText: l.measured_text, result: l.result, notes: l.notes
     })),
@@ -150,7 +161,7 @@ const resultSchema = z.object({
   acceptedQty: z.coerce.number().min(0).optional(),
   rejectedQty: z.coerce.number().min(0).optional(),
   notes: z.string().max(5000).optional(),
-  signaturePassword: z.string().max(1000).optional()
+  signaturePassword: z.string().min(1).max(1000)
 });
 
 /**
@@ -164,7 +175,11 @@ router.post('/inspections/:id/result', requirePermission('quality.write'), valid
     if (!insp) throw new AppError('Muayene bulunamadı / Inspection not found', 404);
     if (insp.result !== 'pending') throw new AppError('Bu muayene zaten sonuçlandırılmış / Inspection already completed');
 
-    const b = req.body;
+    const b = req.valid;
+    const signer = db.prepare('SELECT password_hash, is_active FROM users WHERE id = ?').get(req.user.id);
+    if (!signer?.is_active || !bcrypt.compareSync(b.signaturePassword, signer.password_hash)) {
+      throw new AppError('Onay parolası geçersiz / Approval password is invalid', 403);
+    }
     const out = db.txImmediate(() => {
       const upd = db.prepare('UPDATE inspection_lines SET measured_value=?, measured_text=?, result=?, notes=? WHERE id=? AND inspection_id=?');
       b.lines.forEach(l => upd.run(l.measuredValue ?? null, l.measuredText || null, l.result || null, l.notes || null, l.id, insp.id));
@@ -185,15 +200,19 @@ router.post('/inspections/:id/result', requirePermission('quality.write'), valid
         !db.prepare('SELECT id FROM inspection_lines WHERE id=? AND inspection_id=?').get(l.id, insp.id))) {
         throw new AppError('Muayene satırları geçersiz / Invalid inspection lines', 422);
       }
+      if (b.result === 'accepted' && b.lines.some(line => line.result === 'fail')) {
+        throw new AppError('Başarısız ölçüm varken tam kabul yapılamaz / Failed measurement cannot be fully accepted', 422);
+      }
 
-      // Simple electronic signature: a tamper-evident hash of who signed what and when
-      const signature = crypto.createHash('sha256')
-        .update(`${insp.id}|${req.user.id}|${b.result}|${Date.now()}`).digest('hex').slice(0, 32);
-
+      const signedAt = Date.now();
       db.prepare(`UPDATE inspections SET result=?, accepted_qty=?, rejected_qty=?, inspected_by=?, inspected_at=?,
         signed_by=?, signed_at=?, signature_hash=?, notes=COALESCE(?, notes) WHERE id=?`).run(
-        b.result, acceptedQty, rejectedQty, req.user.id, Date.now(), req.user.id, Date.now(), signature,
+        b.result, acceptedQty, rejectedQty, req.user.id, signedAt, req.user.id, signedAt, null,
         b.notes || null, insp.id);
+      const signedInspection = db.prepare('SELECT * FROM inspections WHERE id = ?').get(insp.id);
+      const measuredLines = db.prepare('SELECT * FROM inspection_lines WHERE inspection_id = ? ORDER BY id').all(insp.id);
+      const signature = approvalDigest(signedInspection, measuredLines);
+      db.prepare('UPDATE inspections SET signature_hash = ? WHERE id = ?').run(signature, insp.id);
 
       let ncrId = null;
       let rejectedLotId = insp.lot_id;
@@ -285,10 +304,10 @@ router.post('/ncrs', requirePermission('quality.write'), validate(ncrSchema), (r
         b.supplierId ?? null, b.customerId ?? null, b.qtyAffected ?? null, b.severity, b.description,
         req.user.id, Date.now());
       logAudit(req, 'auditNcrAdd', { entityType: 'ncr', entityId: ncrId, newValue: { ncrNo: no, severity: b.severity }, detail: no });
+      dispatchEvent('ncr.opened', serializeNcr(db.prepare('SELECT * FROM ncrs WHERE id = ?').get(ncrId)), companyIdOf(req));
       return ncrId;
     });
     const serialized = serializeNcr(db.prepare('SELECT * FROM ncrs WHERE id = ?').get(id));
-    dispatchEvent('ncr.opened', serialized, companyIdOf(req));
     res.status(201).json(serialized);
   } catch (e) { next(e); }
 });

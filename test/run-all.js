@@ -57,7 +57,7 @@ const SUITE_ENV_OVERRIDES = {
   // webhooks.js otomatik yeniden deneme kuyruğunun GERÇEKTEN çalıştığını
   // kanıtlamak için process-retry-queue'yu tetikliyor — varsayılan 60sn'lik
   // ilk gecikmeyle test dakikalarca beklerdi.
-  webhooks: { WEBHOOK_RETRY_BASE_MS: '50' }
+  webhooks: { WEBHOOK_RETRY_BASE_MS: '50', WEBHOOK_ALLOW_PRIVATE: '1' }
 };
 
 function startServer(name, env) {

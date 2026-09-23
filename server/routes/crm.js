@@ -97,8 +97,9 @@ router.post('/opportunities', WRITE, validate(oppSchema), (req, res) => {
   const b = req.valid;
   const result = db.txImmediate(() => {
     if (b.customerId) {
-      const c = db.prepare('SELECT id FROM customers WHERE id = ?').get(b.customerId);
+      const c = db.prepare('SELECT id, is_active, anonymized_at FROM customers WHERE id = ?').get(b.customerId);
       if (!c) throw new AppError('Müşteri bulunamadı / Customer not found', 404);
+      if (!c.is_active || c.anonymized_at) throw new AppError('Pasif müşteriye fırsat açılamaz / Customer is inactive', 409);
     }
     const id = uuid();
     const oppNo = nextNumber('opportunity', 'FRS');
@@ -124,6 +125,12 @@ const oppUpdateSchema = oppSchema.omit({ lines: true });
 router.put('/opportunities/:id', WRITE, validatePartial(oppUpdateSchema), (req, res) => {
   const before = db.prepare('SELECT * FROM opportunities WHERE id = ?').get(req.params.id);
   if (!before) throw new AppError('Fırsat bulunamadı / Opportunity not found', 404);
+  if (before.customer_id && db.prepare('SELECT anonymized_at FROM customers WHERE id = ?').get(before.customer_id)?.anonymized_at) throw new AppError('Anonim müşteri fırsatı düzenlenemez / Anonymized customer opportunity cannot be edited', 409);
+  if (req.valid.customerId) {
+    const customer = db.prepare('SELECT is_active, anonymized_at FROM customers WHERE id = ?').get(req.valid.customerId);
+    if (!customer) throw new AppError('Müşteri bulunamadı / Customer not found', 404);
+    if (!customer.is_active || customer.anonymized_at) throw new AppError('Pasif müşteriye fırsat bağlanamaz / Customer is inactive', 409);
+  }
   if (CLOSED_STAGES.includes(before.stage)) throw new AppError('Kapanmış fırsat düzenlenemez / A closed opportunity cannot be edited', 409);
   const b = req.valid;
   db.prepare(`UPDATE opportunities SET customer_id=COALESCE(?,customer_id), customer_name=COALESCE(?,customer_name),
@@ -146,6 +153,7 @@ const stageSchema = z.object({
 });
 
 router.post('/opportunities/:id/stage', WRITE, validate(stageSchema), (req, res) => {
+  const after = db.txImmediate(() => {
   const opp = db.prepare('SELECT * FROM opportunities WHERE id = ?').get(req.params.id);
   if (!opp) throw new AppError('Fırsat bulunamadı / Opportunity not found', 404);
   if (CLOSED_STAGES.includes(opp.stage)) throw new AppError('Kapanmış fırsat yeniden açılamaz / A closed opportunity cannot be reopened', 409);
@@ -161,6 +169,8 @@ router.post('/opportunities/:id/stage', WRITE, validate(stageSchema), (req, res)
     oldValue: { stage: opp.stage }, newValue: { stage: b.stage }, detail: opp.opp_no });
 
   if (b.stage === 'won') dispatchEvent('opportunity.won', serialize(after), companyIdOf(req));
+  return after;
+  });
   res.json(serialize(after));
 });
 

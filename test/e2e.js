@@ -171,7 +171,7 @@ async function login(username, password) {
     });
     ok('operator cannot record inspection result (403)', opInsp.status === 403, `got ${opInsp.status}`);
     const qInsp = await api('POST', `/api/quality/inspections/${pendingInsp.id}/result`, {
-      token: quality, body: { result: 'accepted', acceptedQty: 300, rejectedQty: 0, lines: [] }
+      token: quality, body: { result: 'accepted', acceptedQty: 300, rejectedQty: 0, lines: [], signaturePassword: 'Kalite123!' }
     });
     ok('quality can accept inspection (releases quarantine)', qInsp.status === 200, `got ${qInsp.status} ${JSON.stringify(qInsp.data).slice(0,160)}`);
   }

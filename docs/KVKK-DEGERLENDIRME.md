@@ -10,6 +10,29 @@
 
 Değerlendirme tarihi: 2026-09-13. İncelenen kod tabanı: bu depo, `main` dalı.
 
+## 2026-09-20 teknik durum güncellemesi
+
+Bu belgenin aşağıdaki ilk değerlendirme bölümleri tarihsel bulgudur; mevcut
+uygulama için tek başına geçerli durum olarak okunmamalıdır. Müşteri, tedarikçi
+ve kullanıcı anonimleştirme uçları mevcuttur. İlişkili sipariş, sevkiyat, CRM,
+destek, ziyaret ve ilgili denetim kayıtlarındaki yapılandırılmış kimlik kopyaları
+tek veritabanı işlemi içinde temizlenir. Denetim kaydının olay kimliği, aktör
+kimliği, zaman ve eylemi korunur; kişisel veri taşıyan eski/yeni değer ve
+açıklama alanları bu işlemde redakte edilir. Bu, denetim satırının içerik
+değişmezliği varsayımına bir istisnadır ve dışa aktarılmış eski kayıtları
+değiştirmez. Anonimleştirilmiş kayıtlar API ile yeniden kişisel veriyle
+doldurulamaz; aynı müşteriye yeni sipariş, sevkiyat, fırsat, talep veya ziyaret
+açılması engellenir.
+
+İzole Faz 0 KV-01/02/03/05 kontrolleri geçmektedir. Bu kontrol, farklı
+kayıtlara bağlantısız olarak elle yazılmış serbest metinleri, dosya eklerini,
+harici webhook alıcılarını ve eski yedekleri kapsamaz. Kimlik bağlantısı olmayan
+fırsat adayları da otomatik olarak bir müşteriyle eşleştirilemez. Canlı veri
+üzerinde çalıştırmadan önce saklama/imha politikası, ilgili ticari belge
+yükümlülükleri, yedeklerin yaşam döngüsü ve geçmiş serbest metinler ayrıca
+yetkili kişilerce değerlendirilmelidir. Teknik test geçişi hukuki uygunluk
+onayı değildir.
+
 ---
 
 ## 1. Sistemde işlenen kişisel veriler (envanter)

@@ -62,14 +62,17 @@ const assert = require('node:assert/strict');
     if (r.status >= 400) assert.deepEqual(snap(), b3, 'reddedilen dönüşümde kalıntı');
   });
   await check('CR-05', 'pasif/anonim müşteriye fırsat dönüştürme ve yeni fırsat/talep/ziyaret açılamamalı', async () => {
-    const it = await item('crm-urun2'); const c = await cust('AnonAdayXyz'); await ok('POST', `/sales/customers/${c.id}/anonymize`, {});
+    const it = await item('crm-urun2'); const c = await cust('AnonAdayXyz');
     const o = await opp({ customerId: c.id, lines: [{ itemId: it.id, itemName: it.name, qty: 1, unitPrice: 1 }] });
+    await ok('POST', `/crm/opportunities/${o.id}/stage`, { stage: 'won' });
+    await ok('POST', `/sales/customers/${c.id}/anonymize`, {});
+    const newOpp = await api('POST', '/crm/opportunities', { customerId: c.id, customerName: 'x' });
     const t = await api('POST', '/support', { customerId: c.id, customerName: 'x', subject: 's' });
     const v = await api('POST', '/visits', { customerId: c.id, visitDate: '2026-09-01' });
-    await ok('POST', `/crm/opportunities/${o.id}/stage`, { stage: 'won' });
     const cv = await api('POST', `/crm/opportunities/${o.id}/convert`, {});
-    info('CR-05b', 'anonim müşteri üzerinde işlemler', { firsatOlustur: 201, talep: t.status, ziyaret: v.status, donusum: cv.status });
-    assert(t.status >= 400 && v.status >= 400 && cv.status >= 400, `anonim müşteriye kayıt açılabildi: talep=${t.status} ziyaret=${v.status} dönüşüm=${cv.status}`);
+    info('CR-05b', 'anonim müşteri üzerinde işlemler', { firsatOlustur: newOpp.status, talep: t.status, ziyaret: v.status, donusum: cv.status });
+    assert(newOpp.status >= 400 && t.status >= 400 && v.status >= 400 && cv.status >= 400,
+      `anonim müşteriye kayıt açılabildi: fırsat=${newOpp.status} talep=${t.status} ziyaret=${v.status} dönüşüm=${cv.status}`);
   });
   await check('CR-06', 'kısmi güncelleme: alan temizlenebilir mi (COALESCE deseni) — notes/telefon boşaltma', async () => {
     const o = await opp({ notes: 'not', phone: '555' });

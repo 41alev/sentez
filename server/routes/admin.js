@@ -77,6 +77,7 @@ router.put('/users/:id', ADMIN, validate(userUpdateSchema), (req, res) => {
   const after = db.txImmediate(() => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   if (!user) throw new AppError('Kullanıcı bulunamadı / User not found', 404);
+  if (user.anonymized_at) throw new AppError('Anonimleştirilmiş kullanıcı düzenlenemez / Anonymized user cannot be edited', 409);
   if (user.role === 'admin' && user.is_active &&
       ((role !== undefined && role !== 'admin') || isActive === false)) {
     const admins = db.prepare("SELECT COUNT(*) c FROM users WHERE role='admin' AND is_active=1").get().c;

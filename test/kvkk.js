@@ -57,6 +57,8 @@ async function api(method, p, { token, body } = {}) {
   ok('VKN/TCKN silindi', anon.data.tax_no === null);
   ok('müşteri pasifleştirildi', anon.data.is_active === 0);
   ok('anonymized_at damgalandı', !!anon.data.anonymized_at);
+  ok('anonim müşteriye kimlik bilgisi geri yazılamıyor (409)',
+    (await api('PUT', `/api/sales/customers/${cuId}`, { token: admin, body: { name: 'Geri Gelen Ad' } })).status === 409);
 
   const anonAgain = await api('POST', `/api/sales/customers/${cuId}/anonymize`, { token: admin });
   ok('ikinci kez anonimleştirme reddediliyor (409 — geri döndürülemezlik)', anonAgain.status === 409, `got ${anonAgain.status}`);
@@ -85,6 +87,8 @@ async function api(method, p, { token, body } = {}) {
   ok('admin tedarikçiyi anonimleştirebiliyor', anonSup.status === 200, JSON.stringify(anonSup.data));
   ok('banka bilgisi silindi', anonSup.data.bank_info === null);
   ok('VKN silindi', anonSup.data.tax_no === null);
+  ok('anonim tedarikçiye kimlik bilgisi geri yazılamıyor (409)',
+    (await api('PUT', `/api/purchasing/suppliers/${suId}`, { token: admin, body: { name: 'Geri Gelen Tedarikçi' } })).status === 409);
   ok('ikinci kez anonimleştirme reddediliyor (409)',
     (await api('POST', `/api/purchasing/suppliers/${suId}/anonymize`, { token: admin })).status === 409);
 
@@ -116,6 +120,8 @@ async function api(method, p, { token, body } = {}) {
   ok('admin başka bir kullanıcıyı anonimleştirebiliyor', anonUser.status === 200, JSON.stringify(anonUser.data));
   ok('kullanıcı adı anonim değere değişti', anonUser.data.username === `anon_user_${newUserId}`, anonUser.data.username);
   ok('kullanıcı pasifleştirildi', anonUser.data.is_active === 0);
+  ok('anonim kullanıcı yeniden etkinleştirilemiyor (409)',
+    (await api('PUT', `/api/users/${newUserId}`, { token: admin, body: { isActive: true } })).status === 409);
 
   const loginAnon = await api('POST', '/api/auth/login', { body: { username: 'kvkktest', password: 'GucluSifre1!' } });
   ok('anonimleştirilen kullanıcı artık giriş yapamıyor', loginAnon.status !== 200, `got ${loginAnon.status}`);

@@ -89,8 +89,9 @@ router.post('/', WRITE, validate(ticketSchema), (req, res) => {
   const b = req.valid;
   const result = db.txImmediate(() => {
     if (b.customerId) {
-      const c = db.prepare('SELECT id FROM customers WHERE id = ?').get(b.customerId);
+      const c = db.prepare('SELECT id, is_active, anonymized_at FROM customers WHERE id = ?').get(b.customerId);
       if (!c) throw new AppError('Müşteri bulunamadı / Customer not found', 404);
+      if (!c.is_active || c.anonymized_at) throw new AppError('Pasif müşteriye talep açılamaz / Customer is inactive', 409);
     }
     const id = uuid();
     const ticketNo = nextNumber('ticket', 'DST');
@@ -113,6 +114,7 @@ const ticketUpdateSchema = ticketSchema.omit({ customerId: true });
 router.put('/:id', WRITE, validatePartial(ticketUpdateSchema), (req, res) => {
   const before = db.prepare('SELECT * FROM support_tickets WHERE id = ?').get(req.params.id);
   if (!before) throw new AppError('Talep bulunamadı / Ticket not found', 404);
+  if (before.customer_id && db.prepare('SELECT anonymized_at FROM customers WHERE id = ?').get(before.customer_id)?.anonymized_at) throw new AppError('Anonim müşteri talebi düzenlenemez / Anonymized customer ticket cannot be edited', 409);
   if (before.status === 'closed') throw new AppError('Kapanmış talep düzenlenemez / A closed ticket cannot be edited', 409);
   const b = req.valid;
   db.prepare(`UPDATE support_tickets SET customer_name=COALESCE(?,customer_name), subject=COALESCE(?,subject),
@@ -137,6 +139,7 @@ const statusSchema = z.object({
 router.post('/:id/status', WRITE, validate(statusSchema), (req, res) => {
   const t = db.prepare('SELECT * FROM support_tickets WHERE id = ?').get(req.params.id);
   if (!t) throw new AppError('Talep bulunamadı / Ticket not found', 404);
+  if (t.customer_id && db.prepare('SELECT anonymized_at FROM customers WHERE id = ?').get(t.customer_id)?.anonymized_at) throw new AppError('Anonim müşteri talebi güncellenemez / Anonymized customer ticket cannot be updated', 409);
   if (t.status === 'closed') throw new AppError('Kapanmış talep yeniden açılamaz / A closed ticket cannot be reopened', 409);
   const b = req.valid;
   if (b.status === 'resolved' && !b.resolution && !t.resolution) {
@@ -156,8 +159,9 @@ router.post('/:id/status', WRITE, validate(statusSchema), (req, res) => {
 /* ============================ YORUM ============================ */
 
 router.post('/:id/comments', WRITE, validate(z.object({ comment: z.string().min(1).max(5000) })), (req, res) => {
-  const t = db.prepare('SELECT id, ticket_no FROM support_tickets WHERE id = ?').get(req.params.id);
+  const t = db.prepare('SELECT id, ticket_no, customer_id FROM support_tickets WHERE id = ?').get(req.params.id);
   if (!t) throw new AppError('Talep bulunamadı / Ticket not found', 404);
+  if (t.customer_id && db.prepare('SELECT anonymized_at FROM customers WHERE id = ?').get(t.customer_id)?.anonymized_at) throw new AppError('Anonim müşteri talebine yorum eklenemez / Anonymized customer ticket cannot receive comments', 409);
   const info = db.prepare('INSERT INTO support_ticket_comments (ticket_id,user_id,ts,comment) VALUES (?,?,?,?)')
     .run(t.id, req.user.id, Date.now(), req.valid.comment);
   logAudit(req, 'auditTicketComment', { entityType: 'support_ticket', entityId: t.id, detail: t.ticket_no });
@@ -176,6 +180,7 @@ const toNcrSchema = z.object({
 router.post('/:id/to-ncr', WRITE, validate(toNcrSchema), (req, res) => {
   const t = db.prepare('SELECT * FROM support_tickets WHERE id = ?').get(req.params.id);
   if (!t) throw new AppError('Talep bulunamadı / Ticket not found', 404);
+  if (t.customer_id && db.prepare('SELECT anonymized_at FROM customers WHERE id = ?').get(t.customer_id)?.anonymized_at) throw new AppError('Anonim müşteri talebi dönüştürülemez / Anonymized customer ticket cannot be converted', 409);
   if (t.category !== 'complaint') throw new AppError('Yalnızca şikayet kategorisindeki talepler uygunsuzluğa dönüştürülebilir / Only complaint tickets can convert to an NCR', 409);
   if (t.resulting_ncr_id) throw new AppError('Bu talep zaten bir uygunsuzluğa dönüştürülmüş / Already converted', 409);
   if (!t.customer_id) throw new AppError('Uygunsuzluğa dönüştürmek için talepte kayıtlı bir müşteri olmalı / A registered customer is required', 422);

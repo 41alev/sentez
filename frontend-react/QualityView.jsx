@@ -160,7 +160,7 @@ export default function QualityView() {
           <div class="kv"><div class="k">${t('acceptedQty')}</div><div class="v">${num(i.acceptedQty ?? i.accepted_qty ?? 0)}</div></div>
           <div class="kv"><div class="k">${t('rejectedQty')}</div><div class="v">${num(i.rejectedQty ?? i.rejected_qty ?? 0)}</div></div>
         </div>
-        ${i.inspectedByName || i.inspected_by_name ? `<div class="alert ok">${t('eSignature')}: ${esc(i.inspectedByName || i.inspected_by_name)} · ${ts(i.inspectedAt || i.inspected_at)}</div>` : ''}
+        ${i.inspectedByName || i.inspected_by_name ? `<div class="alert ${i.signatureValid === true ? 'ok' : 'warn'}">${t(i.signatureValid === null ? 'legacyApproval' : 'eSignature')}: ${esc(i.inspectedByName || i.inspected_by_name)} · ${ts(i.inspectedAt || i.inspected_at)}${i.signatureValid === false ? ` · ${t('approvalChanged')}` : ''}</div>` : ''}
         <div class="section-title">${t('characteristic')}</div>
         ${(i.lines || []).length ? table([
           { key: 'characteristic', label: t('characteristic') },
@@ -226,6 +226,7 @@ export default function QualityView() {
             { v: 'conditional', l: t('resultConditional') }]))}
         </div>
         ${field(t('notes'), textarea('rsNote'))}
+        ${field(t('approvalPassword'), input('rsPassword', { type: 'password', attrs: 'required autocomplete="current-password"' }))}
         <div class="alert info">${UI.getLang() === 'tr'
           ? 'Sonuç "Kabul" dışında olursa sistem otomatik olarak bir uygunsuzluk (NCR) kaydı açar.'
           : 'Any result other than "Accepted" automatically opens a non-conformance (NCR) record.'}</div>
@@ -253,6 +254,7 @@ export default function QualityView() {
         };
 
         box.querySelector('#rsGo').onclick = async () => {
+          if (!val('rsPassword')) { box.querySelector('#rsPassword').focus(); return; }
           const lineResults = [];
           box.querySelectorAll('.ln-p').forEach(sel => {
             const vEl = box.querySelector(`.ln-v[data-id="${sel.dataset.id}"]`);
@@ -266,7 +268,7 @@ export default function QualityView() {
           try {
             await Api.recordInspection(id, {
               result: val('rsRes'), acceptedQty: numVal('rsAcc'), rejectedQty: numVal('rsRej'),
-              notes: val('rsNote'), lines: lineResults
+              notes: val('rsNote'), lines: lineResults, signaturePassword: val('rsPassword')
             });
             closeModal(); UI.ok(t('saved')); reload(); App.refreshBadges();
           } catch (e) { UI.err(e); }

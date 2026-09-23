@@ -82,8 +82,9 @@ const visitSchema = z.object({
 router.post('/', WRITE, validate(visitSchema), (req, res) => {
   const b = req.valid;
   const result = db.txImmediate(() => {
-    const c = db.prepare('SELECT id FROM customers WHERE id = ?').get(b.customerId);
+    const c = db.prepare('SELECT id, is_active, anonymized_at FROM customers WHERE id = ?').get(b.customerId);
     if (!c) throw new AppError('Müşteri bulunamadı / Customer not found', 404);
+    if (!c.is_active || c.anonymized_at) throw new AppError('Pasif müşteriye ziyaret açılamaz / Customer is inactive', 409);
     if (b.opportunityId) {
       const o = db.prepare('SELECT id FROM opportunities WHERE id = ?').get(b.opportunityId);
       if (!o) throw new AppError('Fırsat bulunamadı / Opportunity not found', 404);
@@ -105,6 +106,7 @@ const visitUpdateSchema = visitSchema.omit({ customerId: true });
 router.put('/:id', WRITE, validatePartial(visitUpdateSchema), (req, res) => {
   const before = db.prepare('SELECT * FROM customer_visits WHERE id = ?').get(req.params.id);
   if (!before) throw new AppError('Ziyaret kaydı bulunamadı / Visit not found', 404);
+  if (db.prepare('SELECT anonymized_at FROM customers WHERE id = ?').get(before.customer_id)?.anonymized_at) throw new AppError('Anonim müşteri ziyareti düzenlenemez / Anonymized customer visit cannot be edited', 409);
   const b = req.valid;
   if (b.opportunityId) {
     const o = db.prepare('SELECT id FROM opportunities WHERE id = ?').get(b.opportunityId);

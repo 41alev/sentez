@@ -154,7 +154,8 @@ const { invariants } = require('./inv');
   console.log('\n[QUALITY] kalite');
   const qLot = async (qty = 10) => { const a = await item(qty); await ok('POST', '/stock/lot-status', { lotId: a.lot.id, toStatus: 'quarantine' }); return a; };
   const insp = async (a, type = 'incoming') => ok('POST', '/quality/inspections', { type, lotId: a.lot.id });
-  const result = (id, body, who) => api('POST', `/quality/inspections/${id}/result`, body, who);
+  const result = (id, body, who) => api('POST', `/quality/inspections/${id}/result`,
+    { ...body, signaturePassword: who === 'quality' ? 'Kalite123!' : 'Admin123!' }, who);
   await check('Q-01', 'tam kabul: karantina → kullanılabilir; ikinci sonuç 4xx', async () => {
     const a = await qLot(10); const i = await insp(a);
     statusIn(await result(i.id, { result: 'accepted', acceptedQty: 10, rejectedQty: 0 }), [200]);
@@ -168,7 +169,7 @@ const { invariants } = require('./inv');
   });
   await check('Q-03', 'tam ret: lot rejected + NCR açılır', async () => {
     const a = await qLot(6); const i = await insp(a);
-    const r = await ok('POST', `/quality/inspections/${i.id}/result`, { result: 'rejected' });
+    const r = await ok('POST', `/quality/inspections/${i.id}/result`, { result: 'rejected', signaturePassword: 'Admin123!' });
     assert(r.ncrId); assert.equal(lotOf(a.lot.id).status, 'rejected'); assert.equal(cacheOf(a.id), 0);
   });
   await check('Q-04', 'rol: viewer/operator kalite sonucu giremez', async () => {

@@ -246,11 +246,12 @@ router.post('/:id/complete', requirePermission('production.write'), validate(com
         oldValue: { status: po.status }, newValue: { status: 'Tamamlandı', producedQty, scrapQty, unitCost: cost.unitCost },
         detail: `${po.order_no} · ${producedQty} üretildi, ${scrapQty} fire` });
 
+      const order = serialize(db.prepare('SELECT * FROM production_orders WHERE id = ?').get(po.id));
+      dispatchEvent('production_order.completed', { outputLotId, cost, producedQty, scrapQty, order }, companyIdOf(req));
       return { outputLotId, cost, producedQty, scrapQty };
     });
 
     const order = serialize(db.prepare('SELECT * FROM production_orders WHERE id = ?').get(po.id));
-    dispatchEvent('production_order.completed', { ...result, order }, companyIdOf(req));
     res.json({ ok: true, ...result, order });
   } catch (e) { next(e); }
 });

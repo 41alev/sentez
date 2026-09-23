@@ -1,5 +1,65 @@
 # PROJECT_STATUS.md
 
+## 23 Eylül 2026 — T12, T14 ve T15 güvenlik/veri bütünlüğü kapatma turu
+
+**Aktif hedef:** Dream Plus'ı başka firmalara kurulabilir, desteklenebilir ve
+ölçülebilir kabul kapılarıyla satılabilir bir ürüne dönüştürmek. Bu turda üç
+yüksek riskli açık uygulama ve regresyon testleriyle kapatıldı. Ürün için genel
+satış onayı henüz verilmedi; müşteri ortamı, TLS, off-site geri yükleme ve pilot
+kabulü hâlâ dış ortam kanıtı gerektiriyor.
+
+**T12 — KVKK anonimleştirme bütünlüğü:** müşteri, tedarikçi ve kullanıcı
+anonimleştirmeleri tek transaction içinde çalışıyor; ilişkili CRM, destek,
+ziyaret, sevkiyat, sipariş ve denetim alanlarındaki kopya kişisel veriler
+maskeleniyor. Anonimleştirilmiş kartların API üzerinden yeniden kimlik verisiyle
+doldurulması ve yeni işleme sokulması engellendi. Veri dışa aktarımları tutarlı
+bir DB snapshot'ında okunuyor. Saklama süresi işi artık anonimleştirme hatasını
+sessizce yutmuyor. Hukuki KVKK uygunluğu iddia edilmiyor; saklama süresi ve veri
+sorumlusu kararları müşteri sözleşmesi/politikasıyla belirlenmeli.
+
+**T14 — kalite kararı doğrulanabilirliği:** muayene sonucu için mevcut kullanıcı
+parolası yeniden doğrulanıyor. Karar, imzalayan kullanıcı, zaman, miktarlar,
+notlar ve ölçüm satırları SHA-256 özetine bağlandı; sonradan değiştirilmiş kayıt
+API/UI'da açıkça işaretleniyor. Başarısız ölçüm satırı varken genel kabul
+engellendi. Bu mekanizma yasal nitelikli elektronik imza olarak sunulmuyor.
+
+**T15 — webhook güvenliği ve teslimat garantisi:** üretim hedefleri yalnız HTTPS
+kabul ediyor; DNS çözümündeki özel, loopback, link-local ve benzeri adresler
+engelleniyor, doğrulanan adres bağlantıya sabitleniyor ve yönlendirme takip
+edilmiyor. İş olayları artık iş transaction'ıyla aynı anda kalıcı outbox'a
+yazılıyor. Kiralamalı işleyici kararlı olay kimliğiyle teslim ediyor, sınırlı
+jitter'lı tekrar planlıyor ve başarısızlığı yönetici kuyruğunda görünür tutuyor.
+Migration `024_webhook_outbox.js` eklendi. Yerel HTTP alıcı izni yalnız test
+ortamında iki açık bayrakla kullanılabiliyor.
+
+**Doğrulama — Geçti:** `node test/run-all.js` (36/36 süit),
+`node test/run-all.js webhooks` (46/46), `npm run test:e2e-browser` (38/38
+Chromium), `npm run build`, `npm run typecheck`, `npm run lint` (0 hata, önceden
+var olan 46 uyarı), `git diff --check`, `npm audit --omit=dev
+--audit-level=high` (0 bildirim). Tam test; güvenlik, stok/finans bütünlüğü,
+eşzamanlılık, temiz kurulum/yükseltme, migration geri dönüşü ve DB+uploads tam
+yedek/geri yükleme paketlerini de geçti. Testler geçici sandbox'larda çalıştı;
+`data/` içindeki müşteri verisine dokunulmadı.
+
+**Bağımsız inceleme:** `C:\Projelerim\Dream\ai_team.py --phase review` ile
+Claude ve Gemini görüşü alındı. Snapshot tutarlılığı, webhook silme temizliği ve
+IPv4-mapped IPv6 kontrolü yeniden değerlendirildi; export transaction'ı ve açık
+outbox silme bu inceleme sonucunda eklendi. Araç sır filtresi `quality.js` ve
+stok bütünlüğü testini modele göndermediği için T14 için bağımsız model incelemesi
+**Doğrulanamadı**; T14 uygulama, API ve tam regresyonla yerel olarak doğrulandı.
+
+**Açık satış kapıları:** T06 eski faturaların mutabakatı ve gerçek vergi/ödeme
+iş akışı; T08 büyük listelerde gerçek sayfalama/arama; T09 tarihsel MRP snapshot
+kuralları; T10 çizelgeleme çakışmaları; T16 kalan mali/tarih kuralları; T17
+müşteri kurulum paketi, TLS ve lisans operasyonu; T18 saha erişilebilirlik/görsel
+kabulü. Faz 0 olumsuz durum takımındaki kalan FAIL/ERROR'lar ana paketten ayrı
+ayıklanmalı. Temiz müşteri cihazı, gerçek off-site hedef, ağ/TLS, büyük veri
+migration'ı ve müşteri pilotu **Doğrulanamadı**.
+
+**Sonraki somut adım:** T06 kapsamında eski alış faturası/teslimat kayıtları için
+veri kaybetmeyen mutabakat akışını ve vergi/ödeme onay sınırlarını tamamlamak;
+ardından kalan Faz 0 bulgularını yeniden sınıflandırmak.
+
 ## 20 Eylül 2026 — satış engellerini kapatma geliştirmesi (devam ediyor)
 
 **Aktif hedef:** masaüstü/ayrı kurulum ürününü başka firmalara güvenle sunabilecek
