@@ -1,5 +1,55 @@
 # PROJECT_STATUS.md
 
+## 26 Eylül 2026 — müşteri paketinde gereksiz dosya denetimi (Codex)
+
+**Aktif hedef ve kabul ölçütü:** `release/dream-plus-2.0.1` içinde yalnız
+çalışma, kurulum, migration, yükseltme, yedek/geri yükleme, Docker/nginx ve
+müşteri belgeleri kalacak; geliştirme/test/satıcı iç araçları çıkarılacak;
+doğrudan kurulum ve Docker sözleşmesi korunacak; değişiklik commit/push
+edilecek ve paket temiz commit üzerinden yeniden üretilecek.
+
+**Sonuç — Geçti:** Paket 165 girdiden **131 girdiye** indirildi. JSX/Vite ön
+yüz kaynakları ve derleme betiği, demo/seed araçları, satıcı lisans üretim
+betiği ve yalnız typecheck için kullanılan `.d.ts` dosyası müşteri paketinden
+çıkarıldı. Müşteri `package.json` dosyası yalnız `start`, migration, kurulum,
+yükseltme, yedek ve geri yükleme komutlarını taşır; devDependencies ile
+derlenmiş React'in çalışma zamanında gerekmeyen paketleri kaldırılır. Müşteri
+Dockerfile'ı doğrulanmış `public/dist` çıktısını kullanır ve derleyici zincirini
+son imaja taşımaz. `.env`, `.env.local`, `.env.production` benzeri dosyalar
+filtrelenir; yalnız güvenli `.env.example` şablonu kalır.
+
+**Belge/güvenlik etkisi:** Müşteri kurulum belgesinden bilinen demo hesapları
+ve satıcıya özel lisans anahtarı üretim adımları çıkarıldı. Süreli lisans
+kurulumunda müşteriye satıcının verdiği imzalı dosyanın kullanılacağı yazıldı.
+Özel anahtar, müşteri verisi, test, iç analiz, yedek, SQLite ve `node_modules`
+pakete girmez. Kullanıcının izlenmeyen `.claude/` ve `CLAUDE.md` dosyalarına
+dokunulmadı.
+
+**Doğrulama — Geçti:** `npm run build`; `npm run typecheck`; `npm run lint`
+(0 hata, önceden var olan 42 uyarı); `node test/release-package.js` (131 dosya,
+checksum, kurcalama, özel anahtar ve `.env.*` sızıntı kontrolleri); temiz
+pakette `npm ci --omit=dev` (216 paket, dev/React sızıntısı yok); müşteri
+paketinden parametreli `npm run setup`; üretim sunucusunda `/health=ok` ve
+yönetici girişi; `setup-upgrade` 45/45; `npm audit --omit=dev
+--audit-level=high` 0 bulgu; `git diff --check` geçti.
+
+**Bağımsız inceleme:** `ai_team.py --phase plan/review --rounds 2 --timeout
+300` ile Claude ve Gemini görüşleri alındı. React/lockfile riski canlı temiz
+kurulumda React dizinlerinin bulunmadığı ve girişin çalıştığı görülerek
+kapandı; sunucu kodunda React importu yoktur. `.env.*` filtresi, manifest
+önkoşul kontrolleri ve iki aşamalı Docker bağımlılık kurulumu inceleme üzerine
+eklendi. Araç test/belge dosyalarını sır filtresi nedeniyle modele vermedi;
+nihai karar yerel test ve dosya incelemesine dayanır.
+
+**Doğrulanamadı:** Bu bilgisayarda Docker CLI kurulu olmadığı için gerçek
+`docker build` çalıştırılamadı. Compose/nginx/Dockerfile portu `3000`, veri
+volume'u `/app/data` ve üretim ortamı statik olarak uyumludur; ilk Docker'lı
+saha kurulumunda imaj build + healthcheck yine uygulanmalıdır.
+
+**Sonraki tek somut adım:** İlk müşteri ortamında `docs/SAHA-KURULUM-KARTI.md`
+ile Docker kullanılıyorsa gerçek imajı derle; ardından TLS/off-site yedek ve
+pilot kabul kapılarını müşteriyle tamamla.
+
 ## 26 Eylül 2026 — Dream Plus 2.0.1 satış adayı (Codex, teknik tur tamamlandı)
 
 **Aktif hedef ve kabul ölçütü:** Kullanıcının tam yetkisiyle kod deposunda
@@ -36,7 +86,7 @@ OpenAPI 10/10; build ve typecheck; lint 0 hata; `npm audit --audit-level=high`
 0 bulgu. Finans/mutabakat/muhasebe/güvenlik ve Faz 0 son değişiklikten sonra
 yeniden çalıştırıldı.
 
-**Dağıtım/kurtarma kanıtı — Geçti:** 2.0.1 release komutuyla 165 dosyalık temiz
+**Dağıtım/kurtarma kanıtı — Geçti:** 2.0.1 release komutuyla 131 dosyalık temiz
 paket üretildi; `npm ci --omit=dev` 0 zafiyetle tamamlandı. Paket içinden boş
 müşteri kurulumu ve ayrı `NODE_ENV=production` süreci açıldı: sürüm 2.0.1,
 `/health=ok`, migration=0, yönetici girişi başarılı ve yabancı Origin için CORS

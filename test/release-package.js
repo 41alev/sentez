@@ -23,8 +23,18 @@ try {
     assert(list.includes(required), 'missing ' + required);
   }
   assert(list.some(f => f.startsWith('public/dist/')), 'built frontend missing');
-  const leaked = list.filter(f => /(^|\/)\.env$|\.pem$|\.sqlite|license-signing-key|^data\/|^test\/|node_modules|PROJECT_STATUS|CLAUDE\.md|AGENTS\.md|satis-denetimi|analiz-2026/i.test(f));
+  const leaked = list.filter(f => /(^|\/)\.env$|\.pem$|\.sqlite|license-signing-key|^data\/|^test\/|node_modules|PROJECT_STATUS|CLAUDE\.md|AGENTS\.md|satis-denetimi|analiz-2026|^frontend-react\/|^scripts\/|server\/scripts\/(demo|license-generate)\.js|server\/seed\.js|server\/types\//i.test(f));
   assert.deepEqual(leaked, [], 'package leaks: ' + leaked.join(', '));
+  const customerPackage = JSON.parse(fs.readFileSync(path.join(r.target, 'package.json'), 'utf8'));
+  assert.deepEqual(Object.keys(customerPackage.scripts).sort(),
+    ['backup', 'backup:full', 'migrate', 'restore', 'restore:full', 'setup', 'start', 'upgrade']);
+  assert.equal(customerPackage.devDependencies, undefined, 'development dependencies leaked');
+  assert.equal(customerPackage.dependencies.react, undefined, 'compiled React dependency leaked');
+  assert.equal(customerPackage.dependencies['react-dom'], undefined, 'compiled React DOM dependency leaked');
+  const customerDockerfile = fs.readFileSync(path.join(r.target, 'Dockerfile'), 'utf8');
+  assert(!/frontend-react|npm run build| AS builder/i.test(customerDockerfile), 'customer Dockerfile rebuilds development sources');
+  const runtimeStage = customerDockerfile.slice(customerDockerfile.lastIndexOf('\nFROM '));
+  assert(!/python3|\bmake\b|g\+\+/.test(runtimeStage), 'compiler toolchain leaked into runtime Docker stage');
   assert.deepEqual(verifyRelease(r.target), []);
   console.log(`✓ package has ${r.fileCount} files; no secrets, data, tests or internal notes; manifest verifies`);
 
@@ -42,6 +52,19 @@ try {
     fs.rmSync(trap, { force: true });
   }
   console.log('✓ a private key inside the package inputs stops packaging');
+
+  // Environment-specific dotenv files are silently excluded; only the safe
+  // root .env.example template is allowed into the customer package.
+  const envTrap = path.join(__dirname, '..', 'server', 'lib', '.env.production');
+  fs.writeFileSync(envTrap, 'JWT_SECRET=must-not-travel\n');
+  try {
+    const filtered = packageRelease({ out: path.join(out, 'third') });
+    assert(!fs.existsSync(path.join(filtered.target, 'server', 'lib', '.env.production')));
+    assert(fs.existsSync(path.join(filtered.target, '.env.example')));
+  } finally {
+    fs.rmSync(envTrap, { force: true });
+  }
+  console.log('✓ .env variants are excluded while .env.example remains');
 } finally {
   fs.rmSync(out, { recursive: true, force: true });
 }

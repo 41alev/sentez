@@ -63,17 +63,6 @@ npm start
 
 Tarayıcıdan `http://sunucu-adresi:3000` adresine gidin.
 
-### Demo verisiyle denemek
-
-Sistemi önce tanımak isterseniz, **ayrı bir klasörde**:
-
-```bash
-DEMO_DATA=1 npm start
-```
-
-Bu, örnek firma ve beş demo kullanıcı (`admin/Admin123!` vb.) yükler.
-**Bu veriyi üretimde kullanmayın** — şifreler bu belgede yazılıdır.
-
 Boş bir veritabanıyla `npm start` çalıştırırsanız sunucu başlamaz ve sizi
 kuruluma yönlendirir. Bu kasıtlıdır: sessizce demo verisiyle açılan bir sistem,
 fabrikada sahte müşteriler ve herkesin bildiği şifrelerle çalışmak demektir.
@@ -112,7 +101,6 @@ Sırayla:
 | `LOGIN_RATE_LIMIT` | 15 dakikada izin verilen **başarısız** giriş (varsayılan 10) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | E-posta bildirimleri için |
 | `NODE_ENV` | Üretimde `production` |
-| `DEMO_DATA` | `1` ise boş veritabanına demo verisi yükler. Üretimde tanımlamayın. |
 
 ---
 
@@ -216,21 +204,8 @@ Varsayılan satış modeli **ömür boyu lisans**tır — `.env` dosyasında `LI
 tanımlanmadığı sürece hiçbir kısıtlama uygulanmaz, sunucu her zamanki gibi açılır.
 Bu, bugün için yapmanız gereken hiçbir şey olmadığı anlamına gelir.
 
-**İleride aylık/yıllık lisansa geçerseniz** (kod değişikliği gerekmez):
-
-```bash
-# 1. Müşteri için imzalı bir lisans dosyası üretin (satıcı makinesinde çalıştırılır)
-npm run license:generate -- --licensee "Örnek Metal Sanayi A.Ş." --expires 2027-12-31
-
-# --expires verilmezse süresiz (ömür boyu) lisans üretilir.
-```
-
-İlk çalıştırmada `license-signing-key.pem` adında bir imzalama anahtarı üretilip
-depo kökünde saklanır (**`.gitignore`'dadır, asla paylaşmayın veya commit etmeyin
-— kaybederseniz o zamana kadar üretilmiş tüm lisansları yeniden üretemezsiniz,
-bu dosyayı ayrıca güvenli bir yere yedekleyin**).
-
-Üretilen `.json` dosyasını müşterinin sunucusuna kopyalayın (ör. `data/license.json`),
+**Aylık/yıllık lisans kullanılıyorsa**, satıcının verdiği imzalı `.json` lisans
+dosyasını müşterinin sunucusuna kopyalayın (ör. `data/license.json`),
 `.env` dosyasına `LICENSE_FILE=data/license.json` satırını ekleyin ve sunucuyu
 yeniden başlatın. Lisans geçersiz veya süresi dolmuşsa sunucu **kasıtlı olarak
 açılmaz** ve nedenini açıkça yazar — tıpkı kurulum yapılmamış boş bir veritabanıyla

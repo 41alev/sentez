@@ -22,15 +22,61 @@ const ROOT = path.join(__dirname, '..');
 /** Paths (relative to the repository) copied into the package. */
 const INCLUDE = [
   'server', 'public', 'package.json', 'package-lock.json', '.npmrc', '.env.example', 'LICENSE',
-  // The Dockerfile builds the frontend itself, so its sources travel along.
-  'Dockerfile', 'docker-compose.yml', 'nginx.conf', '.dockerignore', 'frontend-react', 'scripts/build-frontend.js',
+  // public/dist is built and tested before packaging. The customer Dockerfile
+  // below consumes that output, so JSX/Vite development sources do not travel.
+  'docker-compose.yml', 'nginx.conf', '.dockerignore',
   'docs/KURULUM.md', 'docs/KULLANIM-KILAVUZU.md', 'docs/SAHA-KURULUM-KARTI.md',
   'docs/SAHA-KURULUM-COK-BASIT.md', 'docs/KVKK-DEGERLENDIRME.md'
 ];
 
+/** Repository files that are useful to developers/the vendor, never to a customer installation. */
+const CUSTOMER_EXCLUDE = new Set([
+  'server/scripts/demo.js',
+  'server/scripts/license-generate.js',
+  'server/seed.js',
+  'server/types/better-sqlite3-shim.d.ts'
+]);
+
+const CUSTOMER_SCRIPTS = new Set([
+  'start', 'migrate', 'backup', 'backup:full', 'restore', 'restore:full', 'setup', 'upgrade'
+]);
+
+const CUSTOMER_DOCKERFILE = `FROM node:22-slim AS dependencies
+
+RUN apt-get update && apt-get install -y --no-install-recommends \\
+      python3 make g++ ca-certificates \\
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+FROM node:22-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \\
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY server/ ./server/
+COPY public/ ./public/
+
+RUN mkdir -p /app/data && chown -R node:node /app
+VOLUME ["/app/data"]
+
+USER node
+ENV NODE_ENV=production PORT=3000
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \\
+  CMD node -e "fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+CMD ["node", "server/index.js"]
+`;
+
 /** Anything matching these never enters a package, even inside an included folder. */
 const FORBIDDEN_NAME = [
-  /^\.env$/i, /\.pem$/i, /\.key$/i, /\.p12$/i, /\.pfx$/i,
+  /^\.env(?!\.example$)(?:\..+)?$/i, /\.pem$/i, /\.key$/i, /\.p12$/i, /\.pfx$/i,
   /\.sqlite(-wal|-shm|-journal)?$/i, /\.db$/i, /\.bundle$/i,
   /^license-signing-key/i, /^lisans-.*\.json$/i, /^license\.json$/i
 ];
@@ -48,6 +94,7 @@ function parseArgs(argv) {
 }
 
 function walk(abs, rel, files) {
+  if (CUSTOMER_EXCLUDE.has(rel)) return;
   const stat = fs.lstatSync(abs);
   if (stat.isSymbolicLink()) throw new Error(`Symbolic link refused: ${rel}`);
   if (stat.isDirectory()) {
@@ -57,6 +104,34 @@ function walk(abs, rel, files) {
   }
   if (FORBIDDEN_NAME.some(re => re.test(path.basename(abs)))) return;
   files.push(rel);
+}
+
+function writeCustomerManifests(target) {
+  const packagePath = path.join(target, 'package.json');
+  fs.chmodSync(packagePath, 0o644);
+  const pkg = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+  if (!pkg.dependencies) throw new Error('package.json dependencies missing');
+  pkg.scripts = Object.fromEntries(Object.entries(pkg.scripts || {}).filter(([name]) => CUSTOMER_SCRIPTS.has(name)));
+  delete pkg.devDependencies;
+  // React is compiled into public/dist; customers do not need its packages at runtime.
+  delete pkg.dependencies.react;
+  delete pkg.dependencies['react-dom'];
+  fs.writeFileSync(packagePath, JSON.stringify(pkg, null, 2) + '\n');
+
+  // npm ci requires the root lockfile metadata to match package.json. Keep the
+  // complete lock graph for deterministic installs but align its root entry.
+  const lockPath = path.join(target, 'package-lock.json');
+  fs.chmodSync(lockPath, 0o644);
+  const lock = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+  const root = lock.packages && lock.packages[''];
+  if (!root) throw new Error('package-lock.json root package metadata missing');
+  if (!root.dependencies) throw new Error('package-lock.json root dependencies missing');
+  delete root.devDependencies;
+  delete root.dependencies.react;
+  delete root.dependencies['react-dom'];
+  fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + '\n');
+
+  fs.writeFileSync(path.join(target, 'Dockerfile'), CUSTOMER_DOCKERFILE);
 }
 
 function assertClean(files, base) {
@@ -92,17 +167,21 @@ function packageRelease({ out } = {}) {
   let commit = 'unknown';
   try { commit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim(); } catch { /* not a git checkout */ }
   let dirty = false;
-  try { dirty = execFileSync('git', ['status', '--porcelain', '--', ...INCLUDE], { cwd: ROOT, encoding: 'utf8' }).trim() !== ''; } catch { /* not a git checkout */ }
+  try { dirty = execFileSync('git', ['status', '--porcelain', '--', ...INCLUDE, 'scripts/package-release.js'], { cwd: ROOT, encoding: 'utf8' }).trim() !== ''; } catch { /* not a git checkout */ }
 
   fs.mkdirSync(target, { recursive: true });
-  const sums = [];
   for (const rel of files) {
     const dest = path.join(target, rel);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.copyFileSync(path.join(ROOT, rel), dest);
-    const hash = crypto.createHash('sha256').update(fs.readFileSync(dest)).digest('hex');
-    sums.push(`${hash}  ${rel}`);
   }
+  writeCustomerManifests(target);
+  files.push('Dockerfile');
+
+  const sums = files.sort().map(rel => {
+    const hash = crypto.createHash('sha256').update(fs.readFileSync(path.join(target, rel))).digest('hex');
+    return `${hash}  ${rel}`;
+  });
   const info = {
     product: 'Dream Plus', version: pkg.version, commit, workingTreeDirty: dirty,
     createdAt: new Date().toISOString(), node: pkg.engines && pkg.engines.node, fileCount: files.length
@@ -137,4 +216,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { packageRelease, verifyRelease, FORBIDDEN_NAME, INCLUDE };
+module.exports = { packageRelease, verifyRelease, FORBIDDEN_NAME, INCLUDE, CUSTOMER_EXCLUDE, CUSTOMER_SCRIPTS };
