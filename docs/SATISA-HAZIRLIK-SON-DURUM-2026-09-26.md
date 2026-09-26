@@ -1,7 +1,8 @@
 # Dream Plus 2.0.1 — satışa hazırlık son durum
 
-**Tarih:** 26 Eylül 2026  
-**Kapsam:** Tek müşteriye ait, ayrı kurulum olarak çalışan Dream Plus ERP  
+**Tarih:** 26 Eylül 2026
+
+**Kapsam:** Tek müşteriye ait, ayrı kurulum olarak çalışan Dream Plus ERP
 **Teknik karar:** Kod deposunda kapatılabilen satış engelleri kapatıldı. Sürüm,
 temiz müşteri kurulumu ve kontrollü pilot için bir **release candidate**'dır.
 Gerçek müşteri ağı, cihazı, hukuki metni ve imzalı kabulü kod testiyle
@@ -43,8 +44,8 @@ kanıtlanamayacağı için bunlar her satışta aşağıdaki teslim kapılarınd
 | Build / typecheck | **Geçti** | Hata yok |
 | Lint | **Geçti** | 0 hata; tarihsel uyarılar var |
 | `npm audit --audit-level=high` | **Geçti** | 0 bilinen zafiyet |
-| Temiz release paketi kurulumu | **Geçti** | İzole dizin, `npm ci --omit=dev`, 0 zafiyet |
-| Üretim süreci yeniden başlatma | **Geçti** | `/health`, migration=0, yeniden giriş başarılı |
+| Temiz release paketi kurulumu | **Geçti** | 2.0.1, 165 dosya, `npm ci --omit=dev`, 0 zafiyet |
+| Paket içi üretim smoke | **Geçti** | sürüm 2.0.1, `/health=ok`, migration=0, giriş başarılı, yabancı CORS başlığı yok |
 | Tam yedek ve boş dizine geri yükleme | **Geçti** | bütünlük `ok`, FK=0, firma/kullanıcı ve giriş korundu |
 | Docker imajı | **Doğrulanamadı** | Bu bilgisayarda Docker kurulu değil |
 

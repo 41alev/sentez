@@ -36,13 +36,14 @@ OpenAPI 10/10; build ve typecheck; lint 0 hata; `npm audit --audit-level=high`
 0 bulgu. Finans/mutabakat/muhasebe/güvenlik ve Faz 0 son değişiklikten sonra
 yeniden çalıştırıldı.
 
-**Dağıtım/kurtarma kanıtı — Geçti:** Commit `7dd0767` tabanlı temiz paket geçici
-izole dizinde üretildi; `npm ci --omit=dev` 0 zafiyet; boş müşteri kurulumu,
-üretim süreci açılışı, süreç yeniden başlatma, `/health`, migration=0 ve yeniden
-giriş başarılı. Tam bundle yedek başka boş dizine geri yüklendi; SQLite
-bütünlüğü `ok`, yabancı anahtar hatası 0, firma/kullanıcı/migration 29 korundu;
-geri yüklenen kopya ayrı üretim süreciyle açıldı ve giriş başarılı oldu. 2.0.1
-paketi son commit sonrasında yeniden üretilecek.
+**Dağıtım/kurtarma kanıtı — Geçti:** 2.0.1 release komutuyla 165 dosyalık temiz
+paket üretildi; `npm ci --omit=dev` 0 zafiyetle tamamlandı. Paket içinden boş
+müşteri kurulumu ve ayrı `NODE_ENV=production` süreci açıldı: sürüm 2.0.1,
+`/health=ok`, migration=0, yönetici girişi başarılı ve yabancı Origin için CORS
+izin başlığı yoktu. Önceki tam paket provasında süreç yeniden başlatma başarılı;
+tam bundle başka boş dizine geri yüklendi; SQLite bütünlüğü `ok`, yabancı anahtar
+hatası 0, firma/kullanıcı/migration 29 korundu ve geri yüklenen kopyada giriş
+başarılı oldu. Nihai paketin commit'i `RELEASE.json` içinde kayıtlıdır.
 
 **Bağımsız inceleme:** `ai_team.py --phase review --timeout 300` çalıştı. Gemini
 verilen dosyalarda yeni somut hata bildirmedi. Claude 1,91 saniyede oturum kota
@@ -56,9 +57,9 @@ migration/performans; hukukçu onaylı sözleşme/KVKK/SLA ve imzalı 13 adıml�
 müşteri seçilmeden kapatılamaz. Bunlardan biri kalırsa ilgili müşteri üretim
 kabulü verilmez.
 
-**Sonraki tek somut adım:** son diff ve tam regresyonu doğrula; commit/push et;
-temiz `release/dream-plus-2.0.1` paketini üretip manifest/checksum ve paket içi
-üretim smoke testini son commit üzerinde kaydet.
+**Sonraki tek somut adım:** İlk müşteri ve kurulacağı ortam belirlendiğinde
+`docs/PILOT-KABUL-PLANI.md` ön koşullarını doldur; servis/TLS/off-site yedek
+kurulumunu tamamlayıp 13 adımlı pilotu müşteriyle imzalı olarak kapat.
 
 ## 26 Eylül 2026 — Claude sonrası Codex bağımsız denetimi
 
