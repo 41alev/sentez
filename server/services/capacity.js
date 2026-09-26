@@ -60,37 +60,154 @@ function availableMinutes(workCenterId, dateStr) {
   return afterDowntime * ((wc.efficiency_pct || 100) / 100) * (wc.capacity_units || 1);
 }
 
+/** Etkin çalışma oranı: verimlilik × (1 − planlı duruş). */
+function workFactor(wc) {
+  return ((wc.efficiency_pct || 100) / 100) * (1 - (wc.downtime_pct || 0) / 100);
+}
+
+function dayStartMs(dateStr) { return new Date(dateStr + 'T00:00:00').getTime(); }
+function nextDateStr(dateStr) { return toDateStr(dayStartMs(dateStr) + DAY_MS + 12 * 3600000); }
+
+/**
+ * T10: bir iş merkezinin, `dateStr` gününde BAŞLAYAN vardiyalarından gelen
+ * gerçek saat aralıkları [başlangıç, bitiş) (ms). Gece vardiyası ertesi güne
+ * sarkar ve başladığı güne yazılır. Molanın saati tanımlı olmadığı için
+ * vardiyanın ortasına yerleştirilir (varsayım). Tatil günü aralık yoktur;
+ * kısmi istisnada ilk `available_hours` saat kullanılabilir.
+ */
+function workingIntervals(wc, dateStr, cache) {
+  const key = wc.id + '|' + dateStr;
+  if (cache && cache.has(key)) return cache.get(key);
+  let result = [];
+  if (wc.is_active) {
+    const exc = db.prepare(`SELECT * FROM calendar_exceptions
+      WHERE date = ? AND (work_center_id = ? OR work_center_id IS NULL)
+      ORDER BY work_center_id DESC LIMIT 1`).get(dateStr, wc.id);
+    if (!exc || exc.exception_type !== 'holiday') {
+      const weekday = isoWeekday(dateStr);
+      const base = dayStartMs(dateStr);
+      const shifts = db.prepare(`SELECT s.* FROM shifts s
+        JOIN work_center_shifts wcs ON wcs.shift_id = s.id
+        WHERE wcs.work_center_id = ? AND s.is_active = 1`).all(wc.id)
+        .filter(sh => String(sh.weekdays).split(',').map(x => Number(x.trim())).includes(weekday));
+      const raw = [];
+      for (const sh of shifts) {
+        const start = base + parseHM(sh.start_time) * MIN;
+        let end = base + parseHM(sh.end_time) * MIN;
+        if (end <= start) end += DAY_MS;
+        const brk = Math.min((sh.break_minutes || 0) * MIN, end - start);
+        if (brk > 0) {
+          const firstEnd = start + (end - start - brk) / 2;
+          raw.push([start, firstEnd], [firstEnd + brk, end]);
+        } else {
+          raw.push([start, end]);
+        }
+      }
+      raw.sort((a, b) => a[0] - b[0]);
+      for (const iv of raw) {
+        if (iv[1] <= iv[0]) continue;
+        const last = result[result.length - 1];
+        if (last && iv[0] <= last[1]) last[1] = Math.max(last[1], iv[1]);
+        else result.push([iv[0], iv[1]]);
+      }
+      if (exc && exc.exception_type === 'partial' && exc.available_hours != null) {
+        let budget = exc.available_hours * 60 * MIN;
+        if (!result.length && budget > 0) result = [[base + 8 * 60 * MIN, base + 8 * 60 * MIN + budget]];
+        const truncated = [];
+        for (const iv of result) {
+          if (budget <= 0) break;
+          const take = Math.min(budget, iv[1] - iv[0]);
+          truncated.push([iv[0], iv[0] + take]);
+          budget -= take;
+        }
+        result = truncated;
+      }
+    }
+  }
+  if (cache) cache.set(key, result);
+  return result;
+}
+
+/** Aktif (tamamlanmamış) ve planlanmış operasyonların saat aralıkları. */
+function bookings(workCenterId, excludeOrderId = null) {
+  return db.prepare(`SELECT planned_start AS start, planned_end AS end FROM production_operations
+    WHERE work_center_id = ? AND status NOT IN ('completed','cancelled')
+      AND planned_start IS NOT NULL AND planned_end IS NOT NULL AND planned_end > planned_start
+      AND (? IS NULL OR production_order_id != ?)`).all(workCenterId, excludeOrderId, excludeOrderId);
+}
+
+/** [s,e) içinde aynı anda süren en fazla rezervasyon sayısı. */
+function maxOverlap(list, s, e) {
+  const events = [];
+  for (const b of list) {
+    if (b.end <= s || b.start >= e) continue;
+    events.push([Math.max(b.start, s), 1], [Math.min(b.end, e), -1]);
+  }
+  events.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  let current = 0, max = 0;
+  for (const [, delta] of events) { current += delta; max = Math.max(max, current); }
+  return max;
+}
+
+/**
+ * `fromMs` anından itibaren `workMinutes` etkin iş dakikasını çalışma
+ * aralıklarına yayar. Dönen [start, end) saat aralığıdır; aradaki çalışılmayan
+ * süre (gece, hafta sonu, mola) işi durdurur ama başka iş de o hatta başlamaz.
+ */
+function spanFrom(wc, fromMs, workMinutes, horizonDays, cache) {
+  const factor = workFactor(wc);
+  if (!(factor > 0)) return null;
+  let remaining = (workMinutes / factor) * MIN;
+  let start = null;
+  // Önceki günün gece vardiyası bu güne sarkabilir.
+  let dateStr = toDateStr(dayStartMs(toDateStr(fromMs)) - DAY_MS + 12 * 3600000);
+  for (let i = 0; i <= horizonDays + 1; i++) {
+    for (const [a, b] of workingIntervals(wc, dateStr, cache)) {
+      if (b <= fromMs) continue;
+      const from = Math.max(a, fromMs);
+      if (start === null) start = from;
+      if (remaining <= 0) return { start, end: start };
+      const take = Math.min(b - from, remaining);
+      remaining -= take;
+      if (remaining <= 0.5) return { start, end: from + take };
+      fromMs = b;
+    }
+    dateStr = nextDateStr(dateStr);
+  }
+  return null;
+}
+
 /** Bir tarih aralığında iş merkezi bazında kapasite ve yük. */
 function capacityLoad({ from, to, workCenterId = null }) {
-  const start = new Date(from + 'T00:00:00').getTime();
-  const end = new Date(to + 'T00:00:00').getTime();
+  const start = dayStartMs(from);
+  const end = dayStartMs(to);
   if (!(end >= start)) throw new AppError('Geçersiz tarih aralığı / Invalid date range', 400);
 
   const centers = workCenterId
     ? db.prepare('SELECT * FROM work_centers WHERE id = ? AND is_active = 1').all(workCenterId)
     : db.prepare('SELECT * FROM work_centers WHERE is_active = 1 ORDER BY code').all();
 
+  const cache = new Map();
   const results = [];
   for (const wc of centers) {
+    const factor = workFactor(wc);
+    const booked = bookings(wc.id);
     const days = [];
-    for (let t = start; t <= end; t += DAY_MS) {
-      const dateStr = toDateStr(t);
+    for (let dateStr = from; dateStr <= to; dateStr = nextDateStr(dateStr)) {
       const capacity = availableMinutes(wc.id, dateStr);
-
-      // O güne planlanmış operasyonların yükü
-      const dayStart = new Date(dateStr + 'T00:00:00').getTime();
-      const dayEnd = dayStart + DAY_MS;
-      const load = db.prepare(`SELECT COALESCE(SUM(planned_setup_minutes + planned_run_minutes),0) m
-        FROM production_operations
-        WHERE work_center_id = ? AND status NOT IN ('completed','cancelled')
-          AND planned_start >= ? AND planned_start < ?`).get(wc.id, dayStart, dayEnd).m;
-
+      // Yük: rezervasyonların o günün çalışma aralıklarıyla kesişen etkin dakikası.
+      let load = 0;
+      for (const [a, b] of workingIntervals(wc, dateStr, cache)) {
+        for (const bk of booked) {
+          const overlap = Math.min(b, bk.end) - Math.max(a, bk.start);
+          if (overlap > 0) load += (overlap / MIN) * factor;
+        }
+      }
       days.push({
         date: dateStr,
         capacityMinutes: Math.round(capacity),
         loadMinutes: Math.round(load),
         utilizationPct: capacity > 0 ? Number(((load / capacity) * 100).toFixed(1)) : (load > 0 ? 999 : 0),
-        // Kapasitenin üstündeki yük: bu iş o gün bitmez, kaymak zorundadır
         overloadMinutes: Math.max(0, Math.round(load - capacity))
       });
     }
@@ -109,42 +226,25 @@ function capacityLoad({ from, to, workCenterId = null }) {
 }
 
 /**
- * Bir iş merkezinde, verilen andan itibaren istenen dakikayı sığdırabilecek
- * ilk zaman aralığını bulur. Kapasitesi dolu günleri atlar.
- * Sonsuz döngüye girmemek için ufuk sınırlıdır.
+ * T10: sonlu kapasite. İş merkezinde `capacity_units` kadar paralel hat
+ * vardır; yeni operasyon, mevcut rezervasyonlarla aynı anda en fazla
+ * (hat − 1) çakışma olan ilk çalışma aralığına yerleşir. Aday başlangıçlar:
+ * en erken an ve mevcut rezervasyonların bitişleri (bir hat ancak o anlarda
+ * boşalır). Ufuk içinde yer yoksa 409.
  */
-function findSlot(workCenterId, earliestMs, neededMinutes, horizonDays = 180) {
-  let cursor = earliestMs;
-  let remaining = neededMinutes;
-  let scheduledStart = null;
-
-  for (let i = 0; i < horizonDays && remaining > 0.01; i++) {
-    const dateStr = toDateStr(cursor);
-    const capacity = availableMinutes(workCenterId, dateStr);
-    if (capacity <= 0) { cursor = new Date(dateStr + 'T00:00:00').getTime() + DAY_MS; continue; }
-
-    const dayStart = new Date(dateStr + 'T00:00:00').getTime();
-    const dayEnd = dayStart + DAY_MS;
-    const used = db.prepare(`SELECT COALESCE(SUM(planned_setup_minutes + planned_run_minutes),0) m
-      FROM production_operations
-      WHERE work_center_id = ? AND status NOT IN ('completed','cancelled')
-        AND planned_start >= ? AND planned_start < ?`).get(workCenterId, dayStart, dayEnd).m;
-
-    const free = capacity - used;
-    if (free <= 0.01) { cursor = dayEnd; continue; }
-
-    if (scheduledStart === null) scheduledStart = Math.max(cursor, dayStart);
-    const take = Math.min(free, remaining);
-    remaining -= take;
-    if (remaining > 0.01) cursor = dayEnd;
-    else cursor = Math.max(cursor, dayStart) + take * MIN;
+function findSlot(workCenterId, earliestMs, neededMinutes, horizonDays = 365, { excludeOrderId = null, cache = new Map() } = {}) {
+  const wc = db.prepare('SELECT * FROM work_centers WHERE id = ?').get(workCenterId);
+  if (!wc || !wc.is_active) throw new AppError('İş merkezi bulunamadı veya pasif / Work centre not found or inactive', 422);
+  const units = Math.max(1, wc.capacity_units || 1);
+  const booked = bookings(workCenterId, excludeOrderId);
+  const candidates = [earliestMs, ...booked.map(b => b.end).filter(t => t > earliestMs)].sort((a, b) => a - b);
+  for (const candidate of candidates) {
+    const slot = spanFrom(wc, candidate, neededMinutes, horizonDays, cache);
+    if (!slot) break;
+    if (slot.end === slot.start || maxOverlap(booked, slot.start, slot.end) < units) return slot;
   }
-
-  if (remaining > 0.01) {
-    throw new AppError(
-      `İş merkezinde ${horizonDays} gün içinde yeterli kapasite bulunamadı / No capacity found within ${horizonDays} days`, 409);
-  }
-  return { start: scheduledStart, end: cursor };
+  throw new AppError(
+    `İş merkezinde ${horizonDays} gün içinde yeterli kapasite bulunamadı / No capacity found within ${horizonDays} days`, 409);
 }
 
 /**
@@ -183,11 +283,21 @@ function scheduleOrder(orderId, { startFrom } = {}) {
     ops = db.prepare('SELECT * FROM production_operations WHERE production_order_id = ? ORDER BY operation_no').all(orderId);
   }
 
-  let cursor = startFrom ? new Date(startFrom).getTime() : Date.now();
+  if (order.status === 'İptal Edildi') throw new AppError('İptal edilmiş emir çizelgelenemez / Cannot schedule a cancelled order', 409);
+  // Yeniden çizelgelemede emrin kendi eski rezervasyonları kapasiteyi işgal etmez.
+  db.prepare(`UPDATE production_operations SET planned_start = NULL, planned_end = NULL
+    WHERE production_order_id = ? AND status NOT IN ('completed','in_progress')`).run(orderId);
+  let cursor = startFrom ? new Date(`${startFrom}T00:00:00`).getTime() : Date.now();
+  const cache = new Map();
   const scheduled = [];
   for (const op of ops) {
+    if (op.status === 'completed' || op.status === 'in_progress') {
+      scheduled.push(op);
+      cursor = Math.max(cursor, op.planned_end || op.actual_end || cursor);
+      continue;
+    }
     const needed = (op.planned_setup_minutes || 0) + (op.planned_run_minutes || 0);
-    const slot = findSlot(op.work_center_id, cursor, needed);
+    const slot = findSlot(op.work_center_id, cursor, needed, 365, { excludeOrderId: orderId, cache });
     db.prepare('UPDATE production_operations SET planned_start = ?, planned_end = ? WHERE id = ?')
       .run(slot.start, slot.end, op.id);
     scheduled.push({ ...op, planned_start: slot.start, planned_end: slot.end });
@@ -268,4 +378,4 @@ function oee({ from, to, workCenterId = null }) {
   return { from, to, data };
 }
 
-module.exports = { availableMinutes, capacityLoad, findSlot, scheduleOrder, oee, shiftMinutes };
+module.exports = { availableMinutes, capacityLoad, findSlot, scheduleOrder, oee, shiftMinutes, workingIntervals, maxOverlap };

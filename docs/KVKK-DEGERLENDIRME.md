@@ -79,7 +79,13 @@ Bunlar **gerçekten kodda doğrulandı**, varsayım değildir:
 
 ## 3. Gerçek boşluklar (önem sırasına göre)
 
-### 3.1 — YÜKSEK: Veri silme/anonimleştirme hakkı (KVKK m.7, m.11) uygulanmıyor
+### 3.1 — [TARİHSEL, 13.09.2026] YÜKSEK: Veri silme/anonimleştirme hakkı (KVKK m.7, m.11) uygulanmıyor
+
+> **Güncel durum:** Bu bulgu kod tarafında kapatıldı (anonimleştirme uçları,
+> ilişkili kopyaların tek transaction'da maskelenmesi, anonim kaydın yeniden
+> doldurulamaması, saklama süresi taraması — T12, 23.09.2026). Yukarıdaki
+> "2026-09-20 teknik durum güncellemesi" ve `PROJECT_STATUS.md` geçerlidir.
+> Aşağıdaki metin ilk değerlendirmenin kaydıdır.
 
 `DELETE /api/sales/customers/:id` incelendi (`server/routes/sales.js:74-80`) — bu bir
 **hard delete değil**, `is_active = 0` yapan bir **soft delete**'tir. Müşterinin adı, telefonu,

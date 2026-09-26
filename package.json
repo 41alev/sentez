@@ -48,7 +48,8 @@
     "test:e2e-browser": "playwright test",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "license:generate": "node server/scripts/license-generate.js"
+    "license:generate": "node server/scripts/license-generate.js",
+    "release": "node scripts/build-frontend.js && node scripts/package-release.js"
   },
   "engines": {
     "node": ">=22"

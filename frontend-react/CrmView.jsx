@@ -12,7 +12,7 @@ import { useEffect, useState, useRef } from 'react';
 const STAGE_ORDER = ['new', 'contacted', 'quoted', 'won'];
 
 export default function CrmView() {
-  const { t, esc, num, money, dt, table, loading, modal, closeModal,
+  const { t, esc, num, money, dt, table, pager, loading, modal, closeModal,
           field, input, select, textarea, val, numVal, intVal, can } = UI;
 
   const [tab, setTab] = useState('pipeline');
@@ -46,7 +46,7 @@ export default function CrmView() {
     const fns = { pipeline: renderPipeline, list: renderList, visits: renderVisits };
     (async () => {
       try { await fns[tab](body, actions); }
-      catch (e) { UI.err(e); body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+      catch (e) { UI.errorState(body, e, reload); }
     })();
   }, [ready, tab, reloadToken]);
 
@@ -64,7 +64,7 @@ export default function CrmView() {
   /* ================= HUNİ / PIPELINE ================= */
   async function renderPipeline(body, actions) {
     let p;
-    try { p = await Api.pipeline(); } catch (e) { UI.err(e); return; }
+    try { p = await Api.pipeline(); } catch (e) { UI.errorState(typeof body !== 'undefined' ? body : null, e, typeof reload === 'function' ? reload : null); return; }
     actions.innerHTML = can('write') ? `<button class="btn btn-primary btn-sm" id="oppNew">${UI.icon(UI.ICONS.plus)}${t('newOpportunity')}</button>` : '';
 
     body.innerHTML = `
@@ -100,12 +100,14 @@ export default function CrmView() {
   async function renderList(body, actions) {
     const stageFilter = actions.dataset.stage || '';
     let res;
-    try { res = await Api.opportunities({ pageSize: 100, stage: stageFilter }); } catch (e) { UI.err(e); return; }
+    const page = Number(actions.dataset.page) || 1;
+    try { res = await Api.opportunities({ page, pageSize: 50, stage: stageFilter }); } catch (e) { UI.errorState(typeof body !== 'undefined' ? body : null, e, typeof reload === 'function' ? reload : null); return; }
     const rows = res.data || res;
     actions.innerHTML = `
       ${select('crmStageFilter', [{ v: '', l: t('all') }, ...STAGE_ORDER.concat('lost').map(s => ({ v: s, l: t('stage' + s[0].toUpperCase() + s.slice(1)) }))], stageFilter)}
       ${can('write') ? `<button class="btn btn-primary btn-sm" id="oppNew2">${UI.icon(UI.ICONS.plus)}${t('newOpportunity')}</button>` : ''}`;
-    actions.querySelector('#crmStageFilter').onchange = (e) => { actions.dataset.stage = e.target.value; renderList(body, actions); };
+    // A new filter starts from the first page (T08).
+    actions.querySelector('#crmStageFilter').onchange = (e) => { actions.dataset.stage = e.target.value; actions.dataset.page = '1'; renderList(body, actions); };
     document.getElementById('oppNew2')?.addEventListener('click', () => opportunityForm());
 
     body.innerHTML = `<div class="card">${table([
@@ -116,7 +118,7 @@ export default function CrmView() {
       { key: 'probability', label: t('probability'), num: true, render: r => '%' + num(r.probability) },
       { key: 'estimatedCloseDate', label: t('estimatedCloseDate'), render: r => r.estimatedCloseDate ? dt(r.estimatedCloseDate) : '—' },
       { key: 'stage', label: t('status'), render: r => stageBadge(r.stage) }
-    ], rows)}</div>`;
+    ], rows)}${pager(res, p => { actions.dataset.page = String(p); renderList(body, actions); })}</div>`;
 
     body.querySelectorAll('[data-open]').forEach(el => el.onclick = () => openOpportunity(el.dataset.open));
   }
@@ -125,13 +127,15 @@ export default function CrmView() {
   async function renderVisits(body, actions) {
     const customerFilter = actions.dataset.customer || '';
     let res;
-    try { res = await Api.visits({ pageSize: 100, customerId: customerFilter || undefined }); } catch (e) { UI.err(e); return; }
+    const page = Number(actions.dataset.page) || 1;
+    try { res = await Api.visits({ page, pageSize: 50, customerId: customerFilter || undefined }); } catch (e) { UI.errorState(typeof body !== 'undefined' ? body : null, e, typeof reload === 'function' ? reload : null); return; }
     const rows = res.data || res;
     const customers = customersRef.current;
     actions.innerHTML = `
-      ${select('visitCusFilter', [{ v: '', l: t('all') }, ...customers.map(c => ({ v: c.id, l: c.name }))], customerFilter)}
+      ${select('visitCusFilter', [{ v: '', l: t('all') }, ...customers.map(c => ({ v: c.id, l: c.name }))], customerFilter, { search: 'customers' })}
       ${can('write') ? `<button class="btn btn-primary btn-sm" id="visitNew">${UI.icon(UI.ICONS.plus)}${t('newVisit')}</button>` : ''}`;
-    actions.querySelector('#visitCusFilter').onchange = (e) => { actions.dataset.customer = e.target.value; renderVisits(body, actions); };
+    actions.querySelector('#visitCusFilter').onchange = (e) => { actions.dataset.customer = e.target.value; actions.dataset.page = '1'; renderVisits(body, actions); };
+    UI.enhanceSelects(actions);
     document.getElementById('visitNew')?.addEventListener('click', () => visitForm());
 
     body.innerHTML = `<div class="card">${rows.length ? table([
@@ -144,7 +148,7 @@ export default function CrmView() {
       { key: 'followUpDate', label: t('followUpDate'), render: r => r.followUpDate ? dt(r.followUpDate) : '—' },
       { key: 'actions', label: '', render: r => can('approve')
           ? `<button class="btn btn-ghost btn-sm" data-del="${esc(r.id)}">${UI.icon(UI.ICONS.x)}</button>` : '' }
-    ], rows) : `<div class="empty" style="padding:36px">${t('noVisits')}</div>`}</div>`;
+    ], rows) : `<div class="empty" style="padding:36px">${t('noVisits')}</div>`}${pager(res, p => { actions.dataset.page = String(p); renderVisits(body, actions); })}</div>`;
 
     body.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
       UI.confirmDialog(t('confirmDeleteVisit'), async () => {
@@ -160,7 +164,7 @@ export default function CrmView() {
       title: t('newVisit'),
       body: `
         <div class="field-row">
-          ${field(t('customerName'), select('visitCus', customers.map(c => ({ v: c.id, l: c.name }))))}
+          ${field(t('customerName'), select('visitCus', customers.map(c => ({ v: c.id, l: c.name })), undefined, { search: 'customers' }))}
           ${field(t('visitDate'), input('visitDate', { type: 'date', value: UI.today() }))}
         </div>
         ${field(t('visitPurpose'), input('visitPurpose'))}
@@ -211,7 +215,7 @@ export default function CrmView() {
       title: t('newOpportunity'), size: 'wide',
       body: `
         <div class="field-row">
-          ${field(t('customerName'), select('oppCus', [{ v: '', l: t('none') + ' (' + (UI.getLang() === 'tr' ? 'yeni aday' : 'new lead') + ')' }, ...customers.map(c => ({ v: c.id, l: c.name }))]))}
+          ${field(t('customerName'), select('oppCus', [{ v: '', l: t('none') + ' (' + (UI.getLang() === 'tr' ? 'yeni aday' : 'new lead') + ')' }, ...customers.map(c => ({ v: c.id, l: c.name }))], undefined, { search: 'customers' }))}
           ${field(t('oppSource'), select('oppSrc', ['referans', 'web', 'fuar', 'soguk_arama', 'diger'].map(s => ({ v: s, l: sourceLabel(s) })), 'diger'))}
         </div>
         <div class="field-row" id="oppNewCusRow">
@@ -236,8 +240,8 @@ export default function CrmView() {
         const draw = () => {
           box.querySelector('#oppLines').innerHTML = lines.map((l, i) => `
             <div class="dyn-row">
-              <select data-i="${i}" data-f="itemId" style="flex:1;min-width:150px">
-                ${items.map(o => `<option value="${esc(o.id)}" ${o.id === l.itemId ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}
+              <select data-i="${i}" data-f="itemId" data-search="items" style="flex:1;min-width:150px">
+                ${UI.missingOption(items, l.itemId)}${items.map(o => `<option value="${esc(o.id)}" ${o.id === l.itemId ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}
               </select>
               <input type="number" min="0.0001" step="0.0001" value="${l.qty}" data-i="${i}" data-f="qty" style="width:84px" title="${t('qty')}">
               <input type="number" min="0" step="0.01" value="${l.unitPrice}" data-i="${i}" data-f="unitPrice" style="width:96px" title="${t('price')}">
@@ -253,7 +257,7 @@ export default function CrmView() {
 
         box.querySelector('#oppGo').onclick = async () => {
           const cusId = val('oppCus');
-          const cusName = cusId ? customers.find(c => String(c.id) === String(cusId))?.name : val('oppNewCus');
+          const cusName = cusId ? box.querySelector('#oppCus').selectedOptions[0]?.textContent : val('oppNewCus');
           if (!cusName) return UI.toast(UI.getLang() === 'tr' ? 'Müşteri veya aday adı gerekli.' : 'Customer or lead name is required.', 'err');
           try {
             await Api.createOpportunity({
@@ -261,7 +265,8 @@ export default function CrmView() {
               source: val('oppSrc'), estimatedValue: numVal('oppVal'), probability: intVal('oppProb'),
               estimatedCloseDate: val('oppClose') || undefined, notes: val('oppNote'),
               lines: lines.filter(l => l.itemId && l.qty > 0).map(l => ({
-                ...l, itemName: items.find(x => x.id === l.itemId)?.name || l.itemId
+                ...l, itemName: items.find(x => x.id === l.itemId)?.name
+                  || box.querySelector(`#oppLines select[data-i="${lines.indexOf(l)}"]`)?.selectedOptions[0]?.textContent || l.itemId
               }))
             });
             closeModal(); UI.ok(t('saved')); reload();
@@ -274,7 +279,7 @@ export default function CrmView() {
   /* ================= DETAY ================= */
   async function openOpportunity(id) {
     let o;
-    try { o = await Api.opportunity(id); } catch (e) { UI.err(e); return; }
+    try { o = await Api.opportunity(id); } catch (e) { UI.errorState(null, e, typeof reload === 'function' ? reload : null); return; }
     const nextStage = STAGE_ORDER[STAGE_ORDER.indexOf(o.stage) + 1];
     const isClosed = o.stage === 'won' || o.stage === 'lost';
 
@@ -334,7 +339,7 @@ export default function CrmView() {
           box.querySelector('#oppConvertRow').innerHTML = `
             <div class="section-title">${t('oppConvertNeedsCustomer')}</div>
             <div class="dyn-row">
-              ${select('oppConvertCus', customers.map(c => ({ v: c.id, l: c.name })))}
+              ${select('oppConvertCus', customers.map(c => ({ v: c.id, l: c.name })), undefined, { search: 'customers' })}
               <button class="btn btn-primary btn-sm" id="oppConvertGo">${t('convertToSO')}</button>
             </div>`;
           box.querySelector('#oppConvertGo').onclick = async () => {

@@ -216,7 +216,6 @@ tr: {
   kvkkRetentionHint:"Etkinleştirilirse, pasifleştirilmiş (silinmiş) müşteri/tedarikçi kayıtları burada belirtilen süre sonunda GERİ DÖNÜŞSÜZ olarak anonimleştirilir. Sipariş/fatura geçmişi korunur, yalnızca kimlik/iletişim bilgileri silinir. Varsayılan: kapalı.",
   kvkkRunNow:"Taramayı şimdi çalıştır", kvkkSweepDone:"Tarama tamamlandı",
 
-  warehouseTerminal:"Depo Terminali",
   // veri sağlığı
   tabDataHealth:"Veri Sağlığı", dataHealthTitle:"Veri Sağlığı Denetimi",
   tabAccounting:"Muhasebe Aktarımı",
@@ -352,7 +351,7 @@ tr: {
   auditRequestReject:"talep reddedildi", auditRfqAdd:"teklif talebi oluşturuldu", auditQuoteAdd:"teklif girildi",
   auditPOAdd:"sipariş oluşturuldu", auditPOApprove:"sipariş onaylandı", auditPOReject:"sipariş reddedildi",
   auditPOReceive:"sipariş teslim alındı", auditLandedCost:"varış maliyeti eklendi",
-  auditInvoiceAdd:"fatura girildi", auditSupplierReturn:"iade oluşturuldu",
+  auditInvoiceAdd:"fatura girildi", auditSupplierInvoiceReconciled:"eski fatura mutabakatı yapıldı", auditSupplierInvoiceApproved:"tedarikçi faturası ödemeye onaylandı", auditSupplierInvoicePaid:"tedarikçiye ödeme kaydedildi", auditSupplierReturn:"iade oluşturuldu",
   auditCustomerAdd:"müşteri eklendi", auditCustomerEdit:"müşteri güncellendi", auditCustomerDelete:"müşteri silindi",
   auditCustomerAnonymize:"müşteri verisi anonimleştirildi (KVKK)", auditSupplierAnonymize:"tedarikçi verisi anonimleştirildi (KVKK)",
   auditUserAnonymize:"kullanıcı verisi anonimleştirildi (KVKK)", auditDataRetentionRun:"KVKK saklama süresi taraması çalıştırıldı",
@@ -583,7 +582,6 @@ en: {
   kvkkRetentionHint:"When enabled, deactivated customer/supplier records are IRREVERSIBLY anonymized after the period set here. Order/invoice history is kept — only identity/contact details are erased. Default: off.",
   kvkkRunNow:"Run sweep now", kvkkSweepDone:"Sweep completed",
 
-  warehouseTerminal:"Warehouse Terminal",
   // data health
   tabDataHealth:"Data Health", dataHealthTitle:"Data Health Audit",
   tabAccounting:"Accounting Export",
@@ -717,7 +715,7 @@ en: {
   auditRequestReject:"request rejected", auditRfqAdd:"RFQ created", auditQuoteAdd:"quote entered",
   auditPOAdd:"order created", auditPOApprove:"order approved", auditPOReject:"order rejected",
   auditPOReceive:"order received", auditLandedCost:"landed cost added",
-  auditInvoiceAdd:"invoice entered", auditSupplierReturn:"return created",
+  auditInvoiceAdd:"invoice entered", auditSupplierInvoiceReconciled:"legacy invoice reconciled", auditSupplierInvoiceApproved:"supplier invoice approved for payment", auditSupplierInvoicePaid:"supplier payment recorded", auditSupplierReturn:"return created",
   auditCustomerAdd:"customer added", auditCustomerEdit:"customer updated", auditCustomerDelete:"customer deleted",
   auditCustomerAnonymize:"customer data anonymized (GDPR/KVKK)", auditSupplierAnonymize:"supplier data anonymized (GDPR/KVKK)",
   auditUserAnonymize:"user data anonymized (GDPR/KVKK)", auditDataRetentionRun:"data retention sweep run",

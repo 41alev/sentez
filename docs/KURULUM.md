@@ -21,10 +21,15 @@ Dosya olarak `data/` klasöründe durur.
 
 ## Kurulum
 
+Satıcı müşteri paketini `npm run release` ile üretir; paket
+`dream-plus-<sürüm>/` klasörüdür ve içinde `RELEASE.json` ile
+`SHA256SUMS.txt` bulunur. Pakette `.env`, özel anahtar, veritabanı veya
+yedek bulunmaz — bunlar müşteride oluşturulur.
+
 ```bash
-# 1. Dosyaları açın ve bağımlılıkları kurun
-unzip depo-takip-erp.zip && cd depo-takip-app
-npm install --omit=dev
+# 1. Paketi sunucuya kopyalayın, içine girin ve bağımlılıkları kurun
+cd dream-plus-<sürüm>
+npm ci --omit=dev
 
 # 2. Ortam ayarlarını hazırlayın
 cp .env.example .env

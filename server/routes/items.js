@@ -132,7 +132,7 @@ const itemSchema = z.object({
   warehouse: z.string().max(1000).optional(),
   warehouseId: z.coerce.number().optional(),
   location: z.string().max(1000).optional(),
-  unit: z.string().default('adet'),
+  unit: z.string().trim().min(1).max(50).default('adet'),
   minStock: z.coerce.number().min(0).default(0),
   reorderQty: z.coerce.number().min(0).default(0),
   costingMethod: z.enum(['moving_average','fifo']).default('moving_average'),
@@ -161,7 +161,12 @@ const itemSchema = z.object({
 });
 
 function resolveWarehouseId(body) {
-  if (body.warehouseId) return body.warehouseId;
+  if (body.warehouseId) {
+    if (!db.prepare('SELECT id FROM warehouses WHERE id = ? AND is_active = 1').get(body.warehouseId)) {
+      throw new AppError('Depo bulunamadı / Warehouse not found', 404);
+    }
+    return body.warehouseId;
+  }
   if (body.warehouse) {
     const w = db.prepare('SELECT id FROM warehouses WHERE name = ?').get(body.warehouse);
     if (w) return w.id;
@@ -170,15 +175,50 @@ function resolveWarehouseId(body) {
   return first ? first.id : null;
 }
 
+/** True when `targetId` is reachable from `startId` through item_bom edges. */
+function bomReaches(startId, targetId) {
+  const seen = new Set();
+  const stack = [startId];
+  const children = db.prepare('SELECT component_item_id FROM item_bom WHERE item_id = ?');
+  while (stack.length) {
+    const id = stack.pop();
+    if (id === targetId) return true;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    children.all(id).forEach(row => stack.push(row.component_item_id));
+  }
+  return false;
+}
+
+/**
+ * Replaces the whole BOM. Every component must exist; an unknown id rejects
+ * the request instead of silently dropping the line (Faz 0 CO-06). Direct and
+ * indirect cycles (A→B→A) are rejected because MRP and production costing
+ * cannot explode them (Faz 0 IT-03). Runs inside the caller's transaction.
+ */
 function writeBom(itemId, bom) {
+  const seen = new Set();
+  const components = bom.map(c => {
+    if (c.componentItemId === itemId) throw new AppError('Ürün kendi reçetesinde yer alamaz / Item cannot be its own component', 422);
+    if (seen.has(c.componentItemId)) throw new AppError('Reçetede aynı bileşen tekrarlanamaz / Duplicate BOM component', 422);
+    seen.add(c.componentItemId);
+    const comp = db.prepare('SELECT unit FROM items WHERE id = ? AND deleted_at IS NULL').get(c.componentItemId);
+    if (!comp) throw new AppError('Reçete bileşeni bulunamadı / BOM component not found', 404);
+    if (!(c.qtyPerUnit > 0)) throw new AppError('Bileşen miktarı pozitif olmalı / Component quantity must be positive', 422);
+    return { ...c, unit: comp.unit };
+  });
   db.prepare('DELETE FROM item_bom WHERE item_id = ?').run(itemId);
   const ins = db.prepare('INSERT INTO item_bom (item_id,component_item_id,qty_per_unit,scrap_pct,unit) VALUES (?,?,?,?,?)');
-  bom.forEach(c => {
-    if (c.componentItemId === itemId) throw new AppError('Ürün kendi reçetesinde yer alamaz / Item cannot be its own component');
-    const comp = db.prepare('SELECT unit FROM items WHERE id = ?').get(c.componentItemId);
-    if (!comp) return;
-    ins.run(itemId, c.componentItemId, c.qtyPerUnit, c.scrapPct || 0, comp.unit);
-  });
+  components.forEach(c => ins.run(itemId, c.componentItemId, c.qtyPerUnit, c.scrapPct || 0, c.unit));
+  if (components.some(c => bomReaches(c.componentItemId, itemId))) {
+    throw new AppError('Reçete döngüsü oluşuyor / BOM would create a cycle', 422);
+  }
+}
+
+function ensureSupplier(id) {
+  if (id != null && !db.prepare('SELECT id FROM suppliers WHERE id = ?').get(id)) {
+    throw new AppError('Tedarikçi bulunamadı / Supplier not found', 404);
+  }
 }
 
 function writeRawMaterials(itemId, mats) {
@@ -193,6 +233,7 @@ router.post('/', requirePermission('stock.write'), validate(itemSchema), (req, r
     const result = db.txImmediate(() => {
       const id = uuid();
       const warehouseId = resolveWarehouseId(b);
+      ensureSupplier(b.defaultSupplierId);
       db.prepare(`INSERT INTO items (id,name,code,barcode,category,item_type,origin,default_warehouse_id,location,unit,
         min_stock,reorder_qty,costing_method,standard_cost,sale_price,sale_currency,is_lot_tracked,is_serial_tracked,
         shelf_life_days,requires_incoming_inspection,hs_code,default_supplier_id,supplier,description,procurement_type,created_at,company_id)
@@ -239,6 +280,7 @@ router.put('/:id', requirePermission('stock.write'), validatePartial(itemSchema)
 
     db.txImmediate(() => {
       const warehouseId = (b.warehouseId || b.warehouse) ? resolveWarehouseId(b) : existing.default_warehouse_id;
+      if (b.defaultSupplierId !== undefined) ensureSupplier(b.defaultSupplierId);
       db.prepare(`UPDATE items SET name=@name, code=@code, barcode=@barcode, category=@category, item_type=@item_type,
         origin=@origin, default_warehouse_id=@wh, location=@location, unit=@unit, min_stock=@min_stock,
         reorder_qty=@reorder_qty, costing_method=@costing_method, standard_cost=@standard_cost, sale_price=@sale_price,

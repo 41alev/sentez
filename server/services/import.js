@@ -196,30 +196,56 @@ function cellValue(cell) {
 
 /**
  * Sayı ayrıştırma. Türkiye'de "1.234,56" yazılır, İngilizce'de "1,234.56".
- * İkisini de doğru okumak gerekir; yanlış okunan bir maliyet sessizce yanlış
- * stok değeri üretir.
+ * Her iki ayraç birlikte geçiyorsa sondaki ondalıktır; birden çok aynı ayraç
+ * binlik gruptur ("1.234.567"). Tek bir ayraçtan sonra tam üç hane gelirse
+ * ("1,234" / "1.234") yazım iki dilde farklı sayı demektir; T16 gereği bu
+ * tahmin edilmez, satır hatalı işaretlenir. Hücre Excel'de sayı biçiminde
+ * ise ayrıştırmaya gerek kalmaz.
+ * @returns {{ value: number|null, ambiguous?: boolean }}
  */
-function parseNumber(raw) {
-  if (raw === null || raw === undefined || raw === '') return null;
-  if (typeof raw === 'number') return raw;
+function parseNumberDetailed(raw) {
+  if (raw === null || raw === undefined || raw === '') return { value: null };
+  if (typeof raw === 'number') return { value: Number.isFinite(raw) ? raw : null };
   let s = String(raw).trim().replace(/\s/g, '').replace(/[₺$€£]/g, '');
-  if (!s) return null;
-
+  if (!s) return { value: null };
+  if (!/^[+-]?[\d.,]+$/.test(s)) return { value: null };
+  const sign = /^[+-]/.test(s) ? s[0] : '';
+  s = s.replace(/^[+-]/, '');
+  const group = (text, sep) => {
+    const parts = text.split(sep);
+    if (!/^\d{1,3}$/.test(parts[0]) || parts.slice(1).some(p => !/^\d{3}$/.test(p))) return null;
+    return parts.join('');
+  };
   const hasComma = s.includes(','), hasDot = s.includes('.');
+  let normalized;
   if (hasComma && hasDot) {
-    // Son görülen ayraç ondalık ayracıdır
-    s = s.lastIndexOf(',') > s.lastIndexOf('.')
-      ? s.replace(/\./g, '').replace(',', '.')
-      : s.replace(/,/g, '');
-  } else if (hasComma) {
-    // Tek virgül: "1,5" ondalık; "1,234" binlik olabilir — 3 hane kuralı
-    const parts = s.split(',');
-    s = (parts.length === 2 && parts[1].length === 3 && parts[0].length <= 3)
-      ? s.replace(',', '')      // 1,234 = 1234
-      : s.replace(',', '.');    // 1,5 = 1.5
+    const decimalSep = s.lastIndexOf(',') > s.lastIndexOf('.') ? ',' : '.';
+    const thousandSep = decimalSep === ',' ? '.' : ',';
+    const [intPart, fraction, extra] = s.split(decimalSep);
+    if (extra !== undefined || !/^\d+$/.test(fraction || '')) return { value: null };
+    const intDigits = group(intPart, thousandSep);
+    if (intDigits === null) return { value: null };
+    normalized = `${intDigits}.${fraction}`;
+  } else if (hasComma || hasDot) {
+    const sep = hasComma ? ',' : '.';
+    const parts = s.split(sep);
+    if (parts.length > 2) {
+      normalized = group(s, sep);
+      if (normalized === null) return { value: null };
+    } else if (parts[1].length === 3 && parts[0].length >= 1 && parts[0] !== '0') {
+      return { value: null, ambiguous: true };
+    } else {
+      normalized = `${parts[0] || '0'}.${parts[1]}`;
+    }
+  } else {
+    normalized = s;
   }
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
+  const n = Number(sign + normalized);
+  return { value: Number.isFinite(n) ? n : null };
+}
+
+function parseNumber(raw) {
+  return parseNumberDetailed(raw).value;
 }
 
 /** Tarih: Excel serisi, Date nesnesi veya GG.AA.YYYY / YYYY-AA-GG metni. */
@@ -320,7 +346,12 @@ function parseRow(row, colMap, schema) {
     }
 
     if (def.type === 'number') {
-      const n = parseNumber(raw);
+      const parsed = parseNumberDetailed(raw);
+      const n = parsed.value;
+      if (parsed.ambiguous) {
+        errors.push(`${field}: belirsiz sayı ("${String(raw).slice(0, 20)}") — 1.234 mü 1,234 mü? Hücreyi sayı biçiminde kaydedin veya ondalığı iki haneyle yazın`);
+        continue;
+      }
       if (n === null) { errors.push(`${field}: sayı okunamadı ("${String(raw).slice(0, 20)}")`); continue; }
       if (n < 0 && !['salePrice'].includes(field)) warnings.push(`${field}: negatif değer (${n})`);
       data[field] = n;
@@ -517,6 +548,6 @@ function validateReferences(importType, rows) {
 }
 
 module.exports = {
-  SCHEMAS, HEADERS, preview, normalizeHeader, parseNumber, parseDate, parseOrigin,
+  SCHEMAS, HEADERS, preview, normalizeHeader, parseNumber, parseNumberDetailed, parseDate, parseOrigin,
   parseProcurement, mapColumns, cellValue
 };

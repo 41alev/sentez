@@ -179,10 +179,19 @@ const { invariants } = require('./inv');
     info('DH-03a', 'kg ürünü ile adet ürünü birleştirildi mi / sevkiyat kalemi kaynakta kaldı mı', { birlesti: unitMismatch, hedefStok: tgt, kaynaktaKalanSevkKalemi: orphanShip, degismezIhlal: inv.length });
     state.mergeLeft = { A: A.id, B: B.id, soId: so.id };
     assert(!unitMismatch, 'farklı birimli ürünler (kg + adet) uyarısız birleştirildi: hedef stok ' + tgt + ' (birimsiz toplam)');
-    assert.equal(orphanShip, 0, 'sevkiyat kalemleri kaynak (silinmiş) ürüne bağlı kaldı');
+    // 26.09: birleştirme reddedildiyse B silinmez; sevkiyat kalemlerinin B'de kalması doğrudur.
+    // Taşımanın kendisi aynı birimli ikinci bir birleştirmeyle ölçülür.
+    if (unitMismatch) assert.equal(orphanShip, 0, 'sevkiyat kalemleri kaynak (silinmiş) ürüne bağlı kaldı');
+    const C = await item(3, { unit: 'kg' }), D = await item(4, { unit: 'kg' });
+    const so2 = await ok('POST', '/sales/orders', { customerId: c.id, lines: [{ itemId: D.id, qty: 1, price: 1 }] });
+    await ok('POST', '/sales/shipments', { soId: so2.id, destination: 'y', items: [{ itemId: D.id, qty: 1 }] });
+    await ok('POST', '/data-health/merge/item', { sourceId: D.id, targetId: C.id, confirm: true });
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM shipment_items WHERE item_id=?').get(D.id).n, 0, 'aynı birimli birleştirmede sevkiyat kalemi taşınmadı');
+    assert.equal(invariants().length, 0, 'birleştirme sonrası değişmez ihlali');
   });
   await check('DH-03b', 'birleştirme sonrası o ürünün sevkiyatı iptal edilirse ne olur (sevk kalemi kaynakta kaldı)', async () => {
-    const sh = db.prepare('SELECT s.id FROM shipments s WHERE s.so_id=? ORDER BY s.created_at DESC').get(state.mergeLeft.soId);
+    // 26.09: shipments tablosunda created_at yok; test sorgusu düzeltildi (ürün kusuru değildi).
+    const sh = db.prepare('SELECT s.id FROM shipments s WHERE s.so_id=? ORDER BY s.rowid DESC').get(state.mergeLeft.soId);
     const beforeA = db.prepare('SELECT qty_cache q FROM items WHERE id=?').get(state.mergeLeft.A).q;
     const r = await api('POST', `/sales/shipments/${sh.id}/cancel`, {});
     const afterA = db.prepare('SELECT qty_cache q FROM items WHERE id=?').get(state.mergeLeft.A).q;
@@ -191,12 +200,17 @@ const { invariants } = require('./inv');
     assert(r.status < 500 && inv.length === 0, `status=${r.status}; ihlaller=${inv.join(' | ')}`);
   });
   await check('DH-09', 'birleştirme planı eksikliği: items/suppliers/customers\'a işaret eden TÜM yabancı anahtarlar taşınıyor mu', async () => {
-    const planned = { items: new Set(['stock_lots.item_id', 'movements.item_id', 'item_bom.item_id', 'item_bom.component_item_id', 'po_items.item_id', 'sales_order_lines.item_id', 'production_orders.item_id', 'production_order_components.component_item_id', 'stock_count_lines.item_id', 'routings.item_id', 'customer_invoice_lines.item_id', 'inspections.item_id']),
-      suppliers: new Set(['purchase_orders.supplier_id', 'items.default_supplier_id', 'stock_lots.supplier_id', 'supplier_invoices.supplier_id', 'purchase_requests.supplier_id']),
-      customers: new Set(['sales_orders.customer_id', 'shipments.customer_id', 'customer_invoices.customer_id']) };
+    // 26.09: plan artık şemadan dinamik bulunuyor; beklenti sabit liste yerine sunucunun gerçek planıyla karşılaştırılır.
+    const a = await item(0), b = await item(0);
+    const planned = { items: new Set((await ok('GET', `/data-health/merge/item/preview?sourceId=${a.id}&targetId=${b.id}`)).plannedRefs) };
+    const s1 = await ok('POST', '/purchasing/suppliers', { name: 'P1' }), s2 = await ok('POST', '/purchasing/suppliers', { name: 'P2' });
+    planned.suppliers = new Set((await ok('GET', `/data-health/merge/supplier/preview?sourceId=${s1.id}&targetId=${s2.id}`)).plannedRefs);
+    const c1 = await cust('P1'), c2 = await cust('P2');
+    planned.customers = new Set((await ok('GET', `/data-health/merge/customer/preview?sourceId=${c1.id}&targetId=${c2.id}`)).plannedRefs);
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all().map(t => t.name);
     const missing = { items: [], suppliers: [], customers: [] };
     for (const t of tables) for (const fk of db.prepare(`PRAGMA foreign_key_list("${t}")`).all()) if (missing[fk.table] && !planned[fk.table].has(`${t}.${fk.from}`)) missing[fk.table].push(`${t}.${fk.from}`);
+    if (!planned.items.has('shipment_items.item_id')) missing.items.push('shipment_items.item_id (FK tanımsız)');
     info('DH-09a', 'FK ile bağlı ama birleştirmede TAŞINMAYAN sütunlar', missing);
     const n = missing.items.length + missing.suppliers.length + missing.customers.length;
     assert.equal(n, 0, `taşınmayan bağ sayısı ${n}: ` + JSON.stringify(missing));
@@ -284,7 +298,10 @@ const { invariants } = require('./inv');
     assert.equal(ex.totalDebit, ex.totalCredit);
     const p1 = await api('POST', `/sales/invoices/${ret.data.id}/pay`, {}); const p2 = await api('POST', `/sales/invoices/${inv.id}/pay`, {}); const p3 = await api('POST', `/sales/invoices/${inv.id}/pay`, {});
     info('AC-02b', 'iade faturasına ödeme / asıl faturaya iki kez ödeme', { iadeOdeme: p1.status, ilkOdeme: p2.status, ikinciOdeme: p3.status });
-    assert(p1.status >= 400 && p3.status >= 400, `iade faturası "ödendi" yapılabildi=${p1.status < 300}; aynı fatura ikinci kez "ödendi" yapılabildi=${p3.status < 300}`);
+    // 26.09: ikinci ödeme çağrısı idempotent — 200 {alreadyPaid:true} döner, yeni tahsilat satırı yazmaz (K-05).
+    const ledgerRows = db.prepare('SELECT COUNT(*) n FROM customer_invoice_payments WHERE invoice_id=?').get(inv.id).n;
+    assert(p1.status >= 400 && (p3.status >= 400 || (p3.data && p3.data.alreadyPaid === true)) && ledgerRows <= 1,
+      `iade faturası "ödendi" yapılabildi=${p1.status < 300}; ikinci ödeme yeni kayıt yazdı=${ledgerRows > 1}`);
     statusIn(await api('GET', '/accounting/export?from=2026-12-01&to=2026-01-01'), [400]);
     statusIn(await api('GET', '/accounting/export?from=abc&to=def'), [400, 422]);
     statusIn(await api('GET', '/accounting/export?from=2026-01-01&to=2026-01-31', undefined, 'operator'), [403]);

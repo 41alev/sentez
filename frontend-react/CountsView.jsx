@@ -19,6 +19,8 @@ export default function CountsView() {
   const [phase, setPhase] = useState({ status: 'loading', res: null, error: null });
   const warehousesRef = useRef([]);
   const firstLoadRef = useRef(true);
+  // T08: each list keeps its own page; the pager used to always reload page 1.
+  const pagesRef = useRef({});
 
   const reload = useCallback(() => setReloadToken(x => x + 1), []);
 
@@ -31,7 +33,7 @@ export default function CountsView() {
       }
       if (cancelled) return;
       let res;
-      try { res = await Api.counts({ pageSize: 25 }); } catch (e) { UI.err(e); return; }
+      try { res = await Api.counts({ page: pagesRef.current.counts || 1, pageSize: 25 }); } catch (e) { UI.errorState(null, e, typeof reload === 'function' ? reload : null); return; }
       if (cancelled) return;
       setPhase({ status: 'ready', res, error: null });
     })();
@@ -71,7 +73,7 @@ export default function CountsView() {
 
   async function openCount(id) {
     let c;
-    try { c = await Api.count(id); } catch (e) { UI.err(e); return; }
+    try { c = await Api.count(id); } catch (e) { UI.errorState(null, e, typeof reload === 'function' ? reload : null); return; }
     const editable = c.status === 'open' || c.status === 'counted';
 
     modal({
@@ -182,7 +184,7 @@ export default function CountsView() {
         { key: 'startedAt', label: t('date'), render: r => ts(r.startedAt) },
         { key: 'approvedAt', label: t('countApproved'), render: r => r.approvedAt ? ts(r.approvedAt) : '—' }
       ], rows)}
-      ${pager(res, () => reload())}
+      ${pager(res, p => { pagesRef.current.counts = p; reload(); })}
     </div>`;
 
   return <div dangerouslySetInnerHTML={{ __html: html }} />;

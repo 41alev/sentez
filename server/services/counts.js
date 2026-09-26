@@ -1,7 +1,7 @@
 const db = require('../db');
 const { AppError } = require('../lib/core');
 
-/** Shared desktop/mobile count validation and atomic persistence. */
+/** Count line validation and atomic persistence. */
 function saveCountLines(countId, lines) {
   return db.txImmediate(() => {
     const count = db.prepare('SELECT id,status FROM stock_counts WHERE id=?').get(countId);

@@ -2,7 +2,7 @@
 const express = require('express');
 const db = require('../db');
 const { requireAuth } = require('../middleware/auth');
-const { validate, z } = require('../middleware/validate');
+const { validate, z, optionalDate } = require('../middleware/validate');
 const { AppError, uuid, toBase, logAudit } = require('../lib/core');
 const { companyIdOf } = require('../lib/tenant');
 const { today: todayStr, addDays, toLocalDateStr } = require('../lib/dates');
@@ -30,7 +30,8 @@ router.get('/summary', (req, res) => {
     w.name AS warehouse FROM items i LEFT JOIN warehouses w ON w.id = i.default_warehouse_id
     WHERE i.is_active = 1 AND i.deleted_at IS NULL`).all();
 
-  const lowStock = items.filter(i => i.qty_cache <= i.min_stock);
+  // Same rule as the notification job: only items with a critical level set (RP-03).
+  const lowStock = items.filter(i => i.min_stock > 0 && i.qty_cache <= i.min_stock);
   const outOfStock = items.filter(i => i.qty_cache <= 0);
 
   const warnDays = Number(db.prepare("SELECT value FROM settings WHERE key='expiryWarningDays'").get()?.value || 30);
@@ -377,8 +378,10 @@ router.get('/valuation', (req, res) => {
       COALESCE(SUM(CASE WHEN sl.status='quarantine' THEN sl.qty ELSE 0 END),0) quarantine_qty,
       COALESCE(SUM(CASE WHEN sl.status IN ('blocked','rejected') THEN sl.qty ELSE 0 END),0) blocked_qty
     FROM items i LEFT JOIN stock_lots sl ON sl.item_id = i.id
-    WHERE i.is_active = 1 AND i.deleted_at IS NULL
+    WHERE (i.is_active = 1 AND i.deleted_at IS NULL)
+       OR EXISTS (SELECT 1 FROM stock_lots x WHERE x.item_id = i.id AND x.qty > 0)
     GROUP BY i.id ORDER BY available_value DESC`).all();
+  // Stock owned is stock valued, even for a deactivated item (DH-08).
   const total = rows.reduce((s, r) => s + r.available_value, 0);
   res.json({
     totalValueBase: Math.round(total),
@@ -396,7 +399,7 @@ router.get('/valuation', (req, res) => {
 router.get('/pivot-meta', (req, res) => res.json(pivot.meta()));
 
 const filtersSchema = z.object({
-  from: z.string().max(20).optional(), to: z.string().max(20).optional(),
+  from: optionalDate, to: optionalDate,
   type: z.string().max(50).optional(), warehouseId: z.coerce.number().int().optional(),
   itemId: z.string().max(200).optional(), customerId: z.coerce.number().int().optional(),
   supplierId: z.coerce.number().int().optional()
@@ -435,10 +438,11 @@ const savedReportSchema = z.object({
 
 router.post('/saved', validate(savedReportSchema), (req, res) => {
   const b = req.valid;
-  const ds = pivot.DATASOURCES[b.dataSource];
+  const own = (obj, key) => (typeof key === 'string' && Object.prototype.hasOwnProperty.call(obj, key) ? obj[key] : undefined);
+  const ds = own(pivot.DATASOURCES, b.dataSource);
   if (!ds) throw new AppError('Geçersiz veri kaynağı / Invalid data source', 400);
-  if (!ds.dimensions[b.dimension]) throw new AppError('Geçersiz boyut / Invalid dimension', 400);
-  if (!ds.metrics[b.metric]) throw new AppError('Geçersiz ölçü / Invalid metric', 400);
+  if (!own(ds.dimensions, b.dimension)) throw new AppError('Geçersiz boyut / Invalid dimension', 400);
+  if (!own(ds.metrics, b.metric)) throw new AppError('Geçersiz ölçü / Invalid metric', 400);
   const id = uuid();
   db.prepare(`INSERT INTO saved_reports (id, company_id, name, data_source, dimension, metric, chart_type, filters, created_by, created_at)
     VALUES (?,?,?,?,?,?,?,?,?,?)`)

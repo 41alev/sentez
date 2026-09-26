@@ -2,7 +2,7 @@
 const express = require('express');
 const db = require('../db');
 const { AppError, uuid, nextNumber, logAudit, paginate } = require('../lib/core');
-const { today, addDays } = require('../lib/dates');
+const { today, addDays, isValidLocalDate } = require('../lib/dates');
 const { requireAuth, requirePermission } = require('../middleware/auth');
 const { validate, validateQuery, z, pageQuery } = require('../middleware/validate');
 const stock = require('../services/stock');
@@ -85,10 +85,16 @@ const moveSchema = z.object({
   qty: z.coerce.number().positive(),
   warehouseId: z.coerce.number().optional(),
   lotNo: z.string().max(1000).optional(),
-  expiryDate: z.string().nullable().optional(),
+  expiryDate: z.string().refine(isValidLocalDate, 'Geçerli takvim tarihi gerekli / Valid calendar date required').nullable().optional(),
   unitCost: z.coerce.number().min(0).optional(),
   note: z.string().max(5000).optional()
 });
+
+function ensureWarehouse(id) {
+  if (id != null && !db.prepare('SELECT id FROM warehouses WHERE id = ? AND is_active = 1').get(id)) {
+    throw new AppError('Depo bulunamadı / Warehouse not found', 404);
+  }
+}
 
 router.post('/move', requirePermission('stock.write'), validate(moveSchema), (req, res, next) => {
   try {
@@ -96,6 +102,7 @@ router.post('/move', requirePermission('stock.write'), validate(moveSchema), (re
     const item = db.prepare('SELECT * FROM items WHERE id = ? AND deleted_at IS NULL').get(b.itemId);
     if (!item) throw new AppError('Ürün bulunamadı / Item not found', 404);
     const warehouseId = b.warehouseId || item.default_warehouse_id;
+    ensureWarehouse(b.warehouseId);
 
     const result = db.txImmediate(() => {
       if (b.type === 'in') {
@@ -155,6 +162,7 @@ const transferSchema = z.object({
 router.post('/transfer', requirePermission('stock.write'), validate(transferSchema), (req, res, next) => {
   try {
     const b = req.body;
+    ensureWarehouse(b.targetWarehouseId);
     const newLotId = db.txImmediate(() => stock.transferLot({
       lotId: b.lotId, targetWarehouseId: b.targetWarehouseId, qty: b.qty, note: b.note, userId: req.user.id
     }));
@@ -209,6 +217,7 @@ router.get('/counts/:id', (req, res, next) => {
 /** Opening a count freezes the system quantities as a snapshot to count against. */
 router.post('/counts', requirePermission('count.write'), validate(countCreateSchema), (req, res, next) => {
   try {
+    ensureWarehouse(req.body.warehouseId || null);
     const id = db.txImmediate(() => {
       const countId = uuid();
       const countNo = nextNumber('stock_count', 'SAY');

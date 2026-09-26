@@ -5,6 +5,7 @@ const db = require('../db');
 const { uuid, logAudit } = require('../lib/core');
 const { signToken, requireAuth, TOKEN_TTL_HOURS } = require('../middleware/auth');
 const { validate, z } = require('../middleware/validate');
+const { passwordProblem } = require('../lib/password-policy');
 
 const router = express.Router();
 
@@ -22,8 +23,12 @@ router.post('/login', validate(loginSchema), (req, res) => {
 
   const genericFail = () => res.status(401).json({ error: 'Kullanıcı adı veya şifre hatalı / Invalid username or password' });
 
+  // A wrong password must not reveal whether the account exists or is disabled.
   if (!user) return genericFail();
-  if (!user.is_active) return res.status(403).json({ error: 'Hesap pasif durumda / Account is disabled' });
+  if (!user.is_active) {
+    bcrypt.compareSync(password, user.password_hash); // same cost as an active account
+    return genericFail();
+  }
 
   if (user.locked_until && user.locked_until > Date.now()) {
     const mins = Math.ceil((user.locked_until - Date.now()) / 60000);
@@ -31,7 +36,9 @@ router.post('/login', validate(loginSchema), (req, res) => {
   }
 
   if (!bcrypt.compareSync(password, user.password_hash)) {
-    const attempts = user.failed_attempts + 1;
+    // After a lock has expired the counter restarts, so one typo does not re-lock (AU-02).
+    const expired = user.locked_until && user.locked_until <= Date.now();
+    const attempts = (expired ? 0 : user.failed_attempts) + 1;
     const lockUntil = attempts >= MAX_FAILED ? Date.now() + LOCK_MINUTES * 60000 : null;
     db.prepare('UPDATE users SET failed_attempts = ?, locked_until = ? WHERE id = ?').run(attempts, lockUntil, user.id);
     logAudit({ user: null, ip: req.ip }, 'auditLoginFailed', { entityType: 'user', entityId: user.id, detail: username });
@@ -75,15 +82,18 @@ router.get('/me', requireAuth, (req, res) => {
 
 const changePwSchema = z.object({
   currentPassword: z.string().min(1).max(200),
-  newPassword: z.string().min(8, 'Şifre en az 8 karakter olmalı / Password must be at least 8 characters')
-    .regex(/[A-Za-z]/, 'Harf içermeli / Must contain a letter')
-    .regex(/[0-9]/, 'Rakam içermeli / Must contain a digit')
+  newPassword: z.string().max(200)
 });
 
 router.post('/change-password', requireAuth, validate(changePwSchema), (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
   if (!bcrypt.compareSync(req.body.currentPassword, user.password_hash)) {
     return res.status(400).json({ error: 'Mevcut şifre hatalı / Current password is incorrect' });
+  }
+  const problem = passwordProblem(req.body.newPassword);
+  if (problem) return res.status(422).json({ error: problem });
+  if (bcrypt.compareSync(req.body.newPassword, user.password_hash)) {
+    return res.status(422).json({ error: 'Yeni şifre eskisiyle aynı olamaz / New password must differ from the current one' });
   }
   db.prepare('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?')
     .run(bcrypt.hashSync(req.body.newPassword, 12), user.id);

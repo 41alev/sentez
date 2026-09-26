@@ -19,6 +19,8 @@ export default function PlanningView() {
 
   const [tab, setTab] = useState('mrp');
   const [reloadToken, setReloadToken] = useState(0);
+  // T08: each list keeps its own page.
+  const pagesRef = useRef({});
   const [ready, setReady] = useState(false);
 
   const workCentersRef = useRef([]);
@@ -64,7 +66,7 @@ export default function PlanningView() {
     const fns = { mrp: mrpTab, capacity: capacityTab, workcenters: wcTab, routings: routingTab, shifts: shiftTab };
     (async () => {
       try { await fns[tab](body, actions); }
-      catch (e) { UI.err(e); body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+      catch (e) { UI.errorState(body, e, reload); }
     })();
   }, [ready, tab, reloadToken]);
 
@@ -518,7 +520,7 @@ export default function PlanningView() {
     const to = UI.today();
     const from = UI.addDays(to, -30);
     const [logs, oee] = await Promise.all([
-      Api.shiftLogs({ from, to, pageSize: 50 }),
+      Api.shiftLogs({ from, to, page: pagesRef.current.logs || 1, pageSize: 50 }),
       Api.oee({ from, to })
     ]);
     if (can('write')) actions.innerHTML = `<button class="btn btn-primary btn-sm" id="slNew">${UI.icon(UI.ICONS.plus)}${t('newShiftLog')}</button>`;
@@ -555,7 +557,7 @@ export default function PlanningView() {
           { key: 'producedQty', label: t('producedQty'), num: true, render: l => num(l.producedQty) },
           { key: 'scrapQty', label: t('scrapQty'), num: true, render: l => num(l.scrapQty) }
         ], logs.data)}
-        ${logs.totalPages ? pager(logs, () => reload()) : ''}</div>`;
+        ${logs.totalPages ? pager(logs, p => { pagesRef.current.logs = p; reload(); }) : ''}</div>`;
 
     document.getElementById('slNew')?.addEventListener('click', () => shiftLogForm());
 

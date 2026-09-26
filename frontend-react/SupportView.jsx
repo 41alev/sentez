@@ -9,7 +9,7 @@
 import { useEffect, useState, useRef } from 'react';
 
 export default function SupportView() {
-  const { t, esc, ts, table, loading, modal, closeModal,
+  const { t, esc, ts, table, pager, loading, modal, closeModal,
           field, input, select, textarea, val, intVal, can } = UI;
 
   const [reloadToken, setReloadToken] = useState(0);
@@ -40,7 +40,7 @@ export default function SupportView() {
     if (!body || !actions) return;
     (async () => {
       try { await renderList(body, actions); }
-      catch (e) { UI.err(e); body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+      catch (e) { UI.errorState(body, e, reload); }
     })();
   }, [ready, reloadToken]);
 
@@ -64,16 +64,18 @@ export default function SupportView() {
     const statusFilter = actions.dataset.status ?? '';
     const catFilter = actions.dataset.cat ?? '';
     let res;
-    try { res = await Api.tickets({ pageSize: 100, status: statusFilter || undefined, category: catFilter || undefined }); }
-    catch (e) { UI.err(e); return; }
+    const page = Number(actions.dataset.page) || 1;
+    try { res = await Api.tickets({ page, pageSize: 50, status: statusFilter || undefined, category: catFilter || undefined }); }
+    catch (e) { UI.errorState(typeof body !== 'undefined' ? body : null, e, typeof reload === 'function' ? reload : null); return; }
     const rows = res.data || res;
 
     actions.innerHTML = `
       ${select('supStatusFilter', [{ v: '', l: t('all') }, ...['open', 'in_progress', 'waiting_customer', 'resolved', 'closed'].map(s => ({ v: s, l: statusBadge(s).replace(/<[^>]+>/g, '') }))], statusFilter)}
       ${select('supCatFilter', [{ v: '', l: t('all') }, ...['complaint', 'question', 'return', 'warranty', 'other'].map(c => ({ v: c, l: catLabel(c) }))], catFilter)}
       ${can('write') ? `<button class="btn btn-primary btn-sm" id="supNew">${UI.icon(UI.ICONS.plus)}${t('newTicket')}</button>` : ''}`;
-    actions.querySelector('#supStatusFilter').onchange = (e) => { actions.dataset.status = e.target.value; renderList(body, actions); };
-    actions.querySelector('#supCatFilter').onchange = (e) => { actions.dataset.cat = e.target.value; renderList(body, actions); };
+    // A new filter starts from the first page (T08).
+    actions.querySelector('#supStatusFilter').onchange = (e) => { actions.dataset.status = e.target.value; actions.dataset.page = '1'; renderList(body, actions); };
+    actions.querySelector('#supCatFilter').onchange = (e) => { actions.dataset.cat = e.target.value; actions.dataset.page = '1'; renderList(body, actions); };
     document.getElementById('supNew')?.addEventListener('click', () => ticketForm());
 
     body.innerHTML = `<div class="card">${rows.length ? table([
@@ -85,7 +87,7 @@ export default function SupportView() {
       { key: 'status', label: t('ticketStatus'), render: r => statusBadge(r.status) },
       { key: 'assignedUsername', label: t('assignedTo'), render: r => esc(r.assignedUsername || '—') },
       { key: 'createdAt', label: UI.getLang() === 'tr' ? 'Oluşturulma' : 'Created', render: r => ts(r.createdAt) }
-    ], rows) : `<div class="empty" style="padding:36px">${t('noTickets')}</div>`}</div>`;
+    ], rows) : `<div class="empty" style="padding:36px">${t('noTickets')}</div>`}${pager(res, p => { actions.dataset.page = String(p); renderList(body, actions); })}</div>`;
 
     body.querySelectorAll('[data-open]').forEach(el => el.onclick = () => openTicket(el.dataset.open));
   }
@@ -97,7 +99,7 @@ export default function SupportView() {
       title: t('newTicket'), size: 'wide',
       body: `
         <div class="field-row">
-          ${field(t('customerName'), select('supCus', [{ v: '', l: t('none') }, ...customers.map(c => ({ v: c.id, l: c.name }))]))}
+          ${field(t('customerName'), select('supCus', [{ v: '', l: t('none') }, ...customers.map(c => ({ v: c.id, l: c.name }))], undefined, { search: 'customers' }))}
           ${field(t('ticketCategory'), select('supCat', ['complaint', 'question', 'return', 'warranty', 'other'].map(c => ({ v: c, l: catLabel(c) }))))}
         </div>
         <div class="field-row" id="supNewCusRow">
@@ -117,7 +119,7 @@ export default function SupportView() {
 
         box.querySelector('#supGo').onclick = async () => {
           const cusId = val('supCus');
-          const cusName = cusId ? customers.find(c => String(c.id) === String(cusId))?.name : val('supNewCus');
+          const cusName = cusId ? document.querySelector('#supCus').selectedOptions[0]?.textContent : val('supNewCus');
           const subject = val('supSubject');
           if (!cusName) return UI.toast(UI.getLang() === 'tr' ? 'Müşteri adı gerekli.' : 'Customer name is required.', 'err');
           if (!subject) return UI.toast(t('ticketSubject'), 'err');
@@ -136,7 +138,7 @@ export default function SupportView() {
   /* ================= DETAY ================= */
   async function openTicket(id) {
     let tk;
-    try { tk = await Api.ticket(id); } catch (e) { UI.err(e); return; }
+    try { tk = await Api.ticket(id); } catch (e) { UI.errorState(null, e, typeof reload === 'function' ? reload : null); return; }
     const isClosed = tk.status === 'closed';
 
     modal({

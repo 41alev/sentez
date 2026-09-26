@@ -18,6 +18,8 @@ export default function AdminView() {
 
   const [tab, setTab] = useState('users');
   const [reloadToken, setReloadToken] = useState(0);
+  // T08: each list keeps its own page.
+  const pagesRef = useRef({});
 
   const auditFilterRef = useRef({ entityType: '', username: '', page: 1 });
   const importTypeRef = useRef('items');
@@ -54,7 +56,7 @@ export default function AdminView() {
     const fns = { users: usersTab, warehouses: whTab, fx: fxTab, rules: rulesTab, audit: auditTab, settings: settingsTab, import: importTab, templates: templatesTab, health: healthTab, accounting: accountingTab, webhooks: webhooksTab };
     (async () => {
       try { await fns[tab](body, actions); }
-      catch (e) { UI.err(e); body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+      catch (e) { UI.errorState(body, e, reload); }
     })();
   }, [tab, reloadToken]);
 
@@ -244,7 +246,7 @@ export default function AdminView() {
 
   /* ================= FX ================= */
   async function fxTab(body, actions) {
-    const [current, hist] = await Promise.all([Api.currentRates(), Api.exchangeRates({ pageSize: 100 })]);
+    const [current, hist] = await Promise.all([Api.currentRates(), Api.exchangeRates({ page: pagesRef.current.rates || 1, pageSize: 100 })]);
     actions.innerHTML = can('approve') ? `<button class="btn btn-primary btn-sm" id="fxNew">${UI.icon(UI.ICONS.plus)}${t('addFxRate')}</button>` : '';
 
     body.innerHTML = `
@@ -260,7 +262,7 @@ export default function AdminView() {
         { key: 'rate_date', label: t('fxDate'), render: r => dt(r.rate_date) },
         { key: 'source', label: UI.getLang() === 'tr' ? 'Kaynak' : 'Source', render: r => esc(r.source || '—') }
       ], hist.data || hist)}
-      ${hist.totalPages ? pager(hist, () => reload()) : ''}</div>`;
+      ${hist.totalPages ? pager(hist, p => { pagesRef.current.rates = p; reload(); }) : ''}</div>`;
 
     document.getElementById('fxNew')?.addEventListener('click', () => {
       modal({

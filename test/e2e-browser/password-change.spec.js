@@ -1,32 +1,33 @@
 const { test, expect } = require('@playwright/test');
 
-test('mobil geçici şifreyi değiştirir ve çıkış sunucu oturumunu iptal eder', async ({ page, request }) => {
+// Desktop replaces the removed mobile terminal (26 Sep 2026): a user created
+// with a temporary password must change it, the old password must be refused
+// as the new one, and signing out revokes the server session.
+test('geçici şifre masaüstünde değiştirilir ve çıkış sunucu oturumunu iptal eder', async ({ page, request }) => {
   const login = await request.post('/api/auth/login', { data: { username: 'admin', password: 'Admin123!' } });
   const admin = (await login.json()).token;
-  const username = 'pw-mobile-' + Date.now();
+  const username = 'pw-desktop-' + Date.now();
   const created = await request.post('/api/users', { headers: { Authorization: 'Bearer ' + admin },
-    data: { username, password: 'Temp123!', role: 'operator', mustChangePassword: true } });
+    data: { username, password: 'Temp123!x', role: 'operator', mustChangePassword: true } });
   expect(created.status()).toBe(201);
-  await page.goto('/mobile.html');
-  await page.fill('#mUser', username);
-  await page.fill('#mPass', 'Temp123!');
-  await page.click('#mLoginBtn');
-  await expect(page.locator('#mPasswordChange')).toBeVisible();
-  await expect(page.locator('#mApp')).toBeHidden();
-  await page.fill('#mCurrentPassword', 'Temp123!');
-  await page.fill('#mNewPassword', 'Final123!');
-  await page.fill('#mRepeatPassword', 'Different123!');
-  await page.click('#mPasswordSave');
-  await expect(page.locator('#mPasswordError')).toContainText('eşleşmiyor');
-  await page.fill('#mRepeatPassword', 'Final123!');
-  await page.click('#mPasswordSave');
-  await expect(page.locator('#mApp')).toBeVisible();
-  await expect(page.locator('#mPasswordChange')).toBeHidden();
-  const token = await page.evaluate(() => localStorage.getItem('depoTerminalToken'));
+
+  await page.goto('/');
+  await page.fill('#loginUsername', username);
+  await page.fill('#loginPassword', 'Temp123!x');
+  await page.click('#loginForm button[type="submit"]');
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('Şifre');
+  await page.fill('#cpCur', 'Temp123!x');
+  await page.fill('#cpNew2', 'Temp123!x');
+  await page.click('#cpGo2');
+  await expect(page.locator('#toast')).toContainText('aynı');
+  await page.fill('#cpNew2', 'Final123!x');
+  await page.click('#cpGo2');
+  await expect(dialog).toBeHidden();
+
+  const token = await page.evaluate(() => localStorage.getItem('dt_token'));
   const revoked = page.waitForResponse(r => r.url().endsWith('/api/auth/logout'));
-  await page.click('#mMenu');
-  await page.getByRole('button', { name: 'Çıkış', exact: true }).click();
+  await page.click('#btnLogout');
   expect((await revoked).status()).toBe(200);
-  await expect(page.locator('#mLogin')).toBeVisible();
   expect((await request.get('/api/auth/me', { headers: { Authorization: 'Bearer ' + token } })).status()).toBe(401);
 });

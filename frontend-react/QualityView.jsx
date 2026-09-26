@@ -18,6 +18,8 @@ export default function QualityView() {
   const itemsRef = useRef([]);
   const suppliersRef = useRef([]);
   const usersRef = useRef([]);
+  // T08: each list keeps its own page; the pager used to always reload page 1.
+  const pagesRef = useRef({});
 
   function reload() { setReloadToken(x => x + 1); }
 
@@ -47,7 +49,7 @@ export default function QualityView() {
     const fns = { inspections: renderInspections, ncr: renderNcrs, capa: renderCapas, equipment: renderEquipment, plans: renderPlans, trace: renderTrace };
     (async () => {
       try { await fns[tab](body, actions); }
-      catch (e) { UI.err(e); body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+      catch (e) { UI.errorState(body, e, reload); }
     })();
   }, [ready, tab, reloadToken]);
 
@@ -64,7 +66,7 @@ export default function QualityView() {
 
   async function renderInspections(body, actions) {
     let res;
-    try { res = await Api.inspections({ pageSize: 25 }); } catch (e) { UI.err(e); return; }
+    try { res = await Api.inspections({ page: pagesRef.current.inspections || 1, pageSize: 25 }); } catch (e) { UI.errorState(typeof body !== 'undefined' ? body : null, e, typeof reload === 'function' ? reload : null); return; }
     const rows = res.data || res;
     actions.innerHTML = can('quality') ? `<button class="btn btn-primary btn-sm" id="inNew">${UI.icon(UI.ICONS.plus)}${t('newInspection')}</button>` : '';
 
@@ -83,7 +85,7 @@ export default function QualityView() {
       { key: 'createdAt', label: t('date'), render: r => ts(r.createdAt || r.created_at), cls: 'nowrap' },
       { key: 'act', label: t('actions'), render: r => r.result === 'pending' && can('quality')
           ? `<div class="row-actions"><button class="btn btn-primary btn-sm" data-res="${esc(r.id)}">${t('recordResult')}</button></div>` : '' }
-    ], rows)}${res.totalPages ? pager(res, () => reload()) : ''}</div>`;
+    ], rows)}${res.totalPages ? pager(res, p => { pagesRef.current.inspections = p; reload(); }) : ''}</div>`;
 
     document.getElementById('inNew')?.addEventListener('click', () => inspForm());
     body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openInspection(b.dataset.open));
@@ -98,7 +100,7 @@ export default function QualityView() {
         <div class="field-row">
           ${field(t('inspType'), select('inType', [
             { v: 'incoming', l: t('inspIncoming') }, { v: 'in_process', l: t('inspInProcess') }, { v: 'final', l: t('inspFinal') }]))}
-          ${field(t('itemName'), select('inItem', items.map(i => ({ v: i.id, l: i.name }))))}
+          ${field(t('itemName'), select('inItem', items.map(i => ({ v: i.id, l: i.name })), undefined, { search: 'items' }))}
         </div>
         ${field(t('lotNo'), select('inLot', [{ v: '', l: t('none') }]), UI.getLang() === 'tr' ? 'Ürün seçildiğinde partiler yüklenir.' : 'Lots load once you pick an item.')}
         <div class="field-row three">
@@ -145,7 +147,7 @@ export default function QualityView() {
 
   async function openInspection(id) {
     let i;
-    try { i = await Api.inspection(id); } catch (e) { UI.err(e); return; }
+    try { i = await Api.inspection(id); } catch (e) { UI.errorState(null, e, typeof reload === 'function' ? reload : null); return; }
     modal({
       title: i.inspectionNo || i.inspection_no, sub: `${i.itemName || ''} · ${i.lotNo || ''}`, size: 'wide',
       body: `
@@ -190,7 +192,7 @@ export default function QualityView() {
 
   async function resultDialog(id) {
     let i;
-    try { i = await Api.inspection(id); } catch (e) { UI.err(e); return; }
+    try { i = await Api.inspection(id); } catch (e) { UI.errorState(null, e, typeof reload === 'function' ? reload : null); return; }
     const lines = i.lines || [];
     const inspected = i.inspectedQty ?? i.inspected_qty ?? 0;
 
@@ -295,7 +297,7 @@ export default function QualityView() {
 
   async function renderNcrs(body, actions) {
     let res;
-    try { res = await Api.ncrs({ pageSize: 25 }); } catch (e) { UI.err(e); return; }
+    try { res = await Api.ncrs({ page: pagesRef.current.ncrs || 1, pageSize: 25 }); } catch (e) { UI.errorState(typeof body !== 'undefined' ? body : null, e, typeof reload === 'function' ? reload : null); return; }
     const rows = res.data || res;
     actions.innerHTML = can('quality') ? `<button class="btn btn-primary btn-sm" id="ncNew">${UI.icon(UI.ICONS.plus)}${t('newNcr')}</button>` : '';
 
@@ -316,7 +318,7 @@ export default function QualityView() {
           ${r.status !== 'closed' && can('quality') ? `<button class="btn btn-ghost btn-sm" data-disp="${esc(r.id)}">${t('disposition')}</button>` : ''}
           ${r.status !== 'closed' && r.disposition && can('quality') ? `<button class="icon-btn ok" data-close2="${esc(r.id)}">${UI.icon(UI.ICONS.check)}</button>` : ''}
         </div>` }
-    ], rows)}${res.totalPages ? pager(res, () => reload()) : ''}</div>`;
+    ], rows)}${res.totalPages ? pager(res, p => { pagesRef.current.ncrs = p; reload(); }) : ''}</div>`;
 
     document.getElementById('ncNew')?.addEventListener('click', () => ncrForm());
     body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openNcr(rows.find(x => x.id === b.dataset.open)));
@@ -436,7 +438,7 @@ export default function QualityView() {
 
   async function renderCapas(body, actions) {
     let res;
-    try { res = await Api.capas({ pageSize: 25 }); } catch (e) { UI.err(e); return; }
+    try { res = await Api.capas({ page: pagesRef.current.capas || 1, pageSize: 25 }); } catch (e) { UI.errorState(typeof body !== 'undefined' ? body : null, e, typeof reload === 'function' ? reload : null); return; }
     const rows = res.data || res;
     actions.innerHTML = can('quality') ? `<button class="btn btn-primary btn-sm" id="cpNew">${UI.icon(UI.ICONS.plus)}${t('newCapa')}</button>` : '';
 
@@ -456,7 +458,7 @@ export default function QualityView() {
       { key: 'status', label: t('status'), render: r => capaStatusBadge(r.status) },
       { key: 'act', label: t('actions'), render: r => r.status !== 'closed' && can('quality')
           ? `<div class="row-actions"><button class="btn btn-ghost btn-sm" data-cl="${esc(r.id)}">${UI.getLang() === 'tr' ? 'Kapat' : 'Close'}</button></div>` : '' }
-    ], rows)}</div>`;
+    ], rows)}${pager(res, p => { pagesRef.current.capas = p; reload(); })}</div>`;
 
     document.getElementById('cpNew')?.addEventListener('click', () => capaForm(null));
     body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openCapa(rows.find(x => x.id === b.dataset.open)));
@@ -538,7 +540,7 @@ export default function QualityView() {
   /* ================= EQUIPMENT / CALIBRATION ================= */
   async function renderEquipment(body, actions) {
     let res;
-    try { res = await Api.equipment({ pageSize: 50 }); } catch (e) { UI.err(e); return; }
+    try { res = await Api.equipment({ page: pagesRef.current.equipment || 1, pageSize: 50 }); } catch (e) { UI.errorState(typeof body !== 'undefined' ? body : null, e, typeof reload === 'function' ? reload : null); return; }
     const rows = res.data || res;
     actions.innerHTML = can('quality') ? `<button class="btn btn-primary btn-sm" id="eqNew">${UI.icon(UI.ICONS.plus)}${t('newEquipment')}</button>` : '';
 
@@ -557,7 +559,7 @@ export default function QualityView() {
         } },
       { key: 'act', label: t('actions'), render: r => can('quality')
           ? `<div class="row-actions"><button class="btn btn-ghost btn-sm" data-cal="${esc(r.id)}">${t('addCalibration')}</button></div>` : '' }
-    ], rows)}</div>`;
+    ], rows)}${pager(res, p => { pagesRef.current.equipment = p; reload(); })}</div>`;
 
     document.getElementById('eqNew')?.addEventListener('click', () => eqForm());
     body.querySelectorAll('[data-cal]').forEach(b => b.onclick = () => calForm(b.dataset.cal, rows.find(x => String(x.id) === b.dataset.cal)));
@@ -628,7 +630,7 @@ export default function QualityView() {
   /* ================= INSPECTION PLANS ================= */
   async function renderPlans(body, actions) {
     let res;
-    try { res = await Api.inspectionPlans({ pageSize: 100 }); } catch (e) { UI.err(e); return; }
+    try { res = await Api.inspectionPlans({ page: pagesRef.current.plans || 1, pageSize: 100 }); } catch (e) { UI.errorState(typeof body !== 'undefined' ? body : null, e, typeof reload === 'function' ? reload : null); return; }
     const rows = res.data || res;
     actions.innerHTML = can('quality') ? `<button class="btn btn-primary btn-sm" id="plNew">${UI.icon(UI.ICONS.plus)}${t('newPlan')}</button>` : '';
 
@@ -649,7 +651,7 @@ export default function QualityView() {
         { key: 'aql', label: t('aql'), render: r => esc(r.aql || '—') },
         { key: 'act', label: t('actions'), render: r => can('quality')
             ? `<div class="row-actions"><button class="icon-btn danger" data-del="${esc(r.id)}">${UI.icon(UI.ICONS.trash)}</button></div>` : '' }
-      ], rows)}</div>`;
+      ], rows)}${pager(res, p => { pagesRef.current.plans = p; reload(); })}</div>`;
 
     document.getElementById('plNew')?.addEventListener('click', () => planForm());
     body.querySelectorAll('[data-del]').forEach(b => b.onclick = () => UI.confirmDialog(t('confirmDelete'), async () => {
@@ -663,7 +665,7 @@ export default function QualityView() {
       title: t('newPlan'), size: 'wide',
       body: `
         <div class="field-row">
-          ${field(t('planFor'), select('plItem', items.map(i => ({ v: i.id, l: i.name }))))}
+          ${field(t('planFor'), select('plItem', items.map(i => ({ v: i.id, l: i.name })), undefined, { search: 'items' }))}
           ${field(t('inspType'), select('plType', [
             { v: 'incoming', l: t('inspIncoming') }, { v: 'in_process', l: t('inspInProcess') }, { v: 'final', l: t('inspFinal') }]))}
         </div>

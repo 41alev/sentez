@@ -1,5 +1,10 @@
 # Dream Plus — satışa hazırlık uygulama kaydı
 
+> **26 Eylül 2026 notu:** Bu belge yazıldığı günün fotoğrafıdır. T01–T16
+> ve T18'in kod/test kısmı sonradan kapatıldı; güncel durum, kalan saha
+> doğrulamaları ve K-01…K-15 için alınan varsayılan kararlar
+> [`PROJECT_STATUS.md`](../PROJECT_STATUS.md) en üst bölümündedir.
+
 **Devir notu:** Kullanıcı 20 Eylül 2026 tarihinde mevcut işin tamamlanıp yeni geliştirmeye geçilmeden durulmasını istedi. Güncel ve adım adım kalan işler [devir belgesindedir](DEVIR-VE-KALAN-ISLER-2026-09-20.md). Aşağıdaki bölümler kronolojik kayıttır; en son durum için devir belgesini esas alın.
 
 ## 20 Eylül 2026 — bakım güvenliği ve kalıcı kayıt

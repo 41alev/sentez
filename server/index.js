@@ -21,7 +21,7 @@ process.on('exit', releaseMaintenanceLock);
 
 const { runMigrations } = require('./migrate');
 const db = require('./db');
-const { AppError } = require('./lib/core');
+const { AppError, sqliteConstraintResponse } = require('./lib/core');
 
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
@@ -195,7 +195,6 @@ app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/planning', require('./routes/planning'));
 app.use('/api/import', require('./routes/import'));
 app.use('/api/templates', require('./routes/templates'));
-app.use('/api/mobile', require('./routes/mobile'));
 app.use('/api/data-health', require('./routes/data-health'));
 app.use('/api/accounting', require('./routes/accounting'));
 app.use('/api/labels', require('./routes/labels'));
@@ -223,9 +222,8 @@ app.get('/health', (req, res) => {
 });
 
 // ---------- Static frontend ----------
-// Service worker script: bazı tarayıcılar `navigator.serviceWorker.register()`
-// sırasında kesin bir JavaScript MIME tipi bekler; express.static'in
-// varsayılan çözümlemesi yerine burada AÇIKÇA belirtiyoruz.
+// Mobil terminal kaldırıldı (26.09.2026); /sw.js artık eski kayıtları temizleyen
+// kapatma worker'ıdır ve güncelleme denetiminde hemen alınması için no-cache.
 app.get('/sw.js', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache'); // yeni sürüm hemen fark edilsin
@@ -252,6 +250,17 @@ app.use((err, req, res, next) => {
   }
   if (err && err.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({ error: 'Dosya çok büyük (maks 20MB) / File too large (max 20MB)', requestId: req.id });
+  }
+  if (err && typeof err.code === 'string' && err.code.startsWith('LIMIT_')) {
+    return res.status(400).json({ error: 'Geçersiz dosya yükleme isteği / Invalid upload request', requestId: req.id });
+  }
+  // Database constraints are the last line of defence behind route validation.
+  // A violated constraint is a client/data conflict, not a server fault, so it
+  // must not surface as 500; the SQL text itself is never returned.
+  const constraint = sqliteConstraintResponse(err);
+  if (constraint) {
+    logger.warn({ requestId: req.id, code: err.code, err: err.message, url: req.originalUrl }, 'constraint rejected request');
+    return res.status(constraint.status).json({ error: constraint.error, requestId: req.id });
   }
   logger.error({ requestId: req.id, err: err.message, stack: err.stack, url: req.originalUrl }, 'unhandled error');
   res.status(500).json({ error: 'Sunucu hatası / Server error', requestId: req.id });

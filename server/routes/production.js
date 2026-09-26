@@ -4,7 +4,7 @@ const db = require('../db');
 const { AppError, uuid, nextNumber, logAudit } = require('../lib/core');
 const { today } = require('../lib/dates');
 const { requireAuth, requirePermission } = require('../middleware/auth');
-const { validate, validateQuery, z, pageQuery } = require('../middleware/validate');
+const { validate, validateQuery, z, pageQuery, optionalDate } = require('../middleware/validate');
 const stock = require('../services/stock');
 const costing = require('../services/costing');
 const { companyIdOf } = require('../lib/tenant');
@@ -102,7 +102,7 @@ const createSchema = z.object({
   itemId: z.string(),
   qty: z.coerce.number().positive(),
   warehouseId: z.coerce.number().nullable().optional(),
-  date: z.string().nullable().optional(),
+  date: optionalDate,
   lotNo: z.string().max(1000).optional(),
   note: z.string().max(5000).optional(),
   laborCost: z.coerce.number().min(0).default(0),
@@ -166,7 +166,7 @@ const completeSchema = z.object({
   laborCost: z.coerce.number().min(0).optional(),
   overheadCost: z.coerce.number().min(0).optional(),
   lotNo: z.string().max(1000).optional(),
-  expiryDate: z.string().nullable().optional()
+  expiryDate: optionalDate
 });
 
 /**

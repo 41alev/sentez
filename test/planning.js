@@ -232,12 +232,16 @@ function lastWeekdayStr(startOffset = -1) {
   ok('satın alınacak ürün için "buy" önerisi', !sacSugg || sacSugg.type === 'buy',
     sacSugg ? sacSugg.type : 'sac önerisi yok');
 
-  // Netleme doğru mu: net = brüt + emniyet − eldeki − yoldaki
-  const anySugg = sugg.data[0];
-  const expectedNet = anySugg.grossRequirement + anySugg.safetyStock - anySugg.onHand - anySugg.onOrder;
-  ok('net ihtiyaç formülü doğru (brüt + emniyet − eldeki − yoldaki)',
-    Math.abs(anySugg.netRequirement - expectedNet) < 0.01,
-    `${anySugg.netRequirement} vs ${expectedNet.toFixed(2)}`);
+  // Zaman fazlı netleme (T09): her öneri kendi ihtiyaç tarihine kadarki brüt
+  // ihtiyacı ve o tarihe kadar gelen arzı taşır. Bir ürünün ilk önerisinde
+  // net = brüt + emniyet − eldeki − o tarihe kadar gelen yoldaki.
+  const firstPerItem = Object.values(sugg.data.reduce((acc, s) => {
+    if (!acc[s.itemId] || s.needDate < acc[s.itemId].needDate) acc[s.itemId] = s;
+    return acc;
+  }, {}));
+  const badNet = firstPerItem.find(s => Math.abs(s.netRequirement - (s.grossRequirement + s.safetyStock - s.onHand - s.onOrder)) > 0.01);
+  ok('net ihtiyaç formülü doğru (brüt + emniyet − eldeki − tarihe kadar yoldaki)', !badNet,
+    badNet ? `${badNet.itemName}: ${badNet.netRequirement}` : `${firstPerItem.length} ürün`);
   ok('önerilen miktar net ihtiyaçtan az değil',
     sugg.data.every(s => s.suggestedQty >= s.netRequirement - 0.001),
     'parti büyüklüğü yuvarlaması yalnızca yukarı olmalı');
@@ -287,7 +291,9 @@ function lastWeekdayStr(startOffset = -1) {
       `got ${conv2.status}`);
   } else ok('üretim önerisi emre dönüştü', true, 'açık make önerisi yok');
 
-  const dismissTarget = sugg.data.find(s => s.status === 'open');
+  // Liste dönüştürmelerden önce alındı; dönüştürülmüş öneri reddedilemez (409).
+  const converted = new Set([buySugg && buySugg.id, makeSugg && makeSugg.id]);
+  const dismissTarget = sugg.data.find(s => s.status === 'open' && !converted.has(s.id));
   if (dismissTarget) {
     const dis = await api('POST', `/api/planning/mrp/suggestions/${dismissTarget.id}/dismiss`, { token: manager });
     ok('öneri reddedilebiliyor', dis.status === 200);

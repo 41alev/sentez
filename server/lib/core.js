@@ -93,4 +93,46 @@ function paginate(query, params, page = 1, pageSize = 50, countQuery = null) {
   return { data: rows, page: p, pageSize: size, total, totalPages: Math.ceil(total / size) };
 }
 
-module.exports = { AppError, uuid, nextNumber, logAudit, diff, getSetting, setSetting, fxRate, toBase, paginate };
+
+/**
+ * Maps a better-sqlite3 constraint failure to a safe client response.
+ * Returns null for anything that is not a constraint violation.
+ * Trigger messages are fixed English strings written in our migrations; they
+ * are mapped to bilingual messages here instead of being echoed verbatim.
+ */
+const TRIGGER_MESSAGES = {
+  'Payment exceeds open amount': 'Ödeme açık tutarı aşıyor / Payment exceeds open amount',
+  'Credit note cannot be paid': 'İade faturası tahsil edilemez / A credit note cannot be paid',
+  'Invoice is not open': 'Fatura açık değil / Invoice is not open',
+  'Invoice is not approved for payment': 'Fatura ödeme için onaylanmamış / Invoice is not approved for payment',
+  'Invoice VAT is not reconciled': 'Fatura KDV tutarı mutabık değil / Invoice VAT is not reconciled',
+  'Legacy invoice requires reconciliation': 'Eski fatura önce mutabakat gerektirir / Legacy invoice requires reconciliation',
+  'Payments are immutable': 'Ödeme kaydı değiştirilemez / Payments are immutable',
+  'Receipt quantity already invoiced': 'Teslim miktarı daha önce faturalanmış / Receipt quantity already invoiced',
+  'Receipt line belongs to another order': 'Teslim satırı başka siparişe ait / Receipt line belongs to another order'
+};
+function sqliteConstraintResponse(err) {
+  const code = err && typeof err.code === 'string' ? err.code : '';
+  if (!code.startsWith('SQLITE_CONSTRAINT')) return null;
+  if (code === 'SQLITE_CONSTRAINT_FOREIGNKEY') {
+    return { status: 422, error: 'İlişkili kayıt bulunamadı veya kullanımda / Related record not found or in use' };
+  }
+  if (code === 'SQLITE_CONSTRAINT_UNIQUE' || code === 'SQLITE_CONSTRAINT_PRIMARYKEY') {
+    return { status: 409, error: 'Bu kayıt zaten mevcut / Record already exists' };
+  }
+  if (code === 'SQLITE_CONSTRAINT_TRIGGER') {
+    const known = Object.keys(TRIGGER_MESSAGES).find(key => String(err.message).includes(key));
+    return { status: 409, error: known ? TRIGGER_MESSAGES[known] : 'İşlem veri kuralını ihlal ediyor / Operation violates a data rule' };
+  }
+  return { status: 422, error: 'Geçersiz veya eksik değer / Invalid or missing value' };
+}
+
+/** Assignee must be an existing, active user (CRM/support/visits). */
+function ensureActiveUser(id) {
+  if (id == null) return;
+  const u = db.prepare('SELECT is_active FROM users WHERE id = ?').get(id);
+  if (!u) throw new AppError('Atanan kullanıcı bulunamadı / Assigned user not found', 404);
+  if (!u.is_active) throw new AppError('Atanan kullanıcı pasif / Assigned user is inactive', 422);
+}
+
+module.exports = { ensureActiveUser, sqliteConstraintResponse, AppError, uuid, nextNumber, logAudit, diff, getSetting, setSetting, fxRate, toBase, paginate };

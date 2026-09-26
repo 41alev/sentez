@@ -2,7 +2,7 @@
 const express = require('express');
 const db = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
-const { validate, validatePartial, z } = require('../middleware/validate');
+const { validate, validatePartial, z, localDate, optionalDate } = require('../middleware/validate');
 const { AppError, logAudit, diff, paginate } = require('../lib/core');
 const dates = require('../lib/dates');
 const { companyIdOf } = require('../lib/tenant');
@@ -14,6 +14,42 @@ router.use(requireAuth);
 
 const WRITE = requireRole('admin', 'manager', 'operator');
 const MANAGER = requireRole('admin', 'manager');
+
+const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'SS:DD (00:00–23:59) gerekli / HH:MM required');
+const MAX_RANGE_DAYS = 366;
+
+function ensureWarehouse(id) {
+  if (id != null && !db.prepare('SELECT id FROM warehouses WHERE id = ? AND is_active = 1').get(id)) {
+    throw new AppError('Depo bulunamadı / Warehouse not found', 404);
+  }
+}
+function ensureShifts(ids) {
+  if (new Set(ids).size !== ids.length) throw new AppError('Vardiya tekrarlanamaz / Duplicate shift', 422);
+  for (const id of ids) {
+    if (!db.prepare('SELECT id FROM shifts WHERE id = ? AND is_active = 1').get(id)) {
+      throw new AppError('Vardiya bulunamadı / Shift not found', 404);
+    }
+  }
+}
+function activeWorkCenter(id) {
+  const wc = db.prepare('SELECT * FROM work_centers WHERE id = ?').get(id);
+  if (!wc) throw new AppError('İş merkezi bulunamadı / Work centre not found', 404);
+  if (!wc.is_active) throw new AppError('İş merkezi pasif / Work centre is inactive', 422);
+  return wc;
+}
+/** from/to query range: valid calendar dates, ordered, bounded (Faz 0 PL-05). */
+function dateRange(query, defFrom, defTo) {
+  const from = query.from || defFrom;
+  const to = query.to || defTo;
+  if (!dates.isValidLocalDate(from) || !dates.isValidLocalDate(to)) {
+    throw new AppError('Geçerli tarih aralığı gerekli / Valid date range required', 422);
+  }
+  if (from > to) throw new AppError('Başlangıç bitişten sonra olamaz / from must not be after to', 422);
+  if (dates.daysBetween(from, to) > MAX_RANGE_DAYS) {
+    throw new AppError(`Aralık en fazla ${MAX_RANGE_DAYS} gün olabilir / Range too large`, 422);
+  }
+  return { from, to };
+}
 
 /* ============================ İŞ MERKEZLERİ ============================ */
 
@@ -47,6 +83,8 @@ const wcSchema = z.object({
 
 router.post('/work-centers', MANAGER, validate(wcSchema), (req, res) => {
   const b = req.valid;
+  ensureWarehouse(b.warehouseId);
+  ensureShifts(b.shiftIds);
   const result = db.tx(() => {
     if (db.prepare('SELECT id FROM work_centers WHERE code = ? AND company_id = ?').get(b.code, companyIdOf(req))) {
       throw new AppError('Bu kodda bir iş merkezi zaten var / Work centre code already exists', 409);
@@ -68,6 +106,8 @@ router.put('/work-centers/:id', MANAGER, validatePartial(wcSchema), (req, res) =
   const before = db.prepare('SELECT * FROM work_centers WHERE id = ?').get(req.params.id);
   if (!before) throw new AppError('İş merkezi bulunamadı / Work centre not found', 404);
   const b = req.valid;
+  ensureWarehouse(b.warehouseId);
+  if (b.shiftIds) ensureShifts(b.shiftIds);
   db.tx(() => {
     db.prepare(`UPDATE work_centers SET name=COALESCE(?,name), description=COALESCE(?,description),
       warehouse_id=COALESCE(?,warehouse_id), capacity_units=COALESCE(?,capacity_units),
@@ -109,11 +149,19 @@ router.get('/shifts', (req, res) => {
 
 router.post('/shifts', MANAGER, validate(z.object({
   code: z.string().trim().min(1).max(200), name: z.string().trim().min(1).max(200),
-  startTime: z.string().regex(/^\d{2}:\d{2}$/), endTime: z.string().regex(/^\d{2}:\d{2}$/),
-  breakMinutes: z.coerce.number().min(0).default(0),
-  weekdays: z.array(z.coerce.number().int().min(1).max(7)).min(1)
+  startTime: hhmm, endTime: hhmm,
+  breakMinutes: z.coerce.number().min(0).max(1440).default(0),
+  weekdays: z.array(z.coerce.number().int().min(1).max(7)).min(1).max(7)
 })), (req, res) => {
   const b = req.valid;
+  if (b.startTime === b.endTime) throw new AppError('Vardiya başlangıç ve bitişi aynı olamaz / Shift start and end cannot be equal', 422);
+  if (new Set(b.weekdays).size !== b.weekdays.length) throw new AppError('Hafta günü tekrarlanamaz / Duplicate weekday', 422);
+  if (capacity.shiftMinutes({ start_time: b.startTime, end_time: b.endTime, break_minutes: b.breakMinutes }) <= 0) {
+    throw new AppError('Mola vardiya süresinden kısa olmalı / Break must be shorter than the shift', 422);
+  }
+  if (db.prepare('SELECT id FROM shifts WHERE code = ?').get(b.code)) {
+    throw new AppError('Bu kodda bir vardiya zaten var / Shift code already exists', 409);
+  }
   const info = db.prepare(`INSERT INTO shifts (code,name,start_time,end_time,break_minutes,weekdays)
     VALUES (?,?,?,?,?,?)`).run(b.code, b.name, b.startTime, b.endTime, b.breakMinutes, b.weekdays.join(','));
   logAudit(req, 'auditShiftAdd', { entityType: 'shift', entityId: info.lastInsertRowid, newValue: b, detail: b.name });
@@ -128,13 +176,20 @@ router.get('/calendar-exceptions', (req, res) => {
 });
 
 router.post('/calendar-exceptions', MANAGER, validate(z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  date: localDate,
   workCenterId: z.coerce.number().int().optional(),
   reason: z.string().max(5000).optional(),
   exceptionType: z.enum(['holiday', 'partial']).default('holiday'),
-  availableHours: z.coerce.number().min(0).optional()
+  availableHours: z.coerce.number().min(0).max(24).optional()
 })), (req, res) => {
   const b = req.valid;
+  if (b.workCenterId) activeWorkCenter(b.workCenterId);
+  if (b.exceptionType === 'partial' && b.availableHours == null) {
+    throw new AppError('Kısmi gün için çalışılabilir saat gerekli / Available hours required for a partial day', 422);
+  }
+  if (db.prepare('SELECT id FROM calendar_exceptions WHERE date = ? AND work_center_id IS ?').get(b.date, b.workCenterId || null)) {
+    throw new AppError('Bu gün için istisna zaten var / Exception already exists for this day', 409);
+  }
   const info = db.prepare(`INSERT INTO calendar_exceptions (work_center_id,date,reason,exception_type,available_hours)
     VALUES (?,?,?,?,?)`).run(b.workCenterId || null, b.date, b.reason || null, b.exceptionType, b.availableHours ?? null);
   logAudit(req, 'auditCalendarException', { entityType: 'calendar_exception', entityId: info.lastInsertRowid, newValue: b, detail: b.date });
@@ -179,6 +234,7 @@ router.put('/routings/:itemId', MANAGER, validate(z.object({
 
   const nos = req.valid.operations.map(o => o.operationNo);
   if (new Set(nos).size !== nos.length) throw new AppError('Operasyon numaraları tekrarlanamaz / Duplicate operation numbers', 400);
+  req.valid.operations.forEach(o => activeWorkCenter(o.workCenterId));
 
   db.tx(() => {
     db.prepare('DELETE FROM routings WHERE item_id = ?').run(itemId);
@@ -195,15 +251,14 @@ router.put('/routings/:itemId', MANAGER, validate(z.object({
 /* ============================ KAPASİTE ============================ */
 
 router.get('/capacity', (req, res) => {
-  const { from, to, workCenterId } = req.query;
-  const start = from || dates.today();
-  const end = to || dates.addDays(dates.today(), 30);
+  const { workCenterId } = req.query;
+  const { from: start, to: end } = dateRange(req.query, dates.today(), dates.addDays(dates.today(), 30));
   res.json({ from: start, to: end, data: capacity.capacityLoad({ from: start, to: end, workCenterId: workCenterId || null }) });
 });
 
 /* ============================ ÇİZELGELEME ============================ */
 
-router.post('/schedule/:orderId', WRITE, validate(z.object({ startFrom: z.string().max(1000).optional() })), (req, res) => {
+router.post('/schedule/:orderId', WRITE, validate(z.object({ startFrom: optionalDate })), (req, res) => {
   const result = db.txImmediate(() => capacity.scheduleOrder(req.params.orderId, { startFrom: req.valid.startFrom }));
   logAudit(req, 'auditSchedule', { entityType: 'production_order', entityId: req.params.orderId,
     newValue: { plannedStart: result.plannedStart, plannedEnd: result.plannedEnd, isLate: result.isLate } });
@@ -247,7 +302,13 @@ router.post('/operations/:id/:action', WRITE, (req, res) => {
       .run(Date.now(), req.user.id, id);
   } else if (action === 'complete') {
     if (op.status !== 'in_progress') throw new AppError('Önce operasyonu başlatın / Start the operation first', 409);
-    const { completedQty = 0, scrapQty = 0, notes } = req.body || {};
+    const parsed = z.object({
+      completedQty: z.number().min(0).max(1e12).default(0),
+      scrapQty: z.number().min(0).max(1e12).default(0),
+      notes: z.string().max(5000).optional()
+    }).safeParse(req.body || {});
+    if (!parsed.success) throw new AppError('Geçersiz veri / Validation failed', 422);
+    const { completedQty, scrapQty, notes } = parsed.data;
     const end = Date.now();
     const minutes = op.actual_start ? (end - op.actual_start) / 60000 : null;
     db.prepare(`UPDATE production_operations SET status='completed', actual_end=?, actual_minutes=?,
@@ -286,7 +347,7 @@ router.get('/shift-logs', (req, res) => {
 });
 
 router.post('/shift-logs', WRITE, validate(z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  date: localDate,
   shiftId: z.coerce.number().int(),
   workCenterId: z.coerce.number().int(),
   workedMinutes: z.coerce.number().min(0),
@@ -298,6 +359,8 @@ router.post('/shift-logs', WRITE, validate(z.object({
   notes: z.string().max(5000).optional()
 })), (req, res) => {
   const b = req.valid;
+  if (!db.prepare('SELECT id FROM shifts WHERE id = ?').get(b.shiftId)) throw new AppError('Vardiya bulunamadı / Shift not found', 404);
+  activeWorkCenter(b.workCenterId);
   if (b.downtimeMinutes > b.workedMinutes) {
     throw new AppError('Duruş süresi çalışılan süreden fazla olamaz / Downtime cannot exceed worked time', 400);
   }
@@ -321,8 +384,7 @@ router.post('/shift-logs', WRITE, validate(z.object({
 /* ============================ OEE ============================ */
 
 router.get('/oee', (req, res) => {
-  const from = req.query.from || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-  const to = req.query.to || new Date().toISOString().slice(0, 10);
+  const { from, to } = dateRange(req.query, dates.addDays(dates.today(), -30), dates.today());
   res.json(capacity.oee({ from, to, workCenterId: req.query.workCenterId || null }));
 });
 
@@ -381,9 +443,11 @@ router.get('/mrp/suggestions', (req, res) => {
   });
 });
 
-router.post('/mrp/suggestions/:id/convert', MANAGER, (req, res) => {
+router.post('/mrp/suggestions/:id/convert', MANAGER, validate(z.object({
+  warehouseId: z.coerce.number().int().positive().optional()
+})), (req, res) => {
   const result = db.txImmediate(() => mrp.convertSuggestion(req.params.id, {
-    userId: req.user.id, warehouseId: req.body && req.body.warehouseId
+    userId: req.user.id, warehouseId: req.valid.warehouseId
   }));
   logAudit(req, 'auditMrpConvert', { entityType: 'mrp_suggestion', entityId: req.params.id,
     newValue: result, detail: result.number });
@@ -393,7 +457,9 @@ router.post('/mrp/suggestions/:id/convert', MANAGER, (req, res) => {
 router.post('/mrp/suggestions/:id/dismiss', MANAGER, (req, res) => {
   const s = db.prepare('SELECT * FROM mrp_suggestions WHERE id = ?').get(req.params.id);
   if (!s) throw new AppError('Öneri bulunamadı / Suggestion not found', 404);
-  db.prepare("UPDATE mrp_suggestions SET status='dismissed' WHERE id=?").run(req.params.id);
+  if (s.status === 'dismissed') return res.json({ ok: true, alreadyDismissed: true });
+  if (s.status !== 'open') throw new AppError('Bu öneri zaten işlenmiş / Suggestion already processed', 409);
+  db.prepare("UPDATE mrp_suggestions SET status='dismissed' WHERE id=? AND status='open'").run(req.params.id);
   logAudit(req, 'auditMrpDismiss', { entityType: 'mrp_suggestion', entityId: s.id, detail: s.item_name });
   res.json({ ok: true });
 });

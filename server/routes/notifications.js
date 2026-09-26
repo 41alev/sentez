@@ -3,6 +3,7 @@ const express = require('express');
 const db = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { paginate, logAudit, AppError } = require('../lib/core');
+const { validate, z } = require('../middleware/validate');
 const notifications = require('../services/notifications');
 
 const router = express.Router();
@@ -55,9 +56,14 @@ router.get('/mail-status', requireRole('admin', 'manager'), (req, res) => {
 });
 
 /** Deneme e-postası gönderir — ayarların doğru olduğunu kurulumda kanıtlar. */
-router.post('/test-mail', requireRole('admin'), async (req, res, next) => {
+router.post('/test-mail', requireRole('admin'), validate(z.object({
+  to: z.string().trim().email().max(254).optional()
+}).passthrough()), async (req, res, next) => {
   try {
-    const to = (req.body && req.body.to) || process.env.SMTP_FROM;
+    if (!notifications.mailStatus().configured) {
+      throw new AppError('E-posta (SMTP) yapılandırılmamış / Email (SMTP) is not configured', 409);
+    }
+    const to = req.valid.to || process.env.SMTP_FROM;
     if (!to) throw new AppError('Alıcı adresi gerekli / Recipient required', 400);
     const r = await notifications.sendEmail(to, '[Dream Plus] Test e-postası',
       'Bu bir test mesajıdır. Bu e-postayı aldıysanız SMTP ayarlarınız çalışıyor demektir.');

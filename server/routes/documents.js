@@ -141,19 +141,36 @@ router.post('/:id/revise', MANAGER, upload.single('file'), (req, res) => {
   if (!old) throw new AppError('Doküman bulunamadı / Document not found', 404);
   const b = req.body || {};
   const newRev = b.revision || String(Number(old.revision) + 1 || 2);
+  // Only the current revision can be revised; revising an old one would
+  // branch the chain and leave two "current" documents (Faz 0 DOC-03).
+  if (old.superseded_by != null) {
+    if (req.file) fs.rmSync(req.file.path, { force: true });
+    throw new AppError('Yalnızca güncel revizyon revize edilebilir / Only the current revision can be revised', 409);
+  }
 
-  const info = db.prepare(`INSERT INTO documents (doc_no,title,doc_type,revision,file_path,original_name,mime_type,size_bytes,
-      ref_type,ref_id,is_controlled,effective_date,review_date,uploaded_by,uploaded_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-    old.doc_no, b.title || old.title, old.doc_type, newRev,
-    req.file ? path.basename(req.file.path) : old.file_path,
-    req.file ? req.file.originalname : old.original_name,
-    req.file ? req.file.mimetype : old.mime_type,
-    req.file ? req.file.size : old.size_bytes,
-    old.ref_type, old.ref_id, old.is_controlled,
-    b.effectiveDate || null, b.reviewDate || null, req.user.id, Date.now()
-  );
-  db.prepare('UPDATE documents SET superseded_by = ? WHERE id = ?').run(info.lastInsertRowid, old.id);
+  let info;
+  try {
+    info = db.txImmediate(() => {
+      const inserted = db.prepare(`INSERT INTO documents (doc_no,title,doc_type,revision,file_path,original_name,mime_type,size_bytes,
+          ref_type,ref_id,is_controlled,effective_date,review_date,uploaded_by,uploaded_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+        old.doc_no, b.title || old.title, old.doc_type, newRev,
+        req.file ? path.basename(req.file.path) : old.file_path,
+        req.file ? req.file.originalname : old.original_name,
+        req.file ? req.file.mimetype : old.mime_type,
+        req.file ? req.file.size : old.size_bytes,
+        old.ref_type, old.ref_id, old.is_controlled,
+        b.effectiveDate || null, b.reviewDate || null, req.user.id, Date.now()
+      );
+      const claimed = db.prepare('UPDATE documents SET superseded_by = ? WHERE id = ? AND superseded_by IS NULL')
+        .run(inserted.lastInsertRowid, old.id).changes;
+      if (claimed !== 1) throw new AppError('Doküman eşzamanlı olarak revize edildi / Document was revised concurrently', 409);
+      return inserted;
+    });
+  } catch (e) {
+    if (req.file) fs.rmSync(req.file.path, { force: true });
+    throw e;
+  }
   logAudit(req, 'auditDocumentRevise', {
     entityType: 'document', entityId: info.lastInsertRowid,
     oldValue: { revision: old.revision }, newValue: { revision: newRev }, detail: old.title
@@ -166,6 +183,11 @@ router.delete('/:id', MANAGER, (req, res) => {
   if (!d) throw new AppError('Doküman bulunamadı / Document not found', 404);
   if (d.is_controlled) throw new AppError('Kontrollü doküman silinemez, yeni revizyon oluşturun / Controlled documents cannot be deleted — create a revision');
   db.prepare('DELETE FROM documents WHERE id = ?').run(d.id);
+  // Remove the stored file unless another revision still points to it (DOC-04).
+  if (d.file_path && !db.prepare('SELECT 1 FROM documents WHERE file_path = ?').get(d.file_path)) {
+    const full = path.join(uploadDir, path.basename(d.file_path));
+    if (full.startsWith(uploadDir)) fs.rmSync(full, { force: true });
+  }
   logAudit(req, 'auditDocumentDelete', { entityType: 'document', entityId: d.id, detail: d.title });
   res.status(204).end();
 });

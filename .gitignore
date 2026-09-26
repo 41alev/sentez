@@ -19,3 +19,5 @@ playwright/.cache/
 # musteri lisans dosyalari uretilir (bkz. server/scripts/license-generate.js);
 # sizip repoya girerse herkes gecerli lisans uretebilir hale gelir.
 license-signing-key.pem
+# customer packages produced by npm run release
+release/

@@ -67,9 +67,14 @@ const UI = (() => {
     const ov = document.getElementById('modalOverlay');
     const box = document.getElementById('modalBox');
     box.className = 'modal ' + size;
+    // T18: a real dialog for assistive technology, with focus kept inside.
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.setAttribute('aria-labelledby', 'modalTitle');
+    if (!ov.classList.contains('show')) lastFocus = document.activeElement;
     box.innerHTML = `
       <div class="modal-head">
-        <div><h3>${esc(title)}</h3>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div>
+        <div><h3 id="modalTitle">${esc(title)}</h3>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div>
         <button class="icon-btn" data-close title="${esc(t('close'))}" aria-label="${esc(t('close'))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
       </div>
       <div class="modal-body">${body}</div>
@@ -78,10 +83,60 @@ const UI = (() => {
     box.querySelectorAll('[data-close]').forEach(b => b.onclick = closeModal);
     ov.onclick = (e) => { if (e.target === ov) closeModal(); };
     if (onOpen) onOpen(box);
+    // Line rows re-render their selects; enhance whatever appears later too.
+    enhanceSelects(box);
+    if (modalObserver) modalObserver.disconnect();
+    modalObserver = new MutationObserver(() => enhanceSelects(box));
+    modalObserver.observe(box, { childList: true, subtree: true });
+    const first = box.querySelector('.modal-body input:not([type=hidden]):not([disabled]), .modal-body select:not([disabled]), .modal-body textarea:not([disabled])')
+      || box.querySelector('.modal-foot button:not([data-close])') || box.querySelector('button');
+    if (first) setTimeout(() => { if (box.contains(first)) first.focus(); }, 0);
     return box;
   }
-  function closeModal() { document.getElementById('modalOverlay').classList.remove('show'); }
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+  let modalObserver = null;
+  let lastFocus = null;
+  function closeModal() {
+    if (modalObserver) { modalObserver.disconnect(); modalObserver = null; }
+    const ov = document.getElementById('modalOverlay');
+    const wasOpen = ov.classList.contains('show');
+    ov.classList.remove('show');
+    if (wasOpen && lastFocus && document.contains(lastFocus)) lastFocus.focus();
+    lastFocus = null;
+  }
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeModal(); return; }
+    // Focus trap: Tab cycles inside an open dialog.
+    const ov = document.getElementById('modalOverlay');
+    if (e.key !== 'Tab' || !ov || !ov.classList.contains('show')) return;
+    const box = document.getElementById('modalBox');
+    const items = [...box.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+      .filter(el => !el.disabled && el.offsetParent !== null);
+    if (!items.length) return;
+    const firstEl = items[0], lastEl = items[items.length - 1];
+    if (e.shiftKey && (document.activeElement === firstEl || !box.contains(document.activeElement))) { e.preventDefault(); lastEl.focus(); }
+    else if (!e.shiftKey && (document.activeElement === lastEl || !box.contains(document.activeElement))) { e.preventDefault(); firstEl.focus(); }
+  });
+  // T18: a second click on a dialog's Save/Confirm while its request is still
+  // running is ignored, so one click = one record.
+  document.addEventListener('click', e => {
+    const btn = e.target.closest && e.target.closest('#modalBox .modal-foot .btn-primary, #modalBox .modal-foot .btn-danger');
+    if (btn && typeof Api !== 'undefined' && Api.pendingWriteCount && Api.pendingWriteCount() > 0) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }
+  }, true);
+
+  /**
+   * T18: failed list load shows the reason and a retry button instead of an
+   * endless spinner. Without a host element it falls back to a toast.
+   */
+  function errorState(host, error, onRetry) {
+    if (!host || !host.isConnected) { err(error); return; }
+    const id = 'retry' + Math.random().toString(36).slice(2, 8);
+    host.innerHTML = `<div class="empty" role="alert">${esc(error && error.message ? error.message : String(error))}
+      ${onRetry ? `<div style="margin-top:12px"><button class="btn btn-primary btn-sm" id="${id}">${esc(t('retry'))}</button></div>` : ''}</div>`;
+    if (onRetry) host.querySelector('#' + id).onclick = () => onRetry();
+  }
 
   function confirmDialog(message, onYes, opts = {}) {
     modal({
@@ -94,13 +149,97 @@ const UI = (() => {
   }
 
   /* ---------- form helpers ---------- */
-  const field = (label, inner, hint) =>
-    `<div class="field"><label>${esc(label)}</label>${inner}${hint ? `<div class="hint">${esc(hint)}</div>` : ''}</div>`;
+  // Labels point at their control so screen readers announce them (T18).
+  const field = (label, inner, hint) => {
+    const m = /\bid="([^"]+)"/.exec(inner || '');
+    return `<div class="field"><label${m ? ` for="${m[1]}"` : ''}>${esc(label)}</label>${inner}${hint ? `<div class="hint">${esc(hint)}</div>` : ''}</div>`;
+  };
   const input = (id, o = {}) =>
     `<input id="${id}" type="${o.type || 'text'}" ${o.value !== undefined ? `value="${esc(o.value)}"` : ''} ${o.min !== undefined ? `min="${o.min}"` : ''} ${o.step ? `step="${o.step}"` : ''} ${o.placeholder ? `placeholder="${esc(o.placeholder)}"` : ''} ${o.attrs || ''}>`;
   const textarea = (id, o = {}) => `<textarea id="${id}" ${o.placeholder ? `placeholder="${esc(o.placeholder)}"` : ''}>${esc(o.value || '')}</textarea>`;
-  const select = (id, options, selected, o = {}) =>
-    `<select id="${id}" ${o.attrs || ''}>${options.map(op => `<option value="${esc(op.v)}" ${String(op.v) === String(selected) ? 'selected' : ''}>${esc(op.l)}</option>`).join('')}</select>`;
+  const select = (id, options, selected, o = {}) => {
+    // A selected record outside the preloaded page must not silently fall back
+    // to the first option (T08); it is kept and its label is resolved later.
+    const missing = selected !== undefined && selected !== null && selected !== '' &&
+      !options.some(op => String(op.v) === String(selected));
+    const extra = missing ? `<option value="${esc(selected)}" selected data-unresolved="1">#${esc(selected)}</option>` : '';
+    const search = o.search ? ` data-search="${esc(o.search)}"` : '';
+    return `<select id="${id}"${search} ${o.attrs || ''}>${extra}${options.map(op => `<option value="${esc(op.v)}" ${String(op.v) === String(selected) ? 'selected' : ''}>${esc(op.l)}</option>`).join('')}</select>`;
+  };
+
+  /* ---------- server-side searchable selects (T08) ---------- */
+  const SEARCH_SOURCES = {
+    items: {
+      find: q => Api.items({ q, pageSize: 30 }).then(r => (r.data || r).map(i => ({ v: i.id, l: i.code ? `${i.name} (${i.code})` : i.name }))),
+      one: id => Api.item(id).then(i => i.code ? `${i.name} (${i.code})` : i.name)
+    },
+    customers: {
+      find: q => Api.customers({ q, pageSize: 30 }).then(r => (r.data || r).map(c => ({ v: c.id, l: c.name }))),
+      one: id => Api.customer(id).then(c => c.name)
+    },
+    suppliers: {
+      find: q => Api.suppliers({ q, pageSize: 30 }).then(r => (r.data || r).map(x => ({ v: x.id, l: x.name }))),
+      one: id => Api.supplier(id).then(x => x.name)
+    }
+  };
+
+  /**
+   * Adds a search box above `<select data-search="items|customers|suppliers">`.
+   * Typing queries the server (debounced) and replaces the options with the
+   * matches while keeping the current choice, so lists larger than the
+   * preloaded page stay reachable. Callers keep reading `select.value`.
+   */
+  function enhanceSelect(sel) {
+    if (sel.dataset.enhanced) return;
+    const source = SEARCH_SOURCES[sel.dataset.search];
+    if (!source) return;
+    sel.dataset.enhanced = '1';
+    const unresolved = sel.querySelector('option[data-unresolved]');
+    if (unresolved) {
+      source.one(unresolved.value).then(label => { unresolved.textContent = label; unresolved.removeAttribute('data-unresolved'); })
+        .catch(() => {});
+    }
+    const box = document.createElement('input');
+    box.type = 'search';
+    box.className = 'select-search';
+    box.placeholder = t('search');
+    box.setAttribute('aria-label', `${t('search')} ${sel.closest('.field')?.querySelector('label')?.textContent || ''}`.trim());
+    box.style.marginBottom = '4px';
+    sel.parentNode.insertBefore(box, sel);
+    let version = 0;
+    const run = debounce(async () => {
+      const q = box.value.trim();
+      if (q.length < 2) return;
+      const mine = ++version;
+      try {
+        const found = await source.find(q);
+        if (mine !== version) return;
+        if (!found.length) return;
+        // The first match becomes the choice; the previous choice stays in the
+        // list (last) so the user can switch back without searching again.
+        const current = sel.value;
+        const currentOpt = sel.selectedOptions[0];
+        const keep = current && !found.some(o => String(o.v) === String(current)) && currentOpt
+          ? [{ v: current, l: currentOpt.textContent }] : [];
+        const all = [...found, ...keep];
+        sel.innerHTML = all.map(o => `<option value="${esc(o.v)}">${esc(o.l)}</option>`).join('');
+        sel.value = found[0].v;
+        if (String(found[0].v) !== String(current)) {
+          sel.dispatchEvent(new Event('input', { bubbles: true }));
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      } catch (e) { if (mine === version) err(e); }
+    }, 250);
+    box.addEventListener('input', run);
+  }
+  /** Option for a selected id that is not in the preloaded list (resolved by enhanceSelect). */
+  function missingOption(list, id) {
+    if (id === undefined || id === null || id === '' || list.some(o => String(o.id ?? o.v) === String(id))) return '';
+    return `<option value="${esc(id)}" selected data-unresolved="1">#${esc(id)}</option>`;
+  }
+  function enhanceSelects(root) {
+    (root || document).querySelectorAll('select[data-search]').forEach(enhanceSelect);
+  }
   const checkbox = (id, label, checked) =>
     `<label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-muted);cursor:pointer;margin-bottom:12px">
        <input type="checkbox" id="${id}" ${checked ? 'checked' : ''} style="width:auto;margin:0"> ${esc(label)}</label>`;
@@ -497,6 +636,6 @@ const UI = (() => {
     table, pager, card, stat, loading, tabs,
     lotStatusBadge, stockStatus, poStatusBadge, prodStatusBadge, shipStatusBadge, originBadge, roleLabel,
     chart, PALETTE, printDoc, clearPrintCache, loadPrintConfig, exportCsv, downloadJson, icon, ICONS,
-    debounce, can, onBarcodeScan
+    debounce, can, onBarcodeScan, enhanceSelects, missingOption, errorState
   };
 })();

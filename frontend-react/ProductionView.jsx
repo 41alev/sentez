@@ -27,14 +27,14 @@ export default function ProductionView() {
         firstLoadRef.current = false;
         try {
           const [it, wh, st] = await Promise.all([
-            Api.items({ pageSize: 300 }), Api.warehouses(), Api.settings().catch(() => ({}))
+            Api.items({ pageSize: 300 }), Api.warehouses(), Api.publicSettings().catch(() => ({}))
           ]);
           itemsRef.current = it.data; warehousesRef.current = wh; settingsRef.current = st;
         } catch (e) { UI.err(e); }
       }
       if (cancelled) return;
       let res;
-      try { res = await Api.production({ ...filters, pageSize: 25 }); } catch (e) { UI.err(e); return; }
+      try { res = await Api.production({ ...filters, pageSize: 25 }); } catch (e) { UI.errorState(null, e, typeof reload === 'function' ? reload : null); return; }
       if (cancelled) return;
       setPhase({ status: 'ready', res, error: null });
     })();
@@ -121,7 +121,7 @@ export default function ProductionView() {
 
   async function openProd(id) {
     let p;
-    try { p = await Api.productionOrder(id); } catch (e) { UI.err(e); return; }
+    try { p = await Api.productionOrder(id); } catch (e) { UI.errorState(null, e, typeof reload === 'function' ? reload : null); return; }
     modal({
       title: p.orderNo, sub: `${p.itemName} · ${num(p.qty)}`,
       size: 'wide',
@@ -169,7 +169,7 @@ export default function ProductionView() {
     try {
       p = await Api.productionOrder(id);
       reqs = await Api.productionRequirements(id).then(r => r.requirements || r).catch(() => []);
-    } catch (e) { UI.err(e); return; }
+    } catch (e) { UI.errorState(null, e, typeof reload === 'function' ? reload : null); return; }
 
     const short = reqs.filter(r => r.available < (r.needed ?? r.qtyNeeded));
 

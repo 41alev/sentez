@@ -150,7 +150,7 @@ export default function LotsView() {
       }
       if (cancelled) return;
       let res;
-      try { res = await Api.lots({ ...filters, pageSize: 25 }); } catch (e) { UI.err(e); return; }
+      try { res = await Api.lots({ ...filters, pageSize: 25 }); } catch (e) { UI.errorState(null, e, typeof reload === 'function' ? reload : null); return; }
       if (cancelled) return;
       setPhase({ status: 'ready', res, error: null });
     })();

@@ -25,27 +25,30 @@ router.get('/', (req, res) => {
   if (q.length < MIN_LEN) {
     return res.json({ items: [], customers: [], suppliers: [], salesOrders: [], purchaseOrders: [], lots: [] });
   }
-  const like = `%${q}%`;
+  // User text is matched literally: % and _ are escaped, not wildcards (SE-01).
+  const like = `%${q.slice(0, 100).replace(/[\\%_]/g, ch => '\\' + ch)}%`;
+  const L = "LIKE ? ESCAPE '\\'";
 
   const items = db.prepare(`SELECT id, name, code, barcode FROM items
-    WHERE deleted_at IS NULL AND (name LIKE ? OR code LIKE ? OR barcode LIKE ?)
+    WHERE deleted_at IS NULL AND is_active = 1 AND (name ${L} OR code ${L} OR barcode ${L})
     ORDER BY name LIMIT ?`).all(like, like, like, LIMIT);
 
+  // Inactive and anonymized parties are not offered as search hits (SE-02).
   const customers = db.prepare(`SELECT id, name, code FROM customers
-    WHERE name LIKE ? OR code LIKE ? ORDER BY name LIMIT ?`).all(like, like, LIMIT);
+    WHERE is_active = 1 AND anonymized_at IS NULL AND (name ${L} OR code ${L}) ORDER BY name LIMIT ?`).all(like, like, LIMIT);
 
   const suppliers = db.prepare(`SELECT id, name, code FROM suppliers
-    WHERE name LIKE ? OR code LIKE ? ORDER BY name LIMIT ?`).all(like, like, LIMIT);
+    WHERE is_active = 1 AND anonymized_at IS NULL AND (name ${L} OR code ${L}) ORDER BY name LIMIT ?`).all(like, like, LIMIT);
 
   const salesOrders = db.prepare(`SELECT id, so_no, customer_name FROM sales_orders
-    WHERE so_no LIKE ? ORDER BY date DESC LIMIT ?`).all(like, LIMIT);
+    WHERE so_no ${L} ORDER BY date DESC LIMIT ?`).all(like, LIMIT);
 
   const purchaseOrders = db.prepare(`SELECT id, po_no, supplier_name FROM purchase_orders
-    WHERE po_no LIKE ? ORDER BY date DESC LIMIT ?`).all(like, LIMIT);
+    WHERE po_no ${L} ORDER BY date DESC LIMIT ?`).all(like, LIMIT);
 
   const lots = db.prepare(`SELECT sl.id, sl.lot_no, i.name AS item_name FROM stock_lots sl
     LEFT JOIN items i ON i.id = sl.item_id
-    WHERE sl.lot_no LIKE ? ORDER BY sl.received_at DESC LIMIT ?`).all(like, LIMIT);
+    WHERE sl.lot_no ${L} ORDER BY sl.received_at DESC LIMIT ?`).all(like, LIMIT);
 
   res.json({
     items: items.map(i => ({ id: i.id, label: i.name, sub: i.code || i.barcode || '' })),

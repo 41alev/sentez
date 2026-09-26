@@ -1,5 +1,12 @@
 # Faz 0 doğrulama takımı
 
+> **26 Eylül 2026 güncellemesi:** yedi dosyanın tamamı 0 FAIL / 0 ERROR
+> durumuna getirildi ve `node test/run-all.js faz0-verify` ile ana pakete
+> (dolayısıyla CI'a) bağlandı. Aşağıdaki "run-all'a eklenmedi" bölümü
+> tarihsel gerekçedir. Eski beklentisi geçersizleşen kontroller (LC-01,
+> SI-04, AU-06, DH-02/03/03b/09, AC-02) dosyada tarih ve gerekçeyle
+> güncellendi; ürün davranışı gevşetilmedi.
+
 20 Eylül 2026'da devir belgesindeki "düzeltildi" iddialarını bağımsız olarak
 doğrulamak için yazılan, tek seferlik ama **tekrar çalıştırılabilir** kötü
 senaryo testleri. `test/*.js` (asıl regresyon paketi, `test/run-all.js`

@@ -142,7 +142,7 @@ router.get('/branding/current', (req, res) => {
 });
 
 router.put('/branding/current', MANAGER, validate(z.object({
-  name: z.string().max(200).optional(), phone: z.string().max(40).optional(),
+  name: z.string().trim().min(1, 'Firma adı boş olamaz / Company name required').max(200).optional(), phone: z.string().max(40).optional(),
   email: z.string().max(120).optional(), website: z.string().max(200).optional(),
   address: z.string().max(500).optional(), printFooter: z.string().max(1000).optional(),
   taxNo: z.string().max(50).optional(), taxOffice: z.string().max(200).optional(),
