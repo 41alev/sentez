@@ -38,7 +38,7 @@ Testler:
 
 ```bash
 # Her npm test komutu gerektiğinde kendi izole sunucusunu açar:
-npm test                # 77 — iş kuralları, yetki matrisi, uçtan uca akışlar
+npm test                # 83 — iş kuralları, yetki matrisi, uçtan uca akışlar
 npm run test:contract   # 58 — API alan adları arayüzün okuduklarıyla eşleşiyor mu
 npm run test:planning   # 78 — kapasite, çizelgeleme, MRP, OEE
 npm run test:ui         # 113 — arayüz gerçek bir DOM'da çalıştırılır
@@ -47,7 +47,7 @@ npm run test:load       # 19 — yanıt süreleri ve eşzamanlı yazma doğrulu�
 
 # Sunucu gerektirmez:
 npm run test:visual     # 34 — WCAG kontrast, dokunma hedefi, duyarlı tasarım
-npm run test:backup     # 32 — yedek alma ve gerçek geri yükleme provası
+npm run test:backup     # 48 — yedek alma ve gerçek geri yükleme provası
 npm run test:email      # 28 — süreç içi SMTP sunucusuna gerçek teslimat
 npm run test:barcode    # 21 — USB okuyucu algılama ve kamera yedeği
 ```
