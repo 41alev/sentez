@@ -9,6 +9,7 @@ const stock = require('../services/stock');
 const { dispatchEvent } = require('../lib/webhooks');
 const { createSalesOrder } = require('../services/sales-orders');
 const { prepareInvoiceAllocation, saveInvoiceAllocation } = require('../services/invoice-allocation');
+const payments = require('../services/invoice-payments');
 const kvkk = require('../lib/kvkk');
 const { isValidLocalDate } = require('../lib/dates');
 
@@ -352,8 +353,10 @@ router.delete('/shipments/:id', requireRole('admin'), (req, res) => {
 
 router.get('/invoices', (req, res) => {
   const { page = 1, pageSize = 50 } = req.query;
-  res.json(paginate(`SELECT ci.*, c.name AS customer_name FROM customer_invoices ci
-    LEFT JOIN customers c ON c.id = ci.customer_id ORDER BY ci.invoice_date DESC`, [], page, pageSize));
+  const result = paginate(`SELECT ci.*, c.name AS customer_name FROM customer_invoices ci
+    LEFT JOIN customers c ON c.id = ci.customer_id ORDER BY ci.invoice_date DESC, ci.created_at DESC`, [], page, pageSize);
+  result.data = result.data.map(inv => ({ ...inv, ...payments.customerSettlement(inv) }));
+  res.json(result);
 });
 
 const invoiceSchema = z.object({
@@ -458,6 +461,7 @@ router.post('/invoices', WRITE, validate(invoiceSchema), (req, res) => {
       l.vatRate, l.vatAmount, l.lineTotal, l.lineNo));
 
     saveInvoiceAllocation(id, prepared);
+    if (b.invoiceType === 'iade') payments.refreshCustomerInvoiceStatus(b.originalInvoiceId);
     logAudit(req, 'auditCustomerInvoiceAdd', { entityType: 'customer_invoice', entityId: id,
       newValue: { invoiceNo, amount, currency: b.currency, lineCount: computed.length }, detail: invoiceNo });
     return db.prepare('SELECT * FROM customer_invoices WHERE id = ?').get(id);
@@ -477,6 +481,7 @@ router.get('/invoices/:id', (req, res) => {
     fxRate: inv.fx_rate, status: inv.status, invoiceType: inv.invoice_type, originalInvoiceId: inv.original_invoice_id,
     subtotal: inv.subtotal, vatTotal: inv.vat_total, discountTotal: inv.discount_total,
     soId: inv.so_id, shipmentId: inv.shipment_id,
+    ...payments.customerSettlement(inv), payments: payments.listCustomerPayments(inv.id),
     lines: lines.map(l => ({
       id: l.id, itemId: l.item_id, itemName: l.item_name, itemCode: l.item_code,
       qty: l.qty, unit: l.unit, unitPrice: l.unit_price, discountRate: l.discount_rate,
@@ -485,18 +490,30 @@ router.get('/invoices/:id', (req, res) => {
   });
 });
 
+const paymentSchema = z.object({
+  amount: z.number().positive().max(1e12).optional(),
+  paidOn: z.string().refine(isValidLocalDate, 'Geçerli tarih gerekli / Valid date required').optional(),
+  method: z.enum(['cash', 'bank', 'card', 'check', 'other']).optional(),
+  reference: z.string().trim().max(200).optional(),
+  note: z.string().trim().max(1000).optional(),
+  requestKey: z.string().trim().min(8).max(100).optional()
+}).strict();
+
+/** Full settlement of the open amount; kept for the one-click UI action. */
 router.post('/invoices/:id/pay', WRITE, (req, res) => {
-  const result = db.txImmediate(() => {
-    const inv = db.prepare('SELECT * FROM customer_invoices WHERE id = ?').get(req.params.id);
-    if (!inv) throw new AppError('Fatura bulunamadı / Invoice not found', 404);
-    if (inv.invoice_type === 'iade') throw new AppError('İade faturası tahsil edilemez / A credit note cannot be paid', 409);
-    if (inv.status === 'paid') return { ok: true, alreadyPaid: true };
-    if (inv.status !== 'issued') throw new AppError('Bu fatura tahsil edilemez / Invoice is not issued', 409);
-    db.prepare("UPDATE customer_invoices SET status='paid' WHERE id = ?").run(inv.id);
-    logAudit(req, 'auditCustomerInvoicePaid', { entityType: 'customer_invoice', entityId: inv.id, detail: inv.invoice_no });
-    return { ok: true };
-  });
-  res.json(result);
+  res.json(payments.recordCustomerPayment(req, req.params.id, {}));
+});
+
+/** K-05: partial (or full) collection recorded in the payment ledger. */
+router.post('/invoices/:id/payments', WRITE, validate(paymentSchema), (req, res) => {
+  const result = payments.recordCustomerPayment(req, req.params.id, req.valid);
+  res.status(result.paymentId && !result.duplicate ? 201 : 200).json(result);
+});
+
+router.get('/invoices/:id/payments', (req, res) => {
+  const inv = db.prepare('SELECT * FROM customer_invoices WHERE id=?').get(req.params.id);
+  if (!inv) throw new AppError('Fatura bulunamadı / Invoice not found', 404);
+  res.json({ ...payments.customerSettlement(inv), payments: payments.listCustomerPayments(inv.id) });
 });
 
 /* ============================ PROFITABILITY ============================ */

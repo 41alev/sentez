@@ -135,10 +135,12 @@ function meta() {
  */
 function runPivot(input) {
   const dsKey = input.dataSource || 'movements';
-  const ds = DATASOURCES[dsKey];
+  // Own keys only: '__proto__'/'constructor' must not resolve to prototype members (RP-05).
+  const own = (obj, key) => (typeof key === 'string' && Object.prototype.hasOwnProperty.call(obj, key) ? obj[key] : undefined);
+  const ds = own(DATASOURCES, dsKey);
   if (!ds) throw new AppError('Geçersiz veri kaynağı / Invalid data source', 400, { allowed: Object.keys(DATASOURCES) });
-  const dim = ds.dimensions[input.dimension];
-  const met = ds.metrics[input.metric];
+  const dim = own(ds.dimensions, input.dimension);
+  const met = own(ds.metrics, input.metric);
   if (!dim) throw new AppError('Geçersiz boyut / Invalid dimension', 400, { allowed: Object.keys(ds.dimensions) });
   if (!met) throw new AppError('Geçersiz ölçü / Invalid metric', 400, { allowed: Object.keys(ds.metrics) });
 

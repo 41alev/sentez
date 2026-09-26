@@ -165,7 +165,10 @@ const { invariants } = require('./inv');
     if (!rc) return info('LC-01b', 'tohum irsaliyesi yok', {});
     const r = await api('POST', `/purchasing/receipts/${rc.id}/landed-costs`, { costType: 'freight', amount: 100 });
     info('LC-01b', 'tohum irsaliyesine ek maliyet', { status: r.status, body: r.data && (r.data.error || r.data) });
-    assert.equal(r.status, 201, 'demo tohum irsaliyesine ek maliyet eklenemiyor: ' + JSON.stringify(r.data).slice(0, 200));
+    // 26.09 yeniden sınıflandırma: tohum irsaliyesinin partileri tüketilmiş; tüketilmiş
+    // maliyete sessizce ek maliyet dağıtmak yanlış COGS üretir. 409 + mutabakat bilinçli koruma.
+    assert(r.status === 201 || r.status === 409, 'beklenmeyen durum: ' + r.status);
+    if (r.status === 409) assert(/mutabakat|reconciliation/i.test(r.data.error), 'mutabakat gerekçesi yok');
   });
   await check('LC-02', 'ek maliyet: negatif/boş tutar, olmayan irsaliye, aynı iş iki kez', async () => {
     const it = await item(); const p = await poOk([{ itemId: it.id, qty: 10, price: 10 }]);
@@ -215,10 +218,13 @@ const { invariants } = require('./inv');
     info('SI-03b', 'ödeme uçları', res);
   });
   await check('SI-04', 'tolerans: %2 içi eşleşir, dışı uyuşmazlık', async () => {
-    const it = await item(); const p = await poOk([{ itemId: it.id, qty: 100, price: 10 }]);
-    await ok('POST', `/purchasing/orders/${p.id}/receipts`, { lines: [{ poItemId: p.items[0].id, qty: 100 }] });
-    assert.equal((await ok('POST', '/purchasing/invoices', { invoiceNo: 'T1', poId: p.id, amount: 1019 })).matchStatus, 'matched');
-    assert.equal((await ok('POST', '/purchasing/invoices', { invoiceNo: 'T2', poId: p.id, amount: 1021 })).matchStatus, 'discrepancy');
+    // 26.09: her fatura teslim miktarını tüketir (T06); ikinci faturanın aynı teslimi
+    // tekrar faturalaması 409 olur. Tolerans bu yüzden iki ayrı siparişle ölçülür.
+    for (const [no, amount, expected] of [['T1', 1019, 'matched'], ['T2', 1021, 'discrepancy']]) {
+      const it = await item(); const p = await poOk([{ itemId: it.id, qty: 100, price: 10 }]);
+      await ok('POST', `/purchasing/orders/${p.id}/receipts`, { lines: [{ poItemId: p.items[0].id, qty: 100 }] });
+      assert.equal((await ok('POST', '/purchasing/invoices', { invoiceNo: no, poId: p.id, amount })).matchStatus, expected);
+    }
   });
 
   console.log('\n[FX] kur');
@@ -297,7 +303,8 @@ const { invariants } = require('./inv');
       jtiYok: jwt.sign({ id: 1, username: 'admin', role: 'admin', jti: 'nope' }, secret),
       cokUzun: 'a.'.repeat(50000)
     };
-    for (const [k, t] of Object.entries(forged)) { const r = await api('GET', '/items', undefined, null, { token: t }); assert.equal(r.status, 401, `${k} -> ${r.status}`); }
+    // 26.09: 100 KB'lık başlık Node HTTP katmanında 431 ile reddedilir (uygulamaya ulaşmaz) — doğru davranış.
+    for (const [k, t] of Object.entries(forged)) { const r = await api('GET', '/items', undefined, null, { token: t }); assert(r.status === 401 || (k === 'cokUzun' && r.status === 431), `${k} -> ${r.status}`); }
     assert.equal((await api('GET', '/items', undefined, null)).status, 401);
   });
   await check('AU-07', 'JWT içindeki rol/kimlik yerine DB kullanılıyor: rol düşürülünce mevcut token yetkisini kaybeder', async () => {

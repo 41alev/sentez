@@ -44,6 +44,7 @@ function jsonResponse(description, schema) {
 }
 
 function ref(name) { return { $ref: `#/components/schemas/${name}` }; }
+const idParam = { name: 'id', in: 'path', required: true, schema: { type: 'string' } };
 
 function buildOpenApiSpec() {
   return {
@@ -346,6 +347,27 @@ function buildOpenApiSpec() {
             description: { type: 'string' }
           }
         },
+        PaymentCreate: {
+          type: 'object', additionalProperties: false,
+          properties: {
+            amount: { type: 'number', exclusiveMinimum: 0, description: 'Verilmezse açık tutarın tamamı / Omit to settle the open amount' },
+            paidOn: { type: 'string', format: 'date' }, method: { type: 'string', enum: ['cash', 'bank', 'card', 'check', 'other'] },
+            reference: { type: 'string', maxLength: 200 }, note: { type: 'string', maxLength: 1000 },
+            requestKey: { type: 'string', minLength: 8, maxLength: 100, description: 'Tekrar gönderimde çift kaydı önler / Idempotency key' }
+          }
+        },
+        InvoiceSettlement: {
+          type: 'object',
+          properties: { paidAmount: { type: 'number' }, creditAmount: { type: 'number' }, openAmount: { type: 'number' }, status: { type: 'string' } }
+        },
+        InvoiceReconcile: {
+          type: 'object', required: ['lines', 'note'], additionalProperties: false,
+          properties: {
+            lines: { type: 'array', items: { type: 'object', required: ['receiptLineId', 'qty'], properties: {
+              receiptLineId: { type: 'integer' }, qty: { type: 'number', exclusiveMinimum: 0 }, vatRate: { type: 'number', minimum: 0, maximum: 100 } } } },
+            vatAmount: { type: 'number', minimum: 0 }, note: { type: 'string', minLength: 5, maxLength: 2000 }
+          }
+        },
         WebhookCreated: { allOf: [ref('Webhook'), { type: 'object', properties: { secret: { type: 'string', description: 'YALNIZCA burada bir kez döner — X-Webhook-Signature doğrulaması için saklayın.' } } }] },
         WebhookDelivery: {
           type: 'object',
@@ -634,6 +656,38 @@ function buildOpenApiSpec() {
       },
       '/sales/shipments/{id}/status': {
         patch: { tags: ['Sales'], summary: 'Sevkiyat durumunu ilerlet / Advance shipment status', security: bearerAuth, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: jsonResponse('Güncellendi — webhook: shipment.status_changed', ref('Shipment')), 404: errorResponse } }
+      },
+      '/sales/invoices/{id}/payments': {
+        get: { tags: ['Sales'], summary: 'Tahsilat geçmişi ve kalan tutar / Payment history and open amount', security: bearerAuth, parameters: [idParam], responses: { 200: jsonResponse('Tahsilatlar', ref('InvoiceSettlement')), 404: errorResponse } },
+        post: {
+          tags: ['Sales'], summary: 'Kısmi/tam tahsilat kaydet / Record a partial or full collection', security: bearerAuth, parameters: [idParam],
+          requestBody: { required: true, content: { 'application/json': { schema: ref('PaymentCreate') } } },
+          responses: { 201: jsonResponse('Kaydedildi', ref('InvoiceSettlement')), 200: jsonResponse('Aynı requestKey ile tekrar / idempotent replay', ref('InvoiceSettlement')), 409: jsonResponse('Açık tutar aşıldı veya fatura kapalı / Exceeds open amount or not open', ref('Error')), 422: errorResponse }
+        }
+      },
+      '/purchasing/invoices/{id}': {
+        get: { tags: ['Purchasing'], summary: 'Tedarikçi faturası, tahsisler ve ödemeler / Supplier invoice with allocations and payments', security: bearerAuth, parameters: [idParam], responses: { 200: jsonResponse('Fatura', { type: 'object' }), 404: errorResponse } }
+      },
+      '/purchasing/invoices/{id}/reconcile': {
+        post: {
+          tags: ['Purchasing'], summary: 'Eski faturayı teslim satırlarıyla eşleştir (tek sefer) / Reconcile a legacy invoice (once)', security: bearerAuth, parameters: [idParam],
+          requestBody: { required: true, content: { 'application/json': { schema: ref('InvoiceReconcile') } } },
+          responses: { 200: jsonResponse('Eşleştirildi', { type: 'object' }), 409: jsonResponse('Zaten eşleştirilmiş veya miktar aşıldı / Already reconciled or over-allocated', ref('Error')), 422: errorResponse }
+        }
+      },
+      '/purchasing/invoices/{id}/approve': {
+        post: {
+          tags: ['Purchasing'], summary: 'Ödemeye onayla (uyuşmazlıkta gerekçe zorunlu) / Approve for payment', security: bearerAuth, parameters: [idParam],
+          requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { note: { type: 'string', maxLength: 2000 }, vatAmount: { type: 'number', minimum: 0 } } } } } },
+          responses: { 200: jsonResponse('Onaylandı', { type: 'object' }), 409: jsonResponse('Eski fatura mutabakat bekliyor / Legacy invoice needs reconciliation', ref('Error')), 422: errorResponse }
+        }
+      },
+      '/purchasing/invoices/{id}/payments': {
+        post: {
+          tags: ['Purchasing'], summary: 'Onaylı faturaya kısmi/tam ödeme / Partial or full supplier payment', security: bearerAuth, parameters: [idParam],
+          requestBody: { required: true, content: { 'application/json': { schema: ref('PaymentCreate') } } },
+          responses: { 201: jsonResponse('Kaydedildi', { type: 'object' }), 409: jsonResponse('Onaysız fatura veya açık tutar aşıldı / Not approved or exceeds open amount', ref('Error')), 422: errorResponse }
+        }
       },
       '/production': {
         get: { tags: ['Production'], summary: 'Üretim emirlerini listele / List production orders', security: bearerAuth, responses: { 200: jsonResponse('Sayfalanmış liste', envelope('ProductionOrder')) } },

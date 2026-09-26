@@ -18,6 +18,9 @@ export default function SalesView() {
   const customersRef = useRef([]);
   const warehousesRef = useRef([]);
   const profitGroupRef = useRef('item');
+  const invoicePageRef = useRef(1);
+  // T08: each list keeps its own page; the pager used to always reload page 1.
+  const pagesRef = useRef({});
 
   function reload() { setReloadToken(x => x + 1); }
 
@@ -45,14 +48,14 @@ export default function SalesView() {
     const fns = { orders: renderOrders, shipments: renderShipments, customers: renderCustomers, invoices: renderInvoices, profit: renderProfit };
     (async () => {
       try { await fns[tab](body, actions); }
-      catch (e) { UI.err(e); body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+      catch (e) { UI.errorState(body, e, reload); }
     })();
   }, [ready, tab, reloadToken]);
 
   /* ================= SALES ORDERS ================= */
   async function renderOrders(body, actions) {
     let res;
-    try { res = await Api.salesOrders({ pageSize: 25 }); } catch (e) { UI.err(e); return; }
+    try { res = await Api.salesOrders({ page: pagesRef.current.orders || 1, pageSize: 25 }); } catch (e) { UI.errorState(typeof body !== 'undefined' ? body : null, e, typeof reload === 'function' ? reload : null); return; }
     const rows = res.data || res;
     actions.innerHTML = can('write') ? `<button class="btn btn-primary btn-sm" id="soNew">${UI.icon(UI.ICONS.plus)}${t('newSO')}</button>` : '';
 
@@ -81,7 +84,7 @@ export default function SalesView() {
           ${['shipped', 'partially_shipped'].includes(r.status) && can('write')
             ? `<button class="btn btn-ghost btn-sm" data-inv="${esc(r.id)}">${t('newInvoice')}</button>` : ''}
         </div>` }
-    ], rows)}${res.totalPages ? pager(res, () => reload()) : ''}</div>`;
+    ], rows)}${res.totalPages ? pager(res, p => { pagesRef.current.orders = p; reload(); }) : ''}</div>`;
 
     document.getElementById('soNew')?.addEventListener('click', () => soForm());
     body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openSO(b.dataset.open));
@@ -108,7 +111,7 @@ export default function SalesView() {
       title: t('newSO'), size: 'wide',
       body: `
         <div class="field-row">
-          ${field(t('customerName'), select('soCus', customers.map(c => ({ v: c.id, l: c.name }))))}
+          ${field(t('customerName'), select('soCus', customers.map(c => ({ v: c.id, l: c.name })), undefined, { search: 'customers' }))}
           ${field(t('currency'), select('soCur', [{ v: 'TRY', l: 'TRY ₺' }, { v: 'USD', l: 'USD $' }, { v: 'EUR', l: 'EUR €' }], 'TRY'))}
         </div>
         <div class="field-row three">
@@ -131,8 +134,8 @@ export default function SalesView() {
         const draw = () => {
           box.querySelector('#soLines').innerHTML = lines.map((l, i) => `
             <div class="dyn-row">
-              <select data-i="${i}" data-f="itemId" style="flex:1;min-width:150px">
-                ${items.map(o => `<option value="${esc(o.id)}" ${o.id === l.itemId ? 'selected' : ''}>${esc(o.name)} (${esc(o.unit)})</option>`).join('')}
+              <select data-i="${i}" data-f="itemId" data-search="items" style="flex:1;min-width:150px">
+                ${UI.missingOption(items, l.itemId)}${items.map(o => `<option value="${esc(o.id)}" ${o.id === l.itemId ? 'selected' : ''}>${esc(o.name)} (${esc(o.unit)})</option>`).join('')}
               </select>
               <input type="number" min="0.0001" step="0.0001" value="${l.qty}" data-i="${i}" data-f="qty" style="width:84px" title="${t('qty')}">
               <input type="number" min="0" step="0.01" value="${l.price}" data-i="${i}" data-f="price" style="width:96px" title="${t('price')}">
@@ -175,7 +178,7 @@ export default function SalesView() {
 
   async function openSO(id) {
     let so;
-    try { so = await Api.salesOrder(id); } catch (e) { UI.err(e); return; }
+    try { so = await Api.salesOrder(id); } catch (e) { UI.errorState(null, e, typeof reload === 'function' ? reload : null); return; }
     modal({
       title: so.soNo, sub: `${so.customerName || ''} · ${dt(so.date)}`, size: 'xwide',
       body: `
@@ -231,7 +234,7 @@ export default function SalesView() {
   /* ================= SHIPMENTS ================= */
   async function renderShipments(body, actions) {
     let res;
-    try { res = await Api.shipments({ pageSize: 25 }); } catch (e) { UI.err(e); return; }
+    try { res = await Api.shipments({ page: pagesRef.current.shipments || 1, pageSize: 25 }); } catch (e) { UI.errorState(typeof body !== 'undefined' ? body : null, e, typeof reload === 'function' ? reload : null); return; }
     const rows = res.data || res;
     actions.innerHTML = can('write') ? `<button class="btn btn-primary btn-sm" id="shNew">${UI.icon(UI.ICONS.plus)}${t('newShipment')}</button>` : '';
 
@@ -249,7 +252,7 @@ export default function SalesView() {
           <button class="icon-btn" data-print="${esc(r.id)}" title="${t('print')}">${UI.icon(UI.ICONS.print)}</button>
           ${can('admin') && r.status === 'Hazırlanıyor' ? `<button class="icon-btn danger" data-del="${esc(r.id)}" title="Sevkiyatı iptal et">${UI.icon(UI.ICONS.trash)}</button>` : ''}
         </div>` }
-    ], rows)}${res.totalPages ? pager(res, () => reload()) : ''}</div>`;
+    ], rows)}${res.totalPages ? pager(res, p => { pagesRef.current.shipments = p; reload(); }) : ''}</div>`;
 
     document.getElementById('shNew')?.addEventListener('click', () => shipmentForm(null));
     body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openShipment(b.dataset.open));
@@ -265,7 +268,7 @@ export default function SalesView() {
   async function shipmentForm(soId) {
     const items = itemsRef.current, customers = customersRef.current, warehouses = warehousesRef.current;
     let so = null;
-    if (soId) { try { so = await Api.salesOrder(soId); } catch (e) { UI.err(e); return; } }
+    if (soId) { try { so = await Api.salesOrder(soId); } catch (e) { UI.errorState(null, e, typeof reload === 'function' ? reload : null); return; } }
 
     // Lines default to what the order still owes; a standalone shipment starts with one blank line.
     let lines = so
@@ -318,8 +321,8 @@ export default function SalesView() {
           const host = box.querySelector('#shLines');
           host.innerHTML = lines.map((l, i) => `
             <div class="dyn-row">
-              <select data-i="${i}" data-f="itemId" style="flex:1;min-width:150px" ${so ? 'disabled' : ''}>
-                ${items.map(o => `<option value="${esc(o.id)}" ${o.id === l.itemId ? 'selected' : ''}>${esc(o.name)} (${esc(o.unit)})</option>`).join('')}
+              <select data-i="${i}" data-f="itemId" data-search="items" style="flex:1;min-width:150px" ${so ? 'disabled' : ''}>
+                ${UI.missingOption(items, l.itemId)}${items.map(o => `<option value="${esc(o.id)}" ${o.id === l.itemId ? 'selected' : ''}>${esc(o.name)} (${esc(o.unit)})</option>`).join('')}
               </select>
               <input type="number" min="0.0001" step="0.0001" value="${l.qty}" data-i="${i}" data-f="qty" style="width:90px" title="${t('qty')}">
               <select data-i="${i}" data-f="lotId" class="lot-sel" style="min-width:180px"><option value="">${t('autoFefo')}</option></select>
@@ -404,7 +407,7 @@ export default function SalesView() {
 
   async function openShipment(id) {
     let s;
-    try { s = await Api.shipment(id); } catch (e) { UI.err(e); return; }
+    try { s = await Api.shipment(id); } catch (e) { UI.errorState(null, e, typeof reload === 'function' ? reload : null); return; }
     modal({
       title: s.shipmentNo, sub: `${s.destination || ''} · ${dt(s.date)}`, size: 'wide',
       body: `
@@ -461,7 +464,7 @@ export default function SalesView() {
   /* ================= CUSTOMERS ================= */
   async function renderCustomers(body, actions) {
     let res;
-    try { res = await Api.customers({ pageSize: 50 }); } catch (e) { UI.err(e); return; }
+    try { res = await Api.customers({ page: pagesRef.current.customers || 1, pageSize: 50 }); } catch (e) { UI.errorState(typeof body !== 'undefined' ? body : null, e, typeof reload === 'function' ? reload : null); return; }
     const rows = res.data || res;
     actions.innerHTML = can('approve') ? `<button class="btn btn-primary btn-sm" id="cuNew">${UI.icon(UI.ICONS.plus)}${t('newCustomer')}</button>` : '';
 
@@ -476,7 +479,7 @@ export default function SalesView() {
       { key: 'act', label: t('actions'), render: r => `<div class="row-actions">
           ${can('approve') ? `<button class="icon-btn" data-edit="${r.id}">${UI.icon(UI.ICONS.edit)}</button>` : ''}
           ${can('admin') ? `<button class="icon-btn danger" data-del="${r.id}">${UI.icon(UI.ICONS.trash)}</button>` : ''}</div>` }
-    ], rows)}</div>`;
+    ], rows)}${pager(res, p => { pagesRef.current.customers = p; reload(); })}</div>`;
 
     document.getElementById('cuNew')?.addEventListener('click', () => customerForm(null));
     body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openCustomer(b.dataset.open));
@@ -535,7 +538,7 @@ export default function SalesView() {
 
   async function openCustomer(id) {
     let c;
-    try { c = await Api.customer(id); } catch (e) { UI.err(e); return; }
+    try { c = await Api.customer(id); } catch (e) { UI.errorState(null, e, typeof reload === 'function' ? reload : null); return; }
     const usage = c.creditLimit > 0 ? (c.openBalanceBase / c.creditLimit) * 100 : 0;
     modal({
       title: c.name, sub: `${c.code || ''} · ${c.country || ''}`, size: 'wide',
@@ -592,34 +595,70 @@ export default function SalesView() {
   };
 
   async function renderInvoices(body, actions) {
+    const tr = UI.getLang() === 'tr';
     let res;
-    try { res = await Api.customerInvoices({ pageSize: 50 }); } catch (e) { UI.err(e); return; }
+    try { res = await Api.customerInvoices({ page: invoicePageRef.current, pageSize: 50 }); } catch (e) { UI.errorState(typeof body !== 'undefined' ? body : null, e, typeof reload === 'function' ? reload : null); return; }
     const rows = res.data || res;
+    const byId = new Map(rows.map(r => [r.id, r]));
 
     body.innerHTML = `<div class="card">${table([
-      { key: 'invoice_no', label: t('invoiceNo'), render: r => `<span class="mono">${esc(r.invoice_no)}</span>` },
+      { key: 'invoice_no', label: t('invoiceNo'), render: r => `<span class="mono">${esc(r.invoice_no)}</span>${r.invoice_type === 'iade'
+          ? `<div class="sub-line">${tr ? 'İade faturası' : 'Credit note'}</div>` : ''}` },
       { key: 'customer_name', label: t('customerName'), render: r => esc(r.customer_name || '—') },
       { key: 'invoice_date', label: t('date'), render: r => dt(r.invoice_date) },
-      { key: 'due_date', label: UI.getLang() === 'tr' ? 'Vade' : 'Due', render: r => {
+      { key: 'due_date', label: tr ? 'Vade' : 'Due', render: r => {
           if (!r.due_date) return '—';
-          const overdue = new Date(r.due_date) < new Date() && r.status === 'issued';
+          const overdue = new Date(r.due_date) < new Date() && r.status === 'issued' && r.invoice_type !== 'iade';
           return overdue ? `<span class="badge crit">${dt(r.due_date)}</span>` : dt(r.due_date);
         } },
-      { key: 'amount', label: UI.getLang() === 'tr' ? 'Tutar' : 'Amount', num: true, render: r => `${num(r.amount, 2)} ${cur(r.currency)}` },
+      { key: 'amount', label: tr ? 'Tutar' : 'Amount', num: true, render: r => `${num(r.amount, 2)} ${cur(r.currency)}` },
+      { key: 'open', label: tr ? 'Kalan' : 'Open', num: true, render: r => r.invoice_type === 'iade' ? '—' : num(r.openAmount, 2) },
       { key: 'status', label: t('status'), render: r => invoiceStatusBadge(r.status) },
       { key: 'act', label: t('actions'), render: r => `<div class="row-actions">
-          ${r.status === 'issued' && can('write') ? `<button class="btn btn-ghost btn-sm" data-pay="${esc(r.id)}">${UI.getLang() === 'tr' ? 'Tahsil Et' : 'Mark Paid'}</button>` : ''}
+          ${r.status === 'issued' && r.invoice_type !== 'iade' && can('write') ? `<button class="btn btn-ghost btn-sm" data-pay="${esc(r.id)}">${tr ? 'Tahsilat' : 'Collect'}</button>` : ''}
         </div>` }
-    ], rows)}</div>`;
+    ], rows)}${pager(res, page => { invoicePageRef.current = page; reload(); })}</div>`;
 
-    body.querySelectorAll('[data-pay]').forEach(b => b.onclick = async () => {
-      try { await Api.payInvoice(b.dataset.pay); UI.ok(t('saved')); reload(); } catch (e) { UI.err(e); }
+    body.querySelectorAll('[data-pay]').forEach(b => b.onclick = () => collectDialog(byId.get(b.dataset.pay)));
+  }
+
+  /** K-05: partial or full collection; one request key per dialog blocks double posting. */
+  function collectDialog(inv) {
+    const tr = UI.getLang() === 'tr';
+    const requestKey = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
+    modal({
+      title: `${tr ? 'Tahsilat' : 'Collection'} — ${inv.invoice_no}`,
+      body: `
+        <p>${tr ? 'Kalan' : 'Open'}: <strong>${num(inv.openAmount, 2)} ${cur(inv.currency)}</strong></p>
+        <div class="field-row">
+          ${field(tr ? 'Tutar' : 'Amount', input('coAmt', { type: 'number', min: 0, step: '0.01', value: inv.openAmount }))}
+          ${field(t('date'), input('coDate', { type: 'date', value: UI.today() }))}
+        </div>
+        ${field(tr ? 'Yöntem' : 'Method', select('coMethod', [{ v: 'bank', l: tr ? 'Banka' : 'Bank' }, { v: 'cash', l: tr ? 'Nakit' : 'Cash' },
+          { v: 'check', l: tr ? 'Çek' : 'Check' }, { v: 'card', l: tr ? 'Kart' : 'Card' }, { v: 'other', l: tr ? 'Diğer' : 'Other' }], 'bank'))}
+        ${field(tr ? 'Referans (dekont no)' : 'Reference', input('coRef'))}`,
+      footer: `<button class="btn btn-ghost" data-close>${t('cancel')}</button><button class="btn btn-primary" id="coGo">${t('save')}</button>`,
+      onOpen: (box) => {
+        const button = box.querySelector('#coGo');
+        button.onclick = async () => {
+          if (button.disabled) return;
+          button.disabled = true;
+          try {
+            const amount = Number(val('coAmt'));
+            if (!(amount > 0)) throw new Error(tr ? 'Pozitif bir tutar girin.' : 'Enter a positive amount.');
+            if (amount > inv.openAmount + 0.005) throw new Error(tr ? 'Tutar kalan alacağı aşıyor.' : 'Amount exceeds the open balance.');
+            await Api.addInvoicePayment(inv.id, { amount, paidOn: val('coDate'), method: val('coMethod'),
+              ...(val('coRef') ? { reference: val('coRef') } : {}), requestKey });
+            closeModal(); UI.ok(t('saved')); reload();
+          } catch (e) { UI.err(e); } finally { button.disabled = false; }
+        };
+      }
     });
   }
 
   async function invoiceForm(so) {
     let preview;
-    try { preview = await Api.customerInvoicePreview(so.id); } catch (e) { UI.err(e); return; }
+    try { preview = await Api.customerInvoicePreview(so.id); } catch (e) { UI.errorState(null, e, typeof reload === 'function' ? reload : null); return; }
     modal({
       title: t('newInvoice'), sub: `${so.soNo} · ${so.customerName || ''}`,
       body: `
@@ -648,7 +687,7 @@ export default function SalesView() {
   async function renderProfit(body, actions) {
     const profitGroup = profitGroupRef.current;
     let p;
-    try { p = await Api.profitability({ groupBy: profitGroup }); } catch (e) { UI.err(e); return; }
+    try { p = await Api.profitability({ groupBy: profitGroup }); } catch (e) { UI.errorState(typeof body !== 'undefined' ? body : null, e, typeof reload === 'function' ? reload : null); return; }
 
     actions.innerHTML = `<button class="btn btn-ghost btn-sm" id="prCsv">${UI.icon(UI.ICONS.download)}CSV</button>`;
 

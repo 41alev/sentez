@@ -12,7 +12,7 @@
 const express = require('express');
 const db = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
-const { validate, validatePartial, z } = require('../middleware/validate');
+const { validate, validatePartial, z, localDate, optionalDate } = require('../middleware/validate');
 const { AppError, uuid, logAudit, paginate } = require('../lib/core');
 const { companyIdOf } = require('../lib/tenant');
 
@@ -71,12 +71,12 @@ router.get('/:id', (req, res) => {
 const visitSchema = z.object({
   customerId: z.coerce.number().int(),
   opportunityId: z.string().max(200).optional(),
-  visitDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  visitDate: localDate,
   purpose: z.string().max(300).optional(),
   notes: z.string().max(5000).optional(),
   latitude: z.coerce.number().min(-90).max(90).optional(),
   longitude: z.coerce.number().min(-180).max(180).optional(),
-  followUpDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+  followUpDate: optionalDate
 });
 
 router.post('/', WRITE, validate(visitSchema), (req, res) => {
@@ -86,8 +86,14 @@ router.post('/', WRITE, validate(visitSchema), (req, res) => {
     if (!c) throw new AppError('Müşteri bulunamadı / Customer not found', 404);
     if (!c.is_active || c.anonymized_at) throw new AppError('Pasif müşteriye ziyaret açılamaz / Customer is inactive', 409);
     if (b.opportunityId) {
-      const o = db.prepare('SELECT id FROM opportunities WHERE id = ?').get(b.opportunityId);
+      const o = db.prepare('SELECT id, customer_id FROM opportunities WHERE id = ?').get(b.opportunityId);
       if (!o) throw new AppError('Fırsat bulunamadı / Opportunity not found', 404);
+      if (o.customer_id != null && o.customer_id !== b.customerId) {
+        throw new AppError('Fırsat başka bir müşteriye ait / Opportunity belongs to another customer', 422);
+      }
+    }
+    if (b.followUpDate && b.followUpDate < b.visitDate) {
+      throw new AppError('Takip tarihi ziyaretten önce olamaz / Follow-up cannot be before the visit', 422);
     }
     const id = uuid();
     db.prepare(`INSERT INTO customer_visits
@@ -109,8 +115,16 @@ router.put('/:id', WRITE, validatePartial(visitUpdateSchema), (req, res) => {
   if (db.prepare('SELECT anonymized_at FROM customers WHERE id = ?').get(before.customer_id)?.anonymized_at) throw new AppError('Anonim müşteri ziyareti düzenlenemez / Anonymized customer visit cannot be edited', 409);
   const b = req.valid;
   if (b.opportunityId) {
-    const o = db.prepare('SELECT id FROM opportunities WHERE id = ?').get(b.opportunityId);
+    const o = db.prepare('SELECT id, customer_id FROM opportunities WHERE id = ?').get(b.opportunityId);
     if (!o) throw new AppError('Fırsat bulunamadı / Opportunity not found', 404);
+    if (o.customer_id != null && o.customer_id !== before.customer_id) {
+      throw new AppError('Fırsat başka bir müşteriye ait / Opportunity belongs to another customer', 422);
+    }
+  }
+  const visitDate = b.visitDate ?? before.visit_date;
+  const followUp = b.followUpDate !== undefined ? b.followUpDate : before.follow_up_date;
+  if (followUp && followUp < visitDate) {
+    throw new AppError('Takip tarihi ziyaretten önce olamaz / Follow-up cannot be before the visit', 422);
   }
   db.prepare(`UPDATE customer_visits SET opportunity_id=COALESCE(?,opportunity_id), visit_date=COALESCE(?,visit_date),
     purpose=COALESCE(?,purpose), notes=COALESCE(?,notes), latitude=COALESCE(?,latitude),

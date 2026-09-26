@@ -3,11 +3,12 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
 const { requireAuth, requireRole, PERMISSIONS } = require('../middleware/auth');
-const { validate, z } = require('../middleware/validate');
+const { validate, z, optionalDate } = require('../middleware/validate');
 const { AppError, logAudit, diff, getSetting, setSetting, paginate } = require('../lib/core');
 const { today } = require('../lib/dates');
 const { companyIdOf } = require('../lib/tenant');
 const kvkk = require('../lib/kvkk');
+const { passwordProblem } = require('../lib/password-policy');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -29,8 +30,8 @@ router.get('/users', ADMIN, (req, res) => {
 });
 
 const userCreateSchema = z.object({
-  username: z.string().trim().min(3).max(200),
-  password: z.string().min(8, 'Şifre en az 8 karakter olmalı / Password must be at least 8 characters'),
+  username: z.string().trim().min(3).max(100).regex(/^[a-zA-Z0-9._-]+$/, 'Yalnızca harf, rakam, nokta, alt çizgi ve tire / Letters, digits, dot, underscore and dash only'),
+  password: z.string().max(200),
   fullName: z.string().max(1000).optional(), email: z.string().email().optional().or(z.literal('')),
   role: z.enum(['admin', 'manager', 'operator', 'quality', 'viewer']),
   approvalLimit: z.coerce.number().min(0).default(0),
@@ -39,17 +40,15 @@ const userCreateSchema = z.object({
 
 /** Reject trivially weak passwords regardless of length. */
 function assertPasswordStrength(pw) {
-  if (pw.length < 8) throw new AppError('Şifre en az 8 karakter olmalı / Password must be at least 8 characters');
-  const weak = ['12345678', 'password', 'qwertyui', 'admin123', '11111111'];
-  if (weak.includes(pw.toLowerCase())) throw new AppError('Şifre çok basit / Password is too weak');
-  const classes = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/].filter(r => r.test(pw)).length;
-  if (classes < 2) throw new AppError('Şifre harf ve rakam içermeli / Password must mix letters and numbers');
+  const problem = passwordProblem(pw);
+  if (problem) throw new AppError(problem, 422);
 }
 
 router.post('/users', ADMIN, validate(userCreateSchema), (req, res) => {
   const b = req.valid;
   assertPasswordStrength(b.password);
-  if (db.prepare('SELECT id FROM users WHERE username = ? AND company_id = ?').get(b.username, companyIdOf(req))) {
+  // Usernames differing only by case (Admin/admin) would be confusable.
+  if (db.prepare('SELECT id FROM users WHERE lower(username) = lower(?) AND company_id = ?').get(b.username, companyIdOf(req))) {
     throw new AppError('Bu kullanıcı adı zaten kullanılıyor / Username already taken', 409);
   }
   const info = db.prepare(`INSERT INTO users (username, full_name, email, password_hash, role, approval_limit, must_change_password, is_active, created_at, company_id)
@@ -61,7 +60,7 @@ router.post('/users', ADMIN, validate(userCreateSchema), (req, res) => {
 
 const userUpdateSchema = z.object({
   role: z.enum(['admin', 'manager', 'operator', 'quality', 'viewer']).optional(),
-  password: z.string().min(8).max(200).optional(),
+  password: z.string().max(200).optional(),
   fullName: z.string().max(1000).optional(),
   email: z.string().email().or(z.literal('')).optional(),
   approvalLimit: z.number().finite().min(0).optional(),
@@ -168,10 +167,22 @@ router.post('/warehouses', MANAGER, validate(z.object({
   }
 });
 
-router.put('/warehouses/:id', MANAGER, (req, res) => {
+router.put('/warehouses/:id', MANAGER, validate(z.object({
+  name: z.string().trim().min(1).max(200).optional(), code: z.string().trim().max(100).optional(),
+  address: z.string().max(5000).optional(), isQuarantine: z.coerce.boolean().optional(),
+  isActive: z.coerce.boolean().optional()
+}).strict()), (req, res) => {
   const before = db.prepare('SELECT * FROM warehouses WHERE id = ?').get(req.params.id);
   if (!before) throw new AppError('Depo bulunamadı / Warehouse not found', 404);
-  const { name, code, address, isQuarantine, isActive } = req.body || {};
+  const { name, code, address, isQuarantine, isActive } = req.valid;
+  if (isActive === false && before.is_active) {
+    const onHand = db.prepare(`SELECT COALESCE(SUM(qty),0) q FROM stock_lots
+      WHERE warehouse_id = ? AND qty > 0 AND status IN ('available','quarantine','blocked')`).get(before.id).q;
+    if (onHand > 0) throw new AppError('Stoklu depo pasifleştirilemez; önce stoğu aktarın / Warehouse still holds stock', 409);
+  }
+  if (name !== undefined && db.prepare('SELECT id FROM warehouses WHERE name = ? AND id != ?').get(name, before.id)) {
+    throw new AppError('Bu isimde bir depo zaten var / Warehouse already exists', 409);
+  }
   db.prepare(`UPDATE warehouses SET name = COALESCE(?,name), code = COALESCE(?,code), address = COALESCE(?,address),
     is_quarantine = COALESCE(?,is_quarantine), is_active = COALESCE(?,is_active) WHERE id = ?`)
     .run(name ?? null, code ?? null, address ?? null,
@@ -185,10 +196,31 @@ router.put('/warehouses/:id', MANAGER, (req, res) => {
 
 /* ============================ SETTINGS ============================ */
 
-router.get('/settings', (req, res) => {
-  const rows = db.prepare('SELECT key, value FROM settings').all();
+function settingsMap() {
   const out = {};
-  rows.forEach(r => out[r.key] = r.value);
+  db.prepare('SELECT key, value FROM settings').all().forEach(r => { out[r.key] = r.value; });
+  return out;
+}
+
+/**
+ * Non-sensitive settings every signed-in user needs (brand name, costing
+ * defaults). Operational and privacy configuration stays behind
+ * GET /settings, which is limited to administrators and managers (AD-02).
+ */
+router.get('/settings/public', (req, res) => {
+  const out = settingsMap();
+  res.json({
+    companyName: out.companyName || 'Dream Plus',
+    baseCurrency: out.baseCurrency || 'TRY',
+    defaultLaborRate: Number(out.defaultLaborRate || 0),
+    defaultOverheadPct: Number(out.defaultOverheadPct || 0),
+    defaultVatRate: Number(out.defaultVatRate ?? 20),
+    expiryWarningDays: Number(out.expiryWarningDays || 30)
+  });
+});
+
+router.get('/settings', MANAGER, (req, res) => {
+  const out = settingsMap();
   res.json({
     companyName: out.companyName || 'Dream Plus',
     baseCurrency: out.baseCurrency || 'TRY',
@@ -205,15 +237,35 @@ router.get('/settings', (req, res) => {
   });
 });
 
-router.put('/settings', MANAGER, (req, res) => {
+const settingsSchema = z.object({
+  companyName: z.string().trim().min(1).max(200),
+  baseCurrency: z.enum(['TRY', 'USD', 'EUR', 'GBP']),
+  defaultLaborRate: z.coerce.number().min(0).max(1e9),
+  defaultOverheadPct: z.coerce.number().min(0).max(1000),
+  defaultVatRate: z.coerce.number().min(0).max(100),
+  expiryWarningDays: z.coerce.number().int().min(0).max(3650),
+  lowStockCheckEnabled: z.coerce.boolean(),
+  labelPrinterIp: z.string().trim().max(255).regex(/^$|^[A-Za-z0-9.-]+$/, 'Geçerli IP veya ana makine adı / Valid IP or hostname'),
+  labelPrinterPort: z.coerce.number().int().min(1).max(65535),
+  kvkkRetentionYears: z.coerce.number().int().min(0).max(100),
+  kvkkAutoAnonymizeEnabled: z.coerce.boolean()
+}).partial().strict();
+
+router.put('/settings', MANAGER, validate(settingsSchema), (req, res) => {
   const before = {};
-  const allowed = ['companyName', 'baseCurrency', 'defaultLaborRate', 'defaultOverheadPct', 'defaultVatRate', 'expiryWarningDays', 'lowStockCheckEnabled', 'labelPrinterIp', 'labelPrinterPort', 'kvkkRetentionYears', 'kvkkAutoAnonymizeEnabled'];
   const changes = {};
-  allowed.forEach(k => {
-    if (req.body[k] !== undefined) {
+  const b = req.valid;
+  if (b.baseCurrency !== undefined && b.baseCurrency !== (getSetting('baseCurrency') || 'TRY')) {
+    const used = db.prepare(`SELECT (SELECT COUNT(*) FROM customer_invoices) + (SELECT COUNT(*) FROM purchase_orders)
+      + (SELECT COUNT(*) FROM movements) AS n`).get().n;
+    if (used > 0) throw new AppError('Kayıt varken ana para birimi değiştirilemez / Base currency cannot change once documents exist', 409);
+  }
+  db.tx(() => {
+    for (const [k, v] of Object.entries(b)) {
       before[k] = getSetting(k);
-      setSetting(k, req.body[k]);
-      changes[k] = req.body[k];
+      const stored = typeof v === 'boolean' ? (v ? '1' : '0') : v;
+      setSetting(k, stored);
+      changes[k] = stored;
     }
   });
   logAudit(req, 'auditSettingsUpdate', { entityType: 'settings', oldValue: before, newValue: changes });
@@ -243,7 +295,7 @@ router.get('/exchange-rates/current', (req, res) => {
 router.post('/exchange-rates', MANAGER, validate(z.object({
   currency: z.enum(['USD', 'EUR', 'GBP']),
   rate: z.coerce.number().positive(),
-  rateDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  rateDate: optionalDate,
   source: z.string().max(1000).optional()
 })), (req, res) => {
   const b = req.valid;
@@ -262,7 +314,7 @@ router.post('/exchange-rates', MANAGER, validate(z.object({
 
 /* ============================ APPROVAL RULES ============================ */
 
-router.get('/approval-rules', (req, res) => {
+router.get('/approval-rules', MANAGER, (req, res) => {
   res.json(db.prepare('SELECT * FROM approval_rules WHERE is_active = 1 ORDER BY doc_type, threshold_base').all());
 });
 
@@ -286,14 +338,14 @@ router.delete('/approval-rules/:id', ADMIN, (req, res) => {
 
 /* ============================ NOTIFICATION RULES ============================ */
 
-router.get('/notification-rules', (req, res) => {
+router.get('/notification-rules', MANAGER, (req, res) => {
   res.json(db.prepare('SELECT * FROM notification_rules ORDER BY rule_type').all());
 });
 
 router.post('/notification-rules', MANAGER, validate(z.object({
   ruleType: z.enum(['low_stock', 'expiry', 'overdue_po', 'ncr_open', 'calibration_due']),
   channel: z.enum(['inapp', 'email']).default('inapp'),
-  thresholdDays: z.coerce.number().int().optional(),
+  thresholdDays: z.coerce.number().int().min(0).max(3650).optional(),
   recipients: z.string().max(1000).optional()
 })), (req, res) => {
   const b = req.valid;
@@ -310,7 +362,7 @@ router.delete('/notification-rules/:id', MANAGER, (req, res) => {
 
 /* ============================ AUDIT LOG ============================ */
 
-router.get('/audit', (req, res) => {
+router.get('/audit', MANAGER, (req, res) => {
   const { entityType = '', entityId = '', username = '', page = 1, pageSize = 100 } = req.query;
   let sql = 'SELECT * FROM audit_log WHERE 1=1';
   const params = [];

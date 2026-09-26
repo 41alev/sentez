@@ -63,7 +63,9 @@ const MERGE_PLANS = {
       ['stock_count_lines', 'item_id', 'sayım satırı'],
       ['routings', 'item_id', 'rota'],
       ['customer_invoice_lines', 'item_id', 'fatura satırı'],
-      ['inspections', 'item_id', 'muayene']
+      ['inspections', 'item_id', 'muayene'],
+      // shipment_items.item_id has no declared FK, so discovery below misses it.
+      ['shipment_items', 'item_id', 'sevkiyat kalemi']
     ]
   },
   supplier: {
@@ -105,22 +107,55 @@ function mergePlan(type) {
   return { ...base, refs };
 }
 
+/**
+ * BOM handling for an item merge (T04). Returns a conflict message or null;
+ * with `apply` it also rewrites item_bom inside the caller's transaction.
+ *  - Source used as a component where the parent already uses the target:
+ *    quantities are the same material now, so they are summed (units are
+ *    equal, enforced above). Different scrap allowances cannot be summed → 409.
+ *  - Source and target both have their own recipe: identical recipes collapse,
+ *    different ones need a person to decide → 409.
+ *  - A merge that would make an item its own component → 409.
+ */
+function planItemBom(source, target, apply) {
+  const rows = db.prepare(`SELECT rowid AS rid, item_id, component_item_id, qty_per_unit, scrap_pct FROM item_bom
+    WHERE item_id IN (?,?) OR component_item_id IN (?,?)`).all(source.id, target.id, source.id, target.id);
+  const map = id => (id === source.id ? target.id : id);
+  if (rows.some(r => map(r.item_id) === map(r.component_item_id))) {
+    return 'Birleştirme kendi kendine reçete oluşturur / Self-referencing BOM';
+  }
+  const sourceRecipe = rows.filter(r => r.item_id === source.id);
+  const targetRecipe = rows.filter(r => r.item_id === target.id);
+  if (sourceRecipe.length && targetRecipe.length) {
+    const norm = list => list.map(r => `${map(r.component_item_id)}|${r.qty_per_unit}|${r.scrap_pct || 0}`).sort().join(';');
+    if (norm(sourceRecipe) !== norm(targetRecipe)) {
+      return 'Reçeteler farklı: iki ürünün de kendi reçetesi var, hangisinin geçerli olduğu elle belirlenmeli / Both items have different recipes';
+    }
+    if (apply) sourceRecipe.forEach(r => db.prepare('DELETE FROM item_bom WHERE rowid = ?').run(r.rid));
+  }
+  const byParent = new Map();
+  for (const r of rows.filter(x => x.item_id !== source.id || !targetRecipe.length)) {
+    const key = `${map(r.item_id)}\u0000${map(r.component_item_id)}`;
+    const other = byParent.get(key);
+    if (!other) { byParent.set(key, r); continue; }
+    if ((other.scrap_pct || 0) !== (r.scrap_pct || 0)) {
+      return 'Reçete satırlarının fire oranları farklı; elle uzlaştırılmalı / BOM scrap allowances differ';
+    }
+    if (apply) {
+      const keep = other.component_item_id === target.id ? other : r;
+      const drop = keep === other ? r : other;
+      db.prepare('UPDATE item_bom SET qty_per_unit = qty_per_unit + ? WHERE rowid = ?').run(drop.qty_per_unit, keep.rid);
+      db.prepare('DELETE FROM item_bom WHERE rowid = ?').run(drop.rid);
+    }
+  }
+  return null;
+}
+
 function mergeConflict(type, source, target) {
   if (type !== 'item') return null;
   if (source.deleted_at || target.deleted_at) return 'Silinmiş ürün birleştirilemez / Deleted item cannot be merged';
   if (source.unit !== target.unit) return 'Farklı birimdeki ürünler birleştirilemez / Item units differ';
-  const bom = db.prepare('SELECT item_id, component_item_id FROM item_bom WHERE item_id IN (?,?) OR component_item_id IN (?,?)')
-    .all(source.id, target.id, source.id, target.id);
-  const projected = new Set();
-  for (const row of bom) {
-    const item = row.item_id === source.id ? target.id : row.item_id;
-    const component = row.component_item_id === source.id ? target.id : row.component_item_id;
-    if (item === component) return 'Birleştirme kendi kendine reçete oluşturur / Self-referencing BOM';
-    const key = `${item}\u0000${component}`;
-    if (projected.has(key)) return 'Reçete satırları çakışıyor; miktarlar elle uzlaştırılmalı / BOM conflict';
-    projected.add(key);
-  }
-  return null;
+  return planItemBom(source, target, false);
 }
 
 /** Tablo/sütun gerçekten var mı? Şema sürüme göre değişebilir. */
@@ -161,6 +196,7 @@ router.get('/merge/:type/preview', MANAGER, (req, res) => {
     source: { id: source.id, name: source.name, code: source.code },
     target: { id: target.id, name: target.name, code: target.code },
     references, totalReferences: references.reduce((s, r) => s + r.count, 0),
+    plannedRefs: plan.refs.map(([table, column]) => `${table}.${column}`),
     canMerge: !conflict, conflict,
     warning: 'Bu işlem geri alınamaz. Kaynak kayıt silinir, tüm bağları hedefe taşınır.'
   });
@@ -184,6 +220,7 @@ router.post('/merge/:type', MANAGER, validate(z.object({
     if (!source || !target) throw new AppError('Kayıt bulunamadı / Record not found', 404);
     const conflict = mergeConflict(req.params.type, source, target);
     if (conflict) throw new AppError(conflict, 409);
+    if (req.params.type === 'item') planItemBom(source, target, true);
     for (const [table, column, label] of plan.refs) {
       if (!refExists(table, column)) continue;
       const info = db.prepare(`UPDATE ${table} SET ${column} = ? WHERE ${column} = ?`).run(targetId, sourceId);
@@ -240,17 +277,25 @@ router.post('/bulk-update/items', MANAGER, validate(z.object({
   };
   const col = columns[field];
 
-  // Sayısal alanlara metin yazmak sessizce 0 üretir; erken reddedilmeli
-  const numeric = ['min_stock', 'safety_stock', 'vat_rate'];
-  let v = value;
-  if (numeric.includes(col)) {
-    v = Number(value);
-    if (!Number.isFinite(v)) throw new AppError(`${field} sayı olmalı / must be a number`, 400);
+  // Each field has its own rule; nothing is silently coerced to 0 (Faz 0 DH-07).
+  const validators = {
+    unit: z.string().trim().min(1).max(50),
+    category: z.string().trim().min(1).max(200),
+    procurementType: z.enum(['make', 'buy']),
+    minStock: z.number().min(0).max(1e12),
+    safetyStock: z.number().min(0).max(1e12),
+    vatRate: z.number().min(0).max(100),
+    defaultSupplierId: z.number().int().positive().nullable(),
+    itemType: z.enum(['raw', 'semi', 'finished', 'consumable']),
+    isActive: z.boolean()
+  };
+  const parsed = validators[field].safeParse(value);
+  if (!parsed.success) throw new AppError(`${field}: geçersiz değer / invalid value`, 422);
+  let v = parsed.data;
+  if (col === 'default_supplier_id' && v != null && !db.prepare('SELECT id FROM suppliers WHERE id = ?').get(v)) {
+    throw new AppError('Tedarikçi bulunamadı / Supplier not found', 404);
   }
-  if (col === 'is_active') v = value ? 1 : 0;
-  if (col === 'procurement_type' && !['make', 'buy'].includes(v)) {
-    throw new AppError('Tedarik şekli "make" veya "buy" olmalı', 400);
-  }
+  if (col === 'is_active') v = v ? 1 : 0;
 
   const placeholders = itemIds.map(() => '?').join(',');
   const info = db.txImmediate(() =>
@@ -288,10 +333,18 @@ router.get('/system', MANAGER, (req, res) => {
   const backupDir = process.env.BACKUP_DIR || path.join(db.dataDir, 'backups');
   let backups = [];
   if (fs.existsSync(backupDir)) {
+    // Routine backups are DB + uploads bundles (directories) since T02; older
+    // installations may still hold single-file .sqlite backups.
     backups = fs.readdirSync(backupDir)
-      .filter(f => f.startsWith('depo-takip-') && f.endsWith('.sqlite'))
-      .map(f => ({ file: f, mtime: fs.statSync(path.join(backupDir, f)).mtimeMs,
-                   size: fs.statSync(path.join(backupDir, f)).size }))
+      .filter(f => f.startsWith('depo-takip-') && (f.endsWith('.bundle') || f.endsWith('.sqlite')))
+      .map(f => {
+        const full = path.join(backupDir, f);
+        const isBundle = f.endsWith('.bundle');
+        const dbFile = isBundle ? path.join(full, 'database.sqlite') : full;
+        return { file: f, kind: isBundle ? 'bundle' : 'database-only', mtime: fs.statSync(full).mtimeMs,
+                 size: fs.existsSync(dbFile) ? fs.statSync(dbFile).size : 0,
+                 complete: !isBundle || fs.existsSync(path.join(full, 'manifest.json')) };
+      })
       .sort((a, b) => b.mtime - a.mtime);
   }
 
@@ -323,7 +376,8 @@ router.get('/system', MANAGER, (req, res) => {
     },
     backups: {
       count: backups.length,
-      latest: backups[0] ? { file: backups[0].file, at: backups[0].mtime, sizeBytes: backups[0].size } : null,
+      latest: backups[0] ? { file: backups[0].file, kind: backups[0].kind, complete: backups[0].complete,
+        at: backups[0].mtime, sizeBytes: backups[0].size } : null,
       // Yedek alınmadan geçen gün: 7 günden fazlaysa ciddi risk
       daysSinceLast: backups[0] ? Math.floor((Date.now() - backups[0].mtime) / 86400000) : null
     },

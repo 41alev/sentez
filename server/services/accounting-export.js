@@ -13,8 +13,10 @@
  * Alış tarafı: supplier_invoices yalnızca KDV HARİÇ tek bir `amount` tutuyor
  * (bkz. routes/purchasing.js — 3'lü eşleştirme net tutar üzerinden yapılıyor).
  * Yeni faturalar teslim satırlarının fatura anındaki fiyat/kur/KDV oranı
- * snapshot'ını kullanır. Eski faturalar için satır eşleşmesi bilinmediğinden
- * PO ürünlerinden ağırlıklı oran tahmini sürer; bu kesin vergi kaydı değildir.
+ * snapshot'ını kullanır; faturada `vat_amount` varsa (yeni kayıt veya
+ * mutabakat sonrası) o tutar kullanılır. Mutabakatı yapılmamış eski
+ * faturalarda PO ürünlerinden ağırlıklı oran tahmini sürer; bu kesin vergi
+ * kaydı değildir ve bu faturalar onaylanıp ödenemez.
  */
 const db = require('../db');
 const { AppError } = require('../lib/core');
@@ -98,7 +100,10 @@ function generateJournalEntries({ from, to, companyId = 1 }) {
     const vatRate = snapshotBase > 0
       ? snapshots.reduce((sum, line) => sum + line.qty * line.unit_price * line.fx_rate * line.vat_rate, 0) / snapshotBase
       : purchaseVatRate(inv.po_id);
-    const vatBase = Math.round(netBase * (vatRate / 100) * 100) / 100;
+    // Mutabık/kayıtlı faturada tedarikçi belgesindeki KDV tutarı otoriterdir.
+    const vatBase = inv.vat_amount != null
+      ? Math.round(inv.vat_amount * rate * 100) / 100
+      : Math.round(netBase * (vatRate / 100) * 100) / 100;
     const grossBase = Math.round((netBase + vatBase) * 100) / 100;
     const desc = `Alış faturası ${inv.invoice_no} — ${inv.supplier_name || ''}`;
     rows.push({ date: inv.invoice_date, docNo: inv.invoice_no, accountCode: map.inventory.code,

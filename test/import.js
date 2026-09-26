@@ -139,13 +139,15 @@ async function uploadPreview(token, importType, buffer, fileName = 'test.xlsx', 
     String(byCode['IMP-N2'].data.salePrice));
   ok('tek virgül ondalık sayılıyor (12,5 → 12.5)', byCode['IMP-N3'].data.salePrice === 12.5,
     String(byCode['IMP-N3'].data.salePrice));
-  ok('üç haneli grup binlik sayılıyor (1,234 → 1234)', byCode['IMP-N4'].data.salePrice === 1234,
-    String(byCode['IMP-N4'].data.salePrice));
+  // T16: "1,234" Türkçede 1,234, İngilizcede 1234 demektir; tahmin edilmez.
+  ok('belirsiz tek ayraç + 3 hane satır hatası (1,234)', byCode['IMP-N4'].errors.some(e => /belirsiz/.test(e)),
+    JSON.stringify(byCode['IMP-N4'].errors));
   ok('para simgesi temizleniyor (₺ 99,90 → 99.9)', byCode['IMP-N5'].data.salePrice === 99.9,
     String(byCode['IMP-N5'].data.salePrice));
   ok('okunamayan sayı satırı hatalı işaretleniyor', byCode['IMP-N6'].errors.length > 0,
     JSON.stringify(byCode['IMP-N6'].errors));
-  ok('tek bozuk satır dosyayı düşürmüyor', numPrev.data.validRows === 5 && numPrev.data.errorRows === 1,
+  // Bozuk (IMP-N6) ve belirsiz (IMP-N4) satırlar hatalı; kalan 4 satır geçerli kalır.
+  ok('bozuk satırlar dosyayı düşürmüyor', numPrev.data.validRows === 4 && numPrev.data.errorRows === 2,
     `geçerli ${numPrev.data.validRows}, hatalı ${numPrev.data.errorRows}`);
 
   console.log('\n=== HATALI SATIRLAR / INVALID ROWS ===');

@@ -1,88 +1,21 @@
 /**
- * Depo Terminali için service worker.
+ * Kaldırılmış Depo Terminali (mobil PWA) için "kapatma" service worker'ı.
  *
- * Kapsamı `/` olsa da (script kök dizinde servis edildiği için tarayıcı
- * varsayılan olarak böyle veriyor) bilinçli olarak YALNIZCA aşağıdaki
- * SHELL_URLS listesindeki dosyaları ve `/mobile.html` sayfasını önbellekler.
- * Masaüstü arayüzü (`/`, `/index.html`, `/api/...`) ve tüm API çağrıları bu
- * worker'a hiç uğramaz — fetch olayı bunlar için `respondWith` çağırmaz,
- * istek tarayıcının normal ağ davranışına bırakılır. Bu, terminalin
- * çevrimdışı çalışabilmesini sağlarken masaüstü uygulamasının her zaman
- * canlı veriyle çalışmasını garanti eder.
- *
- * Sürüm notu: SHELL_URLS'teki dosyalardan biri değiştiğinde CACHE_NAME'in
- * sürüm numarası artırılmalı — aksi halde kullanıcılar eski önbellekten
- * servis edilmeye devam eder (activate aşamasında eski sürümler silinir).
+ * 26 Eylül 2026'da mobil el terminali ürün kapsamından çıkarıldı (masaüstü
+ * web kararı). Daha önce terminali açmış tarayıcılarda eski worker kayıtlı
+ * kalabilir ve eski önbellekten dosya sunmaya devam edebilirdi. Tarayıcı bir
+ * sonraki güncelleme denetiminde bu dosyayı alır: önbellekleri siler, kendi
+ * kaydını kaldırır ve açık sekmeleri yeniden yükler. Hiçbir isteğe
+ * `respondWith` ile karışmaz; tüm trafik normal ağdan gider.
  */
-const CACHE_VERSION = 'v2-20260919';
-const CACHE_NAME = `depo-terminal-${CACHE_VERSION}`;
-
-const SHELL_URLS = [
-  '/mobile.html',
-  '/css/mobile.css',
-  '/js/mobile.js',
-  '/js/mobile-db.js',
-  '/manifest.webmanifest',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png'
-];
-
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(SHELL_URLS))
-      .then(() => self.skipWaiting())
-  );
-});
+self.addEventListener('install', () => self.skipWaiting());
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys()
-      .then((names) => Promise.all(
-        names.filter((n) => n.startsWith('depo-terminal-') && n !== CACHE_NAME).map((n) => caches.delete(n))
-      ))
-      .then(() => self.clients.claim())
-  );
-});
-
-async function cacheFirst(request) {
-  const currentCache = await caches.open(CACHE_NAME);
-  const cached = await currentCache.match(request);
-  if (cached) return cached;
-  const response = await fetch(request);
-  if (response.ok) {
-    const cache = await caches.open(CACHE_NAME);
-    cache.put(request, response.clone());
-  }
-  return response;
-}
-
-/** Sayfa gövdesi: mümkünse hep TAZE sürüm, yalnızca ağ yoksa önbellekten. */
-async function networkFirst(request, cacheKey) {
-  try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(cacheKey, response.clone());
-    }
-    return response;
-  } catch {
-    const cached = await caches.match(cacheKey);
-    if (cached) return cached;
-    throw new Error('çevrimdışı ve önbellekte kayıt yok');
-  }
-}
-
-self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin) return;      // dış kaynak — karışma
-  if (event.request.method !== 'GET') return;            // yalnızca GET önbelleklenir
-
-  const isMobileShell = SHELL_URLS.includes(url.pathname);
-  const isMobileNav = event.request.mode === 'navigate' && url.pathname === '/mobile.html';
-  if (!isMobileShell && !isMobileNav) return;             // API + masaüstü: dokunulmaz, ağa gider
-
-  event.respondWith(
-    isMobileNav ? networkFirst(event.request, '/mobile.html') : cacheFirst(event.request)
-  );
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.map((key) => caches.delete(key)));
+    await self.registration.unregister();
+    const clients = await self.clients.matchAll({ type: 'window' });
+    clients.forEach((client) => client.navigate(client.url));
+  })());
 });

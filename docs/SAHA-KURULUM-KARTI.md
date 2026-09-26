@@ -26,7 +26,7 @@ paylaşmaz). Bu kart, tek bir firma kurulumu için baştan sona.
 Firma sana "şu bilgisayara/sunucuya kur" diyecek. Kontrol et:
 
 - Sürekli açık kalacak mı? (Kapanan bir bilgisayara kurma — herkes erişemez olur.)
-- Aynı yerel ağda mı (Wi-Fi/kablolu) diğer bilgisayarlar/el terminalleri?
+- Aynı yerel ağda mı (Wi-Fi/kablolu) diğer bilgisayarlar? (Mobil el terminali ürünle gelmez; barkod için USB okuyucu kullanılır.)
 - İşletim sistemi Windows mu Linux mu? (Aşağıdaki adımlar ikisini de kapsıyor.)
 
 ---

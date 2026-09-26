@@ -3,10 +3,10 @@ const express = require('express');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
-const { AppError, uuid, nextNumber, logAudit } = require('../lib/core');
+const { AppError, uuid, nextNumber, logAudit, paginate } = require('../lib/core');
 const { today } = require('../lib/dates');
 const { requireAuth, requirePermission } = require('../middleware/auth');
-const { validate, validateQuery, z, pageQuery } = require('../middleware/validate');
+const { validate, validateQuery, z, pageQuery, localDate, optionalDate } = require('../middleware/validate');
 const stock = require('../services/stock');
 const trace = require('../services/traceability');
 const { companyIdOf } = require('../lib/tenant');
@@ -374,18 +374,19 @@ const capaSchema = z.object({
   rootCause: z.string().max(5000).optional(),
   actionPlan: z.string().trim().min(1).max(200),
   responsibleUserId: z.coerce.number().nullable().optional(),
-  dueDate: z.string().nullable().optional()
+  dueDate: optionalDate
 });
 
-router.get('/capas', (req, res) => {
-  const rows = db.prepare(`SELECT c.*, u.username AS responsible, n.ncr_no FROM capas c
+router.get('/capas', validateQuery(pageQuery), (req, res) => {
+  const { page, pageSize } = req.validatedQuery;
+  const result = paginate(`SELECT c.*, u.username AS responsible, n.ncr_no FROM capas c
     LEFT JOIN users u ON u.id = c.responsible_user_id LEFT JOIN ncrs n ON n.id = c.ncr_id
-    ORDER BY c.opened_at DESC LIMIT 200`).all();
-  res.json(rows.map(r => ({
+    ORDER BY c.opened_at DESC, c.id`, [], page, pageSize);
+  res.json({ ...result, data: result.data.map(r => ({
     id: r.id, capaNo: r.capa_no, ncrId: r.ncr_id, ncrNo: r.ncr_no, type: r.type, rootCause: r.root_cause,
     actionPlan: r.action_plan, responsible: r.responsible, dueDate: r.due_date, status: r.status,
     effectivenessCheck: r.effectiveness_check, openedAt: r.opened_at, closedAt: r.closed_at
-  })));
+  })) });
 });
 
 router.post('/capas', requirePermission('quality.write'), validate(capaSchema), (req, res, next) => {
@@ -422,7 +423,7 @@ const equipSchema = z.object({
   serialNo: z.string().max(1000).optional(),
   location: z.string().max(1000).optional(),
   calibrationIntervalDays: z.coerce.number().int().min(1).default(365),
-  lastCalibrationDate: z.string().nullable().optional(),
+  lastCalibrationDate: optionalDate,
   notes: z.string().max(5000).optional()
 });
 
@@ -457,7 +458,7 @@ router.post('/equipment', requirePermission('quality.write'), validate(equipSche
 });
 
 const calSchema = z.object({
-  calibrationDate: z.string(),
+  calibrationDate: localDate,
   performedBy: z.string().max(1000).optional(),
   certificateNo: z.string().max(1000).optional(),
   result: z.enum(['pass', 'fail', 'adjusted']).default('pass'),

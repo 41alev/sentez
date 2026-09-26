@@ -98,7 +98,7 @@ const App = (() => {
     if (adminTab) adminTab.style.display = ['viewer', 'operator', 'quality'].includes(u.role) ? 'none' : '';
 
     try {
-      const s = await Api.settings();
+      const s = await Api.publicSettings();
       if (s.companyName) document.getElementById('brandName').textContent = s.companyName;
     } catch {}
 

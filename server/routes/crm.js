@@ -14,8 +14,8 @@
 const express = require('express');
 const db = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
-const { validate, validatePartial, z } = require('../middleware/validate');
-const { AppError, uuid, nextNumber, logAudit, diff, paginate } = require('../lib/core');
+const { validate, validatePartial, z, optionalDate } = require('../middleware/validate');
+const { AppError, uuid, nextNumber, logAudit, diff, paginate, ensureActiveUser } = require('../lib/core');
 const { companyIdOf } = require('../lib/tenant');
 const { dispatchEvent } = require('../lib/webhooks');
 const { createSalesOrder } = require('../services/sales-orders');
@@ -82,8 +82,8 @@ const oppSchema = z.object({
   customerName: z.string().min(1).max(200),
   contactPerson: z.string().max(200).optional(), phone: z.string().max(100).optional(), email: z.string().max(200).optional(),
   source: z.enum(['referans', 'web', 'fuar', 'soguk_arama', 'diger']).default('diger'),
-  estimatedValue: z.coerce.number().min(0).default(0),
-  estimatedCloseDate: z.string().max(20).optional(),
+  estimatedValue: z.coerce.number().min(0).max(1e12).default(0),
+  estimatedCloseDate: optionalDate,
   probability: z.coerce.number().int().min(0).max(100).default(20),
   assignedTo: z.coerce.number().int().optional(),
   notes: z.string().max(5000).optional(),
@@ -100,6 +100,12 @@ router.post('/opportunities', WRITE, validate(oppSchema), (req, res) => {
       const c = db.prepare('SELECT id, is_active, anonymized_at FROM customers WHERE id = ?').get(b.customerId);
       if (!c) throw new AppError('Müşteri bulunamadı / Customer not found', 404);
       if (!c.is_active || c.anonymized_at) throw new AppError('Pasif müşteriye fırsat açılamaz / Customer is inactive', 409);
+    }
+    ensureActiveUser(b.assignedTo);
+    for (const line of b.lines) {
+      if (!db.prepare('SELECT id FROM items WHERE id = ? AND deleted_at IS NULL').get(line.itemId)) {
+        throw new AppError('Kalem ürünü bulunamadı / Line item not found', 404);
+      }
     }
     const id = uuid();
     const oppNo = nextNumber('opportunity', 'FRS');
@@ -133,6 +139,7 @@ router.put('/opportunities/:id', WRITE, validatePartial(oppUpdateSchema), (req, 
   }
   if (CLOSED_STAGES.includes(before.stage)) throw new AppError('Kapanmış fırsat düzenlenemez / A closed opportunity cannot be edited', 409);
   const b = req.valid;
+  ensureActiveUser(b.assignedTo);
   db.prepare(`UPDATE opportunities SET customer_id=COALESCE(?,customer_id), customer_name=COALESCE(?,customer_name),
     contact_person=COALESCE(?,contact_person), phone=COALESCE(?,phone), email=COALESCE(?,email), source=COALESCE(?,source),
     estimated_value=COALESCE(?,estimated_value), estimated_close_date=COALESCE(?,estimated_close_date),

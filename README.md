@@ -1,7 +1,8 @@
 # Dream Plus
 
 Fabrika ölçeğinde depo, üretim, satın alma, satış ve kalite yönetimi. Node.js + Express + SQLite backend,
-React ekranları ve ayrı mobil/PWA terminali. Türkçe/İngilizce arayüz.
+masaüstü tarayıcı için React ekranları. Türkçe/İngilizce arayüz. (Mobil/PWA el terminali
+26 Eylül 2026'da kapsamdan çıkarıldı; USB barkod okuyucu masaüstünde klavye gibi çalışır.)
 
 ---
 
@@ -95,7 +96,9 @@ Talep → teklif (RFQ) → karşılaştırma → sipariş → onay → kısmi te
 - **Onay kuralları:** tutar eşiğine göre müdür veya yönetici onayı zorunlu hale gelir.
 - **Kısmi teslim alma:** her teslimatta ayrı irsaliye, ayrı lot; kalan miktar takip edilir.
 - **Varış maliyeti (landed cost):** navlun, gümrük, sigorta, elleçleme; değere veya miktara göre lot maliyetine dağıtılır.
-- **3'lü eşleştirme:** fatura ↔ sipariş ↔ teslim alınan miktar.
+- **3'lü eşleştirme:** fatura ↔ sipariş ↔ teslim alınan miktar, teslim satırı bazında miktar tahsisi.
+- **Fatura onayı ve ödeme:** yalnız onaylı fatura ödenir; kısmi ödemeler defterde tutulur, fazla ödeme
+  veritabanı kuralıyla engellenir. Eşleşmesi bilinmeyen eski faturalar önce tek seferlik mutabakattan geçer.
 - Muayene gerektiren ürünler teslim alındığında doğrudan karantinaya düşer.
 - Tedarikçi fiyat geçmişi otomatik birikir.
 
@@ -104,6 +107,7 @@ Talep → teklif (RFQ) → karşılaştırma → sipariş → onay → kısmi te
 - Sevkiyatta parti seçimi elle yapılabilir veya **FEFO** ile otomatik atanır.
 - Kasa ölçüleri ve ağırlıkları, yazdırılabilir sevk irsaliyesi.
 - **Kârlılık:** ciro sipariş fiyatından, maliyet gerçekten çıkan lotların maliyetinden hesaplanır — standart maliyet tahmini değil.
+- **Tahsilat:** faturaya kısmi veya tam tahsilat girilir; iade faturası ve tahsilatlar faturayı otomatik kapatır.
 
 ### Kalite
 - Muayene planları: ürün ve muayene tipine göre ölçülecek özellikler, alt/üst limitler, AQL.
@@ -238,11 +242,11 @@ Tüm uç noktalar `/api` altında, `Authorization: Bearer <token>` ister.
 | Stok | `GET /stock/lots` · `GET /stock/movements` · `POST /stock/move` · `POST /stock/lot-status` · `POST /stock/transfer` |
 | Sayım | `GET/POST /stock/counts` · `GET /stock/counts/:id` · `PUT /stock/counts/:id/lines` · `POST /stock/counts/:id/approve` |
 | Üretim | `GET/POST /production` · `GET /production/:id` · `GET /production/:id/requirements` · `POST /production/:id/complete` |
-| Satın alma | `/purchasing/suppliers` · `/purchasing/requests` · `/purchasing/rfqs` · `/purchasing/orders` · `/purchasing/orders/:id/receipts` · `/purchasing/receipts/:id/landed-costs` · `/purchasing/invoices` |
-| Satış | `/sales/customers` · `/sales/orders` · `/sales/shipments` · `/sales/invoices` · `GET /sales/profitability` |
+| Satın alma | `/purchasing/suppliers` · `/purchasing/requests` · `/purchasing/rfqs` · `/purchasing/orders` · `/purchasing/orders/:id/receipts` · `/purchasing/receipts/:id/landed-costs` · `/purchasing/invoices` · `/purchasing/invoices/:id/reconcile` · `/purchasing/invoices/:id/approve` · `/purchasing/invoices/:id/payments` |
+| Satış | `/sales/customers` · `/sales/orders` · `/sales/shipments` · `/sales/invoices` · `/sales/invoices/:id/payments` · `GET /sales/profitability` |
 | Kalite | `/quality/plans` · `/quality/inspections` · `/quality/ncrs` · `/quality/capas` · `/quality/equipment` · `/quality/trace/backward/:lotId` · `/quality/trace/forward/:lotId` · `/quality/recall/:lotId` |
 | Rapor | `/reports/summary` · `/trends` · `/dead-stock` · `/turnover` · `/abc` · `/reorder-suggestions` · `/supplier-performance` · `/quality-kpis` · `/production-costs` · `/valuation` |
-| Yönetim | `/users` · `/warehouses` · `/settings` · `/exchange-rates` · `/approval-rules` · `/notification-rules` · `/audit` |
+| Yönetim | `/users` · `/warehouses` · `/settings` (yönetici/müdür) · `/settings/public` · `/exchange-rates` · `/approval-rules` · `/notification-rules` · `/audit` |
 | Planlama | `/planning/work-centers` · `/shifts` · `/routings/:itemId` · `/capacity` · `/schedule/:orderId` · `/operations` · `/shift-logs` · `/oee` · `/mrp/run` · `/mrp/suggestions` |
 | Diğer | `/documents` · `/notifications` · `/notifications/mail-status` · `GET /health` (kimlik istemez) |
 
@@ -263,7 +267,9 @@ Tüm uç noktalar `/api` altında, `Authorization: Bearer <token>` ister.
 ## Kurulum
 
 Sıfırdan kurulum, ortam ayarları, yedekleme, sürüm yükseltme ve sorun giderme:
-[`docs/KURULUM.md`](docs/KURULUM.md)
+[`docs/KURULUM.md`](docs/KURULUM.md). Müşteriye götürülecek paket `npm run release`
+ile `release/` altında üretilir; sır, müşteri verisi, test ve iç notlar pakete girmez
+(bkz. `scripts/package-release.js`). Lisans işlemleri: [`docs/LISANS-OPERASYONU.md`](docs/LISANS-OPERASYONU.md).
 
 ```bash
 npm install --omit=dev
@@ -280,6 +286,12 @@ Demo verisiyle denemek için: `DEMO_DATA=1 npm start`
 Son kullanıcılar için role göre yazılmış kılavuz: [`docs/KULLANIM-KILAVUZU.md`](docs/KULLANIM-KILAVUZU.md)
 Depo görevlisinden yöneticiye kadar her rolün günlük işleri, sık karşılaşılan durumlar ve hata
 mesajlarının ne anlama geldiği orada anlatılır.
+
+## Geliştirici rehberi
+
+Projeyi devralan/kuran bir yazılımcı için kurulum + mimari kuralları +
+"şu an tam olarak nerede kaldık" tek belgede:
+[`docs/GELISTIRICI-REHBERI.md`](docs/GELISTIRICI-REHBERI.md)
 
 ## Proje yapısı
 

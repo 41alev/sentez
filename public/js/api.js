@@ -6,15 +6,31 @@ const Api = (() => {
   const setSession = (t, u) => { localStorage.setItem(TOKEN_KEY, t); localStorage.setItem(USER_KEY, JSON.stringify(u)); };
   const clearSession = () => { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); };
 
+  // T18: writes in flight; dialogs use it to ignore a second click on Save.
+  let pendingWrites = 0;
+  const pendingWriteCount = () => pendingWrites;
+
   async function req(method, path, body, isForm) {
     const headers = {};
     if (!isForm) headers['Content-Type'] = 'application/json';
     const tok = getToken();
     if (tok) headers.Authorization = 'Bearer ' + tok;
-    const res = await fetch('/api' + path, {
-      method, headers,
-      body: body === undefined ? undefined : (isForm ? body : JSON.stringify(body))
-    });
+    const write = method !== 'GET';
+    if (write) pendingWrites++;
+    let res;
+    try {
+      res = await fetch('/api' + path, {
+        method, headers,
+        body: body === undefined ? undefined : (isForm ? body : JSON.stringify(body))
+      });
+    } catch (networkError) {
+      const err = new Error('Sunucuya ulaşılamadı; bağlantıyı kontrol edip tekrar deneyin / Server unreachable, check the connection and retry');
+      err.network = true;
+      err.cause = networkError;
+      throw err;
+    } finally {
+      if (write) pendingWrites--;
+    }
     if (res.status === 401) {
       clearSession();
       window.dispatchEvent(new CustomEvent('session-expired'));
@@ -40,7 +56,7 @@ const Api = (() => {
   };
 
   return {
-    getToken, getUser, setSession, clearSession,
+    getToken, getUser, setSession, clearSession, pendingWriteCount,
 
     // auth
     login: (username, password) => req('POST', '/auth/login', { username, password }),
@@ -105,6 +121,10 @@ const Api = (() => {
     supplierInvoices: (p) => req('GET', '/purchasing/invoices' + qs(p)),
     supplierInvoiceReceivableLines: (poId) => req('GET', '/purchasing/invoices/receivable-lines' + qs({ poId })),
     createSupplierInvoice: (d) => req('POST', '/purchasing/invoices', d),
+    supplierInvoice: (id) => req('GET', '/purchasing/invoices/' + id),
+    reconcileSupplierInvoice: (id, d) => req('POST', `/purchasing/invoices/${id}/reconcile`, d),
+    approveSupplierInvoice: (id, d) => req('POST', `/purchasing/invoices/${id}/approve`, d || {}),
+    paySupplierInvoice: (id, d) => req('POST', `/purchasing/invoices/${id}/payments`, d),
     createSupplierReturn: (d) => req('POST', '/purchasing/returns', d),
 
     // crm
@@ -153,6 +173,7 @@ const Api = (() => {
     createCustomerInvoice: (d) => req('POST', '/sales/invoices', d),
     customerInvoicePreview: (id) => req('GET', '/sales/orders/' + id + '/invoice-preview'),
     payInvoice: (id) => req('POST', `/sales/invoices/${id}/pay`),
+    addInvoicePayment: (id, d) => req('POST', `/sales/invoices/${id}/payments`, d),
     profitability: (p) => req('GET', '/sales/profitability' + qs(p)),
 
     // quality
@@ -277,6 +298,7 @@ const Api = (() => {
     createWarehouse: (d) => req('POST', '/warehouses', d),
     updateWarehouse: (id, d) => req('PUT', '/warehouses/' + id, d),
     settings: () => req('GET', '/settings'),
+    publicSettings: () => req('GET', '/settings/public'),
     updateSettings: (d) => req('PUT', '/settings', d),
     exchangeRates: (p) => req('GET', '/exchange-rates' + qs(p)),
     currentRates: () => req('GET', '/exchange-rates/current'),

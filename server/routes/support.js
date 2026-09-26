@@ -17,7 +17,7 @@ const express = require('express');
 const db = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { validate, validatePartial, z } = require('../middleware/validate');
-const { AppError, uuid, nextNumber, logAudit, diff, paginate } = require('../lib/core');
+const { AppError, uuid, nextNumber, logAudit, diff, paginate, ensureActiveUser } = require('../lib/core');
 const { companyIdOf } = require('../lib/tenant');
 
 const router = express.Router();
@@ -85,6 +85,17 @@ const ticketSchema = z.object({
   relatedLotId: z.string().max(200).optional()
 });
 
+/** Related order/shipment/lot ids must point to real records. */
+function assertRelated(b) {
+  const checks = [['relatedOrderId', 'sales_orders', 'Sipariş / Order'], ['relatedShipmentId', 'shipments', 'Sevkiyat / Shipment'],
+    ['relatedLotId', 'stock_lots', 'Parti / Lot']];
+  for (const [key, table, label] of checks) {
+    if (b[key] && !db.prepare(`SELECT 1 FROM ${table} WHERE id = ?`).get(b[key])) {
+      throw new AppError(`İlişkili kayıt bulunamadı: ${label}`, 404);
+    }
+  }
+}
+
 router.post('/', WRITE, validate(ticketSchema), (req, res) => {
   const b = req.valid;
   const result = db.txImmediate(() => {
@@ -93,6 +104,8 @@ router.post('/', WRITE, validate(ticketSchema), (req, res) => {
       if (!c) throw new AppError('Müşteri bulunamadı / Customer not found', 404);
       if (!c.is_active || c.anonymized_at) throw new AppError('Pasif müşteriye talep açılamaz / Customer is inactive', 409);
     }
+    ensureActiveUser(b.assignedTo);
+    assertRelated(b);
     const id = uuid();
     const ticketNo = nextNumber('ticket', 'DST');
     db.prepare(`INSERT INTO support_tickets
@@ -117,6 +130,8 @@ router.put('/:id', WRITE, validatePartial(ticketUpdateSchema), (req, res) => {
   if (before.customer_id && db.prepare('SELECT anonymized_at FROM customers WHERE id = ?').get(before.customer_id)?.anonymized_at) throw new AppError('Anonim müşteri talebi düzenlenemez / Anonymized customer ticket cannot be edited', 409);
   if (before.status === 'closed') throw new AppError('Kapanmış talep düzenlenemez / A closed ticket cannot be edited', 409);
   const b = req.valid;
+  ensureActiveUser(b.assignedTo);
+  assertRelated(b);
   db.prepare(`UPDATE support_tickets SET customer_name=COALESCE(?,customer_name), subject=COALESCE(?,subject),
     description=COALESCE(?,description), category=COALESCE(?,category), priority=COALESCE(?,priority),
     assigned_to=COALESCE(?,assigned_to), related_order_id=COALESCE(?,related_order_id),
@@ -146,7 +161,8 @@ router.post('/:id/status', WRITE, validate(statusSchema), (req, res) => {
     throw new AppError('Çözüm açıklaması zorunlu / A resolution note is required', 422, { hint: 'resolution' });
   }
   const now = Date.now();
-  const resolvedAt = b.status === 'resolved' ? now : t.resolved_at;
+  // Reopening clears the resolution time so SLA/resolution reports stay true (SP-02).
+  const resolvedAt = b.status === 'resolved' ? now : (['resolved', 'closed'].includes(b.status) ? t.resolved_at : null);
   const closedAt = b.status === 'closed' ? now : null;
   db.prepare('UPDATE support_tickets SET status = ?, resolution = COALESCE(?,resolution), resolved_at = ?, closed_at = ? WHERE id = ?')
     .run(b.status, b.resolution || null, resolvedAt, closedAt, t.id);
@@ -159,8 +175,9 @@ router.post('/:id/status', WRITE, validate(statusSchema), (req, res) => {
 /* ============================ YORUM ============================ */
 
 router.post('/:id/comments', WRITE, validate(z.object({ comment: z.string().min(1).max(5000) })), (req, res) => {
-  const t = db.prepare('SELECT id, ticket_no, customer_id FROM support_tickets WHERE id = ?').get(req.params.id);
+  const t = db.prepare('SELECT id, ticket_no, customer_id, status FROM support_tickets WHERE id = ?').get(req.params.id);
   if (!t) throw new AppError('Talep bulunamadı / Ticket not found', 404);
+  if (t.status === 'closed') throw new AppError('Kapanmış talebe yorum eklenemez / A closed ticket cannot receive comments', 409);
   if (t.customer_id && db.prepare('SELECT anonymized_at FROM customers WHERE id = ?').get(t.customer_id)?.anonymized_at) throw new AppError('Anonim müşteri talebine yorum eklenemez / Anonymized customer ticket cannot receive comments', 409);
   const info = db.prepare('INSERT INTO support_ticket_comments (ticket_id,user_id,ts,comment) VALUES (?,?,?,?)')
     .run(t.id, req.user.id, Date.now(), req.valid.comment);

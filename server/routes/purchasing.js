@@ -1,15 +1,16 @@
 // @ts-nocheck
 const express = require('express');
 const db = require('../db');
-const { AppError, uuid, nextNumber, logAudit, diff, fxRate } = require('../lib/core');
+const { AppError, uuid, nextNumber, logAudit, diff, fxRate, paginate } = require('../lib/core');
 const { toLocalDateStr, isValidLocalDate } = require('../lib/dates');
 const { companyIdOf } = require('../lib/tenant');
 const { requireAuth, requirePermission, requireRole } = require('../middleware/auth');
 const kvkk = require('../lib/kvkk');
-const { validate, validatePartial, validateQuery, z, pageQuery, currency } = require('../middleware/validate');
+const { validate, validatePartial, validateQuery, z, pageQuery, currency, optionalDate } = require('../middleware/validate');
 const stock = require('../services/stock');
 const costing = require('../services/costing');
 const { dispatchEvent } = require('../lib/webhooks');
+const payments = require('../services/invoice-payments');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -156,25 +157,26 @@ router.get('/suppliers/:id/data-export', requireRole('admin'), (req, res, next) 
 // ============================ PURCHASE REQUESTS ============================
 const prSchema = z.object({
   department: z.string().max(1000).optional(),
-  neededBy: z.string().nullable().optional(),
+  neededBy: optionalDate,
   notes: z.string().max(5000).optional(),
   lines: z.array(z.object({
     itemId: z.string().nullable().optional(),
-    itemName: z.string().max(1000).optional(),
+    itemName: z.string().trim().max(1000).optional(),
     qty: z.coerce.number().positive(),
     unit: z.string().max(1000).optional(),
     notes: z.string().max(5000).optional()
   })).min(1)
 });
 
-router.get('/requests', (req, res) => {
-  const rows = db.prepare(`SELECT pr.*, u.username AS requester FROM purchase_requests pr
-    LEFT JOIN users u ON u.id = pr.requested_by ORDER BY pr.created_at DESC LIMIT 200`).all();
-  res.json(rows.map(r => ({
+router.get('/requests', validateQuery(pageQuery), (req, res) => {
+  const { page, pageSize } = req.validatedQuery;
+  const result = paginate(`SELECT pr.*, u.username AS requester FROM purchase_requests pr
+    LEFT JOIN users u ON u.id = pr.requested_by ORDER BY pr.created_at DESC, pr.id`, [], page, pageSize);
+  res.json({ ...result, data: result.data.map(r => ({
     id: r.id, requestNo: r.request_no, requester: r.requester, department: r.department,
     neededBy: r.needed_by, status: r.status, notes: r.notes, createdAt: r.created_at,
     lines: db.prepare('SELECT item_id AS itemId, item_name AS itemName, qty, unit, notes FROM purchase_request_lines WHERE request_id = ?').all(r.id)
-  })));
+  })) });
 });
 
 router.post('/requests', requirePermission('purchase.write'), validate(prSchema), (req, res, next) => {
@@ -187,7 +189,9 @@ router.post('/requests', requirePermission('purchase.write'), validate(prSchema)
         req.body.neededBy || null, req.body.notes || '', Date.now());
       const ins = db.prepare('INSERT INTO purchase_request_lines (request_id,item_id,item_name,qty,unit,notes) VALUES (?,?,?,?,?,?)');
       req.body.lines.forEach(l => {
-        const item = l.itemId ? db.prepare('SELECT name, unit FROM items WHERE id = ?').get(l.itemId) : null;
+        const item = l.itemId ? db.prepare('SELECT name, unit FROM items WHERE id = ? AND deleted_at IS NULL').get(l.itemId) : null;
+        if (l.itemId && !item) throw new AppError('Ürün bulunamadı / Item not found', 404);
+        if (!l.itemId && !l.itemName) throw new AppError('Satırda ürün veya ürün adı gerekli / Item or item name required', 422);
         ins.run(reqId, l.itemId || null, item ? item.name : (l.itemName || '—'), l.qty, l.unit || (item ? item.unit : null), l.notes || null);
       });
       logAudit(req, 'auditRequestAdd', { entityType: 'purchase_request', entityId: reqId, detail: no });
@@ -197,12 +201,26 @@ router.post('/requests', requirePermission('purchase.write'), validate(prSchema)
   } catch (e) { next(e); }
 });
 
+/** Estimated request value (item moving average × qty) for approval rules. */
+function requestValueBase(requestId) {
+  return db.prepare(`SELECT COALESCE(SUM(l.qty * COALESCE(i.avg_cost, 0)), 0) v FROM purchase_request_lines l
+    LEFT JOIN items i ON i.id = l.item_id WHERE l.request_id = ?`).get(requestId).v;
+}
+
 router.post('/requests/:id/approve', requirePermission('purchase.approve'), (req, res, next) => {
   try {
     const pr = db.prepare('SELECT * FROM purchase_requests WHERE id = ?').get(req.params.id);
     if (!pr) throw new AppError('Talep bulunamadı / Request not found', 404);
-    db.prepare(`UPDATE purchase_requests SET status='approved', approved_by=?, approved_at=? WHERE id=?`)
-      .run(req.user.id, Date.now(), pr.id);
+    if (pr.status === 'approved') return res.json({ ok: true, alreadyApproved: true });
+    if (pr.status !== 'submitted') throw new AppError('Bu talep onaylanamaz / Request cannot be approved in its current state', 409);
+    const rule = db.prepare(`SELECT * FROM approval_rules WHERE doc_type='purchase_request' AND is_active=1
+      AND threshold_base <= ? ORDER BY threshold_base DESC LIMIT 1`).get(requestValueBase(pr.id));
+    if (rule && req.user.role !== 'admin' && req.user.role !== rule.required_role) {
+      throw new AppError('Bu talebi onaylama yetkiniz yok / Approval requires role: ' + rule.required_role, 403);
+    }
+    const changed = db.prepare(`UPDATE purchase_requests SET status='approved', approved_by=?, approved_at=? WHERE id=? AND status='submitted'`)
+      .run(req.user.id, Date.now(), pr.id).changes;
+    if (changed !== 1) throw new AppError('Talep eşzamanlı olarak değiştirildi / Request changed concurrently', 409);
     logAudit(req, 'auditRequestApprove', { entityType: 'purchase_request', entityId: pr.id,
       oldValue: { status: pr.status }, newValue: { status: 'approved' }, detail: pr.request_no });
     res.json({ ok: true });
@@ -213,8 +231,11 @@ router.post('/requests/:id/reject', requirePermission('purchase.approve'), (req,
   try {
     const pr = db.prepare('SELECT * FROM purchase_requests WHERE id = ?').get(req.params.id);
     if (!pr) throw new AppError('Talep bulunamadı / Request not found', 404);
-    db.prepare(`UPDATE purchase_requests SET status='rejected', approved_by=?, approved_at=?, reject_reason=? WHERE id=?`)
-      .run(req.user.id, Date.now(), req.body.reason || '', pr.id);
+    if (pr.status === 'rejected') return res.json({ ok: true, alreadyRejected: true });
+    if (pr.status !== 'submitted') throw new AppError('Bu talep reddedilemez / Request cannot be rejected in its current state', 409);
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim().slice(0, 2000) : '';
+    db.prepare(`UPDATE purchase_requests SET status='rejected', approved_by=?, approved_at=?, reject_reason=? WHERE id=? AND status='submitted'`)
+      .run(req.user.id, Date.now(), reason, pr.id);
     logAudit(req, 'auditRequestReject', { entityType: 'purchase_request', entityId: pr.id, detail: pr.request_no });
     res.json({ ok: true });
   } catch (e) { next(e); }
@@ -223,15 +244,16 @@ router.post('/requests/:id/reject', requirePermission('purchase.approve'), (req,
 // ============================ RFQ ============================
 const rfqSchema = z.object({
   requestId: z.string().nullable().optional(),
-  dueDate: z.string().nullable().optional(),
+  dueDate: optionalDate,
   notes: z.string().max(5000).optional(),
   lines: z.array(z.object({ itemId: z.string(), qty: z.coerce.number().positive() })).min(1),
   supplierIds: z.array(z.coerce.number()).default([])
 });
 
-router.get('/rfqs', (req, res) => {
-  const rows = db.prepare('SELECT * FROM rfqs ORDER BY created_at DESC LIMIT 200').all();
-  res.json(rows.map(r => ({
+router.get('/rfqs', validateQuery(pageQuery), (req, res) => {
+  const { page, pageSize } = req.validatedQuery;
+  const result = paginate('SELECT * FROM rfqs ORDER BY created_at DESC, id', [], page, pageSize);
+  res.json({ ...result, data: result.data.map(r => ({
     id: r.id, rfqNo: r.rfq_no, status: r.status, dueDate: r.due_date, notes: r.notes,
     awardedSupplierId: r.awarded_supplier_id, createdAt: r.created_at,
     lines: db.prepare('SELECT item_id AS itemId, item_name AS itemName, qty FROM rfq_lines WHERE rfq_id = ?').all(r.id),
@@ -241,7 +263,7 @@ router.get('/rfqs', (req, res) => {
         id: q.id, supplierId: q.supplier_id, supplier: q.supplier_name, itemId: q.item_id, itemName: q.item_name,
         unitPrice: q.unit_price, currency: q.currency, leadTimeDays: q.lead_time_days, validUntil: q.valid_until, notes: q.notes
       }))
-  })));
+  })) });
 });
 
 router.post('/rfqs', requirePermission('purchase.write'), validate(rfqSchema), (req, res, next) => {
@@ -253,8 +275,12 @@ router.post('/rfqs', requirePermission('purchase.write'), validate(rfqSchema), (
         VALUES (?,?,?,'open',?,?,?,?)`).run(rfqId, no, req.body.requestId || null, req.body.dueDate || null,
         req.body.notes || '', req.user.id, Date.now());
       const ins = db.prepare('INSERT INTO rfq_lines (rfq_id,item_id,item_name,qty) VALUES (?,?,?,?)');
+      for (const supplierId of req.body.supplierIds) {
+        if (!db.prepare('SELECT id FROM suppliers WHERE id = ?').get(supplierId)) throw new AppError('Tedarikçi bulunamadı / Supplier not found', 404);
+      }
       req.body.lines.forEach(l => {
-        const item = db.prepare('SELECT name FROM items WHERE id = ?').get(l.itemId);
+        const item = db.prepare('SELECT name FROM items WHERE id = ? AND deleted_at IS NULL').get(l.itemId);
+        if (!item) throw new AppError('Ürün bulunamadı / Item not found', 404);
         ins.run(rfqId, l.itemId, item ? item.name : '—', l.qty);
       });
       logAudit(req, 'auditRfqAdd', { entityType: 'rfq', entityId: rfqId, detail: no });
@@ -270,7 +296,7 @@ const quoteSchema = z.object({
   unitPrice: z.coerce.number().min(0),
   currency: currency.default('TRY'),
   leadTimeDays: z.coerce.number().int().min(0).optional(),
-  validUntil: z.string().nullable().optional(),
+  validUntil: optionalDate,
   notes: z.string().max(5000).optional()
 });
 
@@ -279,6 +305,12 @@ router.post('/rfqs/:id/quotes', requirePermission('purchase.write'), validate(qu
     const rfq = db.prepare('SELECT * FROM rfqs WHERE id = ?').get(req.params.id);
     if (!rfq) throw new AppError('Teklif talebi bulunamadı / RFQ not found', 404);
     const b = req.body;
+    if (rfq.status !== 'open') throw new AppError('Teklif talebi kapalı / RFQ is closed', 409);
+    if (!db.prepare('SELECT id FROM suppliers WHERE id = ?').get(b.supplierId)) throw new AppError('Tedarikçi bulunamadı / Supplier not found', 404);
+    if (!db.prepare('SELECT id FROM items WHERE id = ?').get(b.itemId)) throw new AppError('Ürün bulunamadı / Item not found', 404);
+    if (!db.prepare('SELECT 1 FROM rfq_lines WHERE rfq_id = ? AND item_id = ?').get(rfq.id, b.itemId)) {
+      throw new AppError('Ürün bu teklif talebinde yok / Item is not part of this RFQ', 422);
+    }
     db.txImmediate(() => {
       db.prepare(`INSERT INTO rfq_quotes (rfq_id,supplier_id,item_id,unit_price,currency,lead_time_days,valid_until,notes)
         VALUES (?,?,?,?,?,?,?,?)`).run(rfq.id, b.supplierId, b.itemId, b.unitPrice, b.currency,
@@ -611,7 +643,7 @@ router.get('/receipts/:id', (req, res, next) => {
 // ---------------- LANDED COST ----------------
 const landedSchema = z.object({
   costType: z.enum(['freight', 'customs', 'insurance', 'handling', 'other']),
-  amount: z.coerce.number().min(0),
+  amount: z.coerce.number().positive().max(1e12),
   currency: currency.default('TRY'),
   allocationMethod: z.enum(['value', 'qty']).default('value'),
   notes: z.string().max(5000).optional()
@@ -643,6 +675,9 @@ const invoiceSchema = z.object({
     'Geçerli takvim tarihi gerekli / Valid calendar date required').nullable().optional(),
   amount: z.coerce.number().min(0),
   currency: currency.default('TRY'),
+  // KDV tutarı tedarikçi faturasındaki gerçek değerdir; verilmezse teslim
+  // satırlarının fatura anındaki KDV oranı snapshot'ından hesaplanır.
+  vatAmount: z.number().min(0).max(1e12).optional(),
   lines: z.array(z.object({
     receiptLineId: z.coerce.number().int().positive(),
     qty: z.coerce.number().positive(),
@@ -761,6 +796,8 @@ router.post('/invoices', requirePermission('purchase.write'), validate(invoiceSc
         VALUES (?,?,?,?,?,?,?)`);
       for (const line of chosen) insertAllocation.run(id, line.id, line.invoiceQty, line.price,
         line.currency, line.fx_rate, line.invoiceVatRate);
+      const vatAmount = b.vatAmount ?? payments.snapshotVatAmount(id, b.amount);
+      if (vatAmount != null) db.prepare('UPDATE supplier_invoices SET vat_amount=? WHERE id=?').run(payments.round2(vatAmount), id);
       logAudit(req, 'auditInvoiceAdd', { entityType: 'supplier_invoice', entityId: id,
         newValue: { invoiceNo: b.invoiceNo, amount: b.amount, matched: withinTolerance }, detail: b.invoiceNo });
       return { id, matchStatus: withinTolerance ? 'matched' : 'discrepancy',
@@ -771,14 +808,191 @@ router.post('/invoices', requirePermission('purchase.write'), validate(invoiceSc
   } catch (e) { next(e); }
 });
 
-router.get('/invoices', (req, res) => {
-  const rows = db.prepare(`SELECT si.*, s.name AS supplier_name, po.po_no FROM supplier_invoices si
+function supplierInvoiceDto(r) {
+  return {
+    id: r.id, invoiceNo: r.invoice_no, supplier: r.supplier_name, supplierId: r.supplier_id, poId: r.po_id,
+    poNo: r.po_no, receiptId: r.receipt_id, invoiceDate: r.invoice_date, dueDate: r.due_date,
+    amount: r.amount, vatAmount: r.vat_amount, currency: r.currency, fxRate: r.fx_rate,
+    matchStatus: r.match_status, discrepancyNote: r.discrepancy_note, allocationState: r.allocation_state,
+    reconciledAt: r.reconciled_at, reconcileNote: r.reconcile_note,
+    approvedAt: r.approved_at, approvalNote: r.approval_note,
+    ...payments.supplierSettlement(r)
+  };
+}
+
+router.get('/invoices', validateQuery(pageQuery.extend({
+  status: z.enum(['unmatched', 'matched', 'discrepancy', 'approved', 'paid']).optional(),
+  allocationState: z.enum(['legacy', 'recorded', 'none']).optional(),
+  q: z.string().trim().max(100).optional()
+})), (req, res) => {
+  const { page = 1, pageSize = 50, status, allocationState, q } = req.validatedQuery;
+  const where = [], params = [];
+  if (status) { where.push('si.match_status = ?'); params.push(status); }
+  if (allocationState) { where.push('si.allocation_state = ?'); params.push(allocationState); }
+  if (q) {
+    where.push("(si.invoice_no LIKE ? ESCAPE '\\' OR s.name LIKE ? ESCAPE '\\' OR po.po_no LIKE ? ESCAPE '\\')");
+    const like = `%${q.replace(/[\\%_]/g, ch => '\\' + ch)}%`;
+    params.push(like, like, like);
+  }
+  const result = paginate(`SELECT si.*, s.name AS supplier_name, po.po_no FROM supplier_invoices si
     LEFT JOIN suppliers s ON s.id = si.supplier_id LEFT JOIN purchase_orders po ON po.id = si.po_id
-    ORDER BY si.created_at DESC LIMIT 200`).all();
-  res.json(rows.map(r => ({
-    id: r.id, invoiceNo: r.invoice_no, supplier: r.supplier_name, poNo: r.po_no, invoiceDate: r.invoice_date,
-    dueDate: r.due_date, amount: r.amount, currency: r.currency, matchStatus: r.match_status, discrepancyNote: r.discrepancy_note
-  })));
+    ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+    ORDER BY si.created_at DESC, si.id`, params, page, pageSize);
+  result.data = result.data.map(supplierInvoiceDto);
+  res.json(result);
+});
+
+function loadSupplierInvoice(id) {
+  const r = db.prepare(`SELECT si.*, s.name AS supplier_name, po.po_no FROM supplier_invoices si
+    LEFT JOIN suppliers s ON s.id = si.supplier_id LEFT JOIN purchase_orders po ON po.id = si.po_id
+    WHERE si.id = ?`).get(id);
+  if (!r) throw new AppError('Fatura bulunamadı / Invoice not found', 404);
+  return r;
+}
+
+router.get('/invoices/:id', (req, res) => {
+  const r = loadSupplierInvoice(req.params.id);
+  const allocations = db.prepare(`SELECT a.receipt_line_id, a.qty, a.unit_price, a.currency, a.fx_rate, a.vat_rate,
+      pr.receipt_no, COALESCE(rl.item_name, i.name, '') AS item_name
+    FROM supplier_invoice_allocations a
+    JOIN po_receipt_lines rl ON rl.id = a.receipt_line_id
+    JOIN po_receipts pr ON pr.id = rl.receipt_id
+    LEFT JOIN items i ON i.id = rl.item_id
+    WHERE a.invoice_id = ? ORDER BY pr.received_at, rl.id`).all(r.id);
+  res.json({ ...supplierInvoiceDto(r),
+    allocations: allocations.map(a => ({ receiptLineId: a.receipt_line_id, receiptNo: a.receipt_no, itemName: a.item_name,
+      qty: a.qty, unitPrice: a.unit_price, currency: a.currency, fxRate: a.fx_rate, vatRate: a.vat_rate })),
+    payments: payments.listSupplierPayments(r.id) });
+});
+
+const reconcileSchema = z.object({
+  lines: z.array(z.object({
+    receiptLineId: z.number().int().positive(),
+    qty: z.number().positive().max(1e12),
+    vatRate: z.number().min(0).max(100).optional()
+  }).strict()).max(500),
+  vatAmount: z.number().min(0).max(1e12).optional(),
+  note: z.string().trim().min(5, 'Mutabakat gerekçesi gerekli / Reconciliation note required').max(2000)
+}).strict();
+
+/**
+ * T06: a person maps a legacy supplier invoice (created before receipt-line
+ * allocation existed) to the receipt quantities it really billed. The
+ * allocation rows snapshot the PO line price/FX and the VAT rate at this
+ * moment; later item or PO edits never change them. An empty `lines` list
+ * records that the invoice bills no received goods (e.g. a service charge).
+ * Each invoice can be reconciled exactly once; a second attempt is 409.
+ */
+router.post('/invoices/:id/reconcile', requirePermission('purchase.approve'), validate(reconcileSchema), (req, res) => {
+  const b = req.valid;
+  const result = db.txImmediate(() => {
+    const inv = loadSupplierInvoice(req.params.id);
+    if (inv.allocation_state !== 'legacy') {
+      throw new AppError('Bu fatura zaten eşleştirilmiş / Invoice is already reconciled', 409);
+    }
+    const lines = db.prepare(`SELECT rl.id, rl.qty, pi.price, pi.currency, pi.fx_rate, i.vat_rate,
+        COALESCE((SELECT SUM(a.qty) FROM supplier_invoice_allocations a WHERE a.receipt_line_id=rl.id),0) AS allocated_qty
+      FROM po_receipt_lines rl
+      JOIN po_receipts pr ON pr.id=rl.receipt_id
+      JOIN po_items pi ON pi.id=rl.po_item_id AND pi.po_id=pr.po_id
+      LEFT JOIN items i ON i.id=rl.item_id
+      WHERE pr.po_id=? AND (? IS NULL OR pr.id=?)`).all(inv.po_id, inv.receipt_id || null, inv.receipt_id || null);
+    const byId = new Map(lines.map(line => [line.id, line]));
+    const seen = new Set();
+    const chosen = b.lines.map(requested => {
+      const line = byId.get(requested.receiptLineId);
+      if (!line) throw new AppError('Teslim satırı bu faturanın siparişine/irsaliyesine ait değil / Receipt line does not belong to this invoice', 422);
+      if (seen.has(line.id)) throw new AppError('Teslim satırı tekrarlandı / Duplicate receipt line', 422);
+      seen.add(line.id);
+      if (!(line.fx_rate > 0)) throw new AppError('Teslim satırında kayıtlı kur yok / Receipt line has no historical FX rate', 409);
+      if (requested.qty > line.qty - line.allocated_qty + 1e-9) {
+        throw new AppError('Teslim miktarı daha önce faturalanmış / Receipt quantity already invoiced', 409);
+      }
+      const vatRate = requested.vatRate ?? line.vat_rate;
+      if (vatRate == null) throw new AppError('Ürünsüz teslim satırında KDV oranı gerekli / VAT rate required for free-text receipt line', 422);
+      return { ...line, invoiceQty: requested.qty, vatRate };
+    });
+    const insertAllocation = db.prepare(`INSERT INTO supplier_invoice_allocations
+      (invoice_id,receipt_line_id,qty,unit_price,currency,fx_rate,vat_rate) VALUES (?,?,?,?,?,?,?)`);
+    for (const line of chosen) insertAllocation.run(inv.id, line.id, line.invoiceQty, line.price, line.currency, line.fx_rate, line.vatRate);
+    const receivedBase = chosen.reduce((sum, line) => sum + line.invoiceQty * line.price * line.fx_rate, 0);
+    const invoiceBase = inv.amount * (inv.fx_rate || 1);
+    const tolerance = Math.max(1, receivedBase * 0.02);
+    const matched = chosen.length > 0 && Math.abs(invoiceBase - receivedBase) <= tolerance;
+    const vatAmount = b.vatAmount ?? payments.snapshotVatAmount(inv.id, inv.amount);
+    if (vatAmount == null) {
+      throw new AppError('Teslim satırı olmayan fatura için KDV tutarı gerekli / VAT amount required when no receipt lines are allocated', 422);
+    }
+    const note = matched ? null : `Fatura ${invoiceBase.toFixed(2)} TL, eşleştirilen teslim ${receivedBase.toFixed(2)} TL`;
+    const nextMatch = ['approved', 'paid'].includes(inv.match_status) ? inv.match_status : (matched ? 'matched' : 'discrepancy');
+    const changed = db.prepare(`UPDATE supplier_invoices SET allocation_state=?, vat_amount=?, match_status=?,
+        discrepancy_note=?, reconciled_at=?, reconciled_by=?, reconcile_note=?
+      WHERE id=? AND allocation_state='legacy'`).run(chosen.length ? 'recorded' : 'none', payments.round2(vatAmount),
+      nextMatch, note, Date.now(), req.user.id, b.note, inv.id).changes;
+    if (changed !== 1) throw new AppError('Fatura eşzamanlı olarak değiştirildi / Invoice changed concurrently', 409);
+    logAudit(req, 'auditSupplierInvoiceReconciled', { entityType: 'supplier_invoice', entityId: inv.id,
+      oldValue: { allocationState: 'legacy', matchStatus: inv.match_status },
+      newValue: { allocationState: chosen.length ? 'recorded' : 'none', matchStatus: nextMatch, vatAmount,
+        allocations: chosen.map(line => ({ receiptLineId: line.id, qty: line.invoiceQty, vatRate: line.vatRate })) },
+      detail: `${inv.invoice_no}: ${b.note}` });
+    return supplierInvoiceDto(loadSupplierInvoice(inv.id));
+  });
+  res.json(result);
+});
+
+const approveSchema = z.object({
+  note: z.string().trim().max(2000).optional(),
+  vatAmount: z.number().min(0).max(1e12).optional()
+}).strict();
+
+/**
+ * Payment gate: only reconciled invoices with a known VAT amount can be
+ * approved. A discrepancy (invoice ≠ received value beyond tolerance) needs
+ * an explicit approval note so the override is traceable.
+ */
+router.post('/invoices/:id/approve', requirePermission('purchase.approve'), validate(approveSchema), (req, res) => {
+  const b = req.valid;
+  const result = db.txImmediate(() => {
+    const inv = loadSupplierInvoice(req.params.id);
+    if (inv.match_status === 'approved' || inv.match_status === 'paid') {
+      return { ...supplierInvoiceDto(inv), alreadyApproved: true };
+    }
+    if (inv.allocation_state === 'legacy') {
+      throw new AppError('Eski fatura önce mutabakat gerektirir / Legacy invoice requires reconciliation', 409);
+    }
+    if (inv.match_status === 'discrepancy' && !(b.note && b.note.length >= 5)) {
+      throw new AppError('Uyuşmazlıklı fatura için onay gerekçesi gerekli / Approval note required for a discrepancy', 422);
+    }
+    let vatAmount = inv.vat_amount;
+    if (vatAmount == null) {
+      if (b.vatAmount == null) throw new AppError('Fatura KDV tutarı gerekli / Invoice VAT amount required', 422);
+      vatAmount = payments.round2(b.vatAmount);
+    }
+    const changed = db.prepare(`UPDATE supplier_invoices SET match_status='approved', vat_amount=?,
+        approved_at=?, approved_by=?, approval_note=?
+      WHERE id=? AND match_status IN ('matched','discrepancy','unmatched')`)
+      .run(vatAmount, Date.now(), req.user.id, b.note || null, inv.id).changes;
+    if (changed !== 1) throw new AppError('Fatura eşzamanlı olarak değiştirildi / Invoice changed concurrently', 409);
+    logAudit(req, 'auditSupplierInvoiceApproved', { entityType: 'supplier_invoice', entityId: inv.id,
+      oldValue: { matchStatus: inv.match_status }, newValue: { matchStatus: 'approved', vatAmount, note: b.note || null },
+      detail: inv.invoice_no });
+    return supplierInvoiceDto(loadSupplierInvoice(inv.id));
+  });
+  res.json(result);
+});
+
+const supplierPaymentSchema = z.object({
+  amount: z.number().positive().max(1e12).optional(),
+  paidOn: z.string().refine(isValidLocalDate, 'Geçerli takvim tarihi gerekli / Valid calendar date required').optional(),
+  method: z.enum(['cash', 'bank', 'card', 'check', 'other']).optional(),
+  reference: z.string().trim().max(200).optional(),
+  note: z.string().trim().max(1000).optional(),
+  requestKey: z.string().trim().min(8).max(100).optional()
+}).strict();
+
+router.post('/invoices/:id/payments', requirePermission('purchase.approve'), validate(supplierPaymentSchema), (req, res) => {
+  const result = payments.recordSupplierPayment(req, req.params.id, req.valid);
+  res.status(result.paymentId && !result.duplicate ? 201 : 200).json(result);
 });
 
 // ---------------- SUPPLIER RETURN ----------------

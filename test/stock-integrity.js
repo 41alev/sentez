@@ -40,22 +40,6 @@ async function main() {
     assert.deepEqual(snapshot(), before);
   }
   console.log('✓ F01: wrong product/depot and second-line failure roll back all stock effects');
-  const operation = { clientId: 'repeat-safe', type: 'move', itemId: b.id, warehouseId: lotB.warehouse_id, qty: 7 };
-  const firstSync = await success('POST', '/mobile/sync', { operations: [operation] });
-  const syncSnapshot = snapshot();
-  const repeats = await Promise.all(Array.from({ length: 5 }, () => success('POST', '/mobile/sync', { operations: [operation] })));
-  for (const repeat of repeats) assert.deepEqual(repeat.results, firstSync.results);
-  assert.deepEqual(snapshot(), syncSnapshot);
-  const changedPayload = await success('POST', '/mobile/sync', { operations: [{ ...operation, qty: 8 }] });
-  assert.equal(changedPayload.results[0].status, 409);
-  assert.deepEqual(snapshot(), syncSnapshot);
-  const { execFileSync } = require('node:child_process');
-  const fromNewProcess = execFileSync(process.execPath, ['-e',
-    "const db=require('./server/db');const user=db.prepare('SELECT id,role FROM users WHERE username=?').get('admin');const r=require('./server/services/mobile-sync').executeMobileOperation(JSON.parse(process.argv[1]),user);console.log(JSON.stringify(r));db.close()",
-    JSON.stringify(operation)], { cwd: path.join(__dirname, '..'), env: process.env, encoding: 'utf8' });
-  assert.deepEqual(JSON.parse(fromNewProcess), firstSync.results[0]);
-  assert.deepEqual(snapshot(), syncSnapshot);
-  console.log('✓ F04: concurrent retries, payload conflict and a new process preserve one stock effect');
   const order = await success('POST', '/sales/orders', { customerId: customer, lines: [{ itemId: a.id, qty: 2, price: 50 }] });
   for (const body of [
     { ...shipment([{ itemId: a.id, lotId: lotA.id, qty: 3 }]), soId: order.id },
@@ -75,8 +59,7 @@ async function main() {
   await success('PUT', `/stock/counts/${count.id}/lines`, { lines: [{ id: line.id, countedQty: 98 }] });
   assert.equal(db.prepare('SELECT counted_qty FROM stock_count_lines WHERE id=?').get(line.id).counted_qty, 98);
   console.log('✓ F17: saved count can be corrected before approval');
-  const badMobile = await success('POST', '/mobile/sync', { operations: [{ clientId: 'negative-count', type: 'count_line', lineId: line.id, countedQty: -9 }] });
-  assert.equal(badMobile.failed, 1);
+  assert.equal((await api('PUT', `/stock/counts/${count.id}/lines`, { lines: [{ id: line.id, countedQty: -9 }] })).status, 422);
   assert.equal(db.prepare('SELECT counted_qty FROM stock_count_lines WHERE id=?').get(line.id).counted_qty, 98);
   await success('POST', '/sales/shipments', shipment([{ itemId: a.id, lotId: lotA.id, qty: 5 }]));
   const beforeCount = snapshot();
@@ -84,10 +67,9 @@ async function main() {
   assert.deepEqual(snapshot(), beforeCount);
   console.log('✓ F06: count cannot overwrite an intervening shipment');
   db.prepare("UPDATE stock_counts SET status='approved' WHERE id=?").run(count.id);
-  const closed = await success('POST', '/mobile/sync', { operations: [{ clientId: 'closed-count', type: 'count_line', lineId: line.id, countedQty: 1 }] });
-  assert.equal(closed.failed, 1);
+  assert.equal((await api('PUT', `/stock/counts/${count.id}/lines`, { lines: [{ id: line.id, countedQty: 1 }] })).status, 409);
   assert.equal(db.prepare('SELECT counted_qty FROM stock_count_lines WHERE id=?').get(line.id).counted_qty, 98);
-  console.log('✓ F05: closed count and negative mobile quantity leave count unchanged');
+  console.log('✓ F05: closed count and negative quantity leave count unchanged');
 
   db.prepare("UPDATE stock_lots SET status='rejected' WHERE id=?").run(lotB.id);
   const supplier = db.prepare('SELECT id FROM suppliers LIMIT 1').get().id;

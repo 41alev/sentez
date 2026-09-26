@@ -1,5 +1,10 @@
 # Dream Plus — satış öncesi güncel inceleme
 
+> **26 Eylül 2026 notu:** Bu belge yazıldığı günün fotoğrafıdır. T01–T16
+> ve T18'in kod/test kısmı sonradan kapatıldı; güncel durum, kalan saha
+> doğrulamaları ve K-01…K-15 için alınan varsayılan kararlar
+> [`PROJECT_STATUS.md`](../../PROJECT_STATUS.md) en üst bölümündedir.
+
 20 Eylül 2026 · Koordinatör: Codex · Proje: `C:\Projelerim\Dream\dream-plus`
 
 **Karar: Ürün ticari geliştirmeye değer bir temele sahip; mevcut sürüm müşteri canlı kullanımına hazır değil.** Bu çalışma dosya incelemesi, izole doğrulama ve ticarileştirme planıdır. Uygulama hataları bu çalışmada düzeltilmedi. Yeni modül eklemekten önce stok/mali doğruluk, yedekleme ve tekrarlanabilir teslim tamamlanmalı.

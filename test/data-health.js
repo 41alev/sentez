@@ -193,10 +193,10 @@ const findCheck = (report, id) => report.checks.find(c => c.id === id);
   // Sayısal alana metin yazmak SQLite'ta sessizce 0 üretir; erken yakalanmalı
   const badNumber = await api('POST', '/api/data-health/bulk-update/items', {
     token: manager, body: { itemIds: [dupe1.data.id], field: 'minStock', value: 'çok' } });
-  ok('sayısal alana metin reddediliyor', badNumber.status === 400, `got ${badNumber.status}`);
+  ok('sayısal alana metin reddediliyor', [400, 422].includes(badNumber.status), `got ${badNumber.status}`);
   const badProc = await api('POST', '/api/data-health/bulk-update/items', {
     token: manager, body: { itemIds: [dupe1.data.id], field: 'procurementType', value: 'belki' } });
-  ok('geçersiz tedarik şekli reddediliyor', badProc.status === 400, `got ${badProc.status}`);
+  ok('geçersiz tedarik şekli reddediliyor', [400, 422].includes(badProc.status), `got ${badProc.status}`);
   const opBulk = await api('POST', '/api/data-health/bulk-update/items', {
     token: operator, body: { itemIds: [dupe1.data.id], field: 'category', value: 'x' } });
   ok('operatör toplu güncelleme yapamıyor (403)', opBulk.status === 403, `got ${opBulk.status}`);
@@ -282,6 +282,13 @@ const findCheck = (report, id) => report.checks.find(c => c.id === id);
     audit.data.filter(a => a.actionKey === 'auditMerge').some(a => a.oldValue && a.newValue),
     'hangi kaydın hangisine gittiği sonradan sorulabilmeli');
   ok('toplu güncelleme denetime yazıldı', audit.data.some(a => a.actionKey === 'auditBulkUpdate'));
+
+  console.log('\n=== SİSTEM DURUMU — YEDEKLER / SYSTEM STATUS — BACKUPS ===');
+  await require('../server/scripts/full-backup').runFullBackup();
+  const sys = (await api('GET', '/api/data-health/system', { token: admin })).data;
+  ok('tam yedek paketi (bundle) sistem durumunda sayılıyor', sys.backups.count >= 1 && sys.backups.latest.kind === 'bundle',
+    JSON.stringify(sys.backups));
+  ok('son yedek eksiksiz ve bugünkü', sys.backups.latest.complete === true && sys.backups.daysSinceLast === 0);
 
   console.log('\n=== PUANLAMA / SCORING ===');
   const final = (await api('GET', '/api/data-health/report', { token: admin })).data;

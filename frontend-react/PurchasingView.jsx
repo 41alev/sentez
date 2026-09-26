@@ -20,6 +20,9 @@ export default function PurchasingView() {
   const itemsRef = useRef([]);
   const suppliersRef = useRef([]);
   const warehousesRef = useRef([]);
+  const invoicePageRef = useRef(1);
+  // T08: each list keeps its own page; the pager used to always reload page 1.
+  const pagesRef = useRef({});
 
   function reload() { setReloadToken(x => x + 1); }
 
@@ -47,14 +50,14 @@ export default function PurchasingView() {
     const fns = { orders: renderOrders, suppliers: renderSuppliers, requests: renderRequests, rfqs: renderRfqs, invoices: renderInvoices };
     (async () => {
       try { await fns[tab](body, actions); }
-      catch (e) { UI.err(e); body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+      catch (e) { UI.errorState(body, e, reload); }
     })();
   }, [ready, tab, reloadToken]);
 
   /* ================= ORDERS ================= */
   async function renderOrders(body, actions) {
     let res;
-    try { res = await Api.purchaseOrders({ pageSize: 25 }); } catch (e) { UI.err(e); return; }
+    try { res = await Api.purchaseOrders({ page: pagesRef.current.orders || 1, pageSize: 25 }); } catch (e) { UI.errorState(typeof body !== 'undefined' ? body : null, e, typeof reload === 'function' ? reload : null); return; }
     const rows = res.data || res;
 
     actions.innerHTML = can('write') ? `<button class="btn btn-primary btn-sm" id="poNew">${UI.icon(UI.ICONS.plus)}${t('newPO')}</button>` : '';
@@ -87,7 +90,7 @@ export default function PurchasingView() {
           ${['approved', 'partially_received'].includes(r.status) && can('write') ? `<button class="btn btn-ghost btn-sm" data-receive="${esc(r.id)}">${t('receive')}</button>` : ''}
           <button class="icon-btn" data-print="${esc(r.id)}" title="${t('print')}">${UI.icon(UI.ICONS.print)}</button>
         </div>` }
-    ], rows)}${res.totalPages ? pager(res, () => reload()) : ''}</div>`;
+    ], rows)}${res.totalPages ? pager(res, p => { pagesRef.current.orders = p; reload(); }) : ''}</div>`;
 
     document.getElementById('poNew')?.addEventListener('click', () => poForm());
     body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openPO(b.dataset.open));
@@ -114,7 +117,7 @@ export default function PurchasingView() {
       title: t('newPO'), size: 'wide',
       body: `
         <div class="field-row">
-          ${field(t('supplierName'), select('poSup', suppliers.map(s => ({ v: s.id, l: s.name })), prefill?.supplierId))}
+          ${field(t('supplierName'), select('poSup', suppliers.map(s => ({ v: s.id, l: s.name })), prefill?.supplierId, { search: 'suppliers' }))}
           ${field(t('warehouse'), select('poWh', warehouses.map(w => ({ v: w.id, l: w.name }))))}
         </div>
         <div class="field-row three">
@@ -134,8 +137,8 @@ export default function PurchasingView() {
         const draw = () => {
           box.querySelector('#poLines').innerHTML = lines.map((l, i) => `
             <div class="dyn-row">
-              <select data-i="${i}" data-f="itemId" style="flex:1;min-width:150px">
-                ${items.map(o => `<option value="${esc(o.id)}" ${o.id === l.itemId ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}
+              <select data-i="${i}" data-f="itemId" data-search="items" style="flex:1;min-width:150px">
+                ${UI.missingOption(items, l.itemId)}${items.map(o => `<option value="${esc(o.id)}" ${o.id === l.itemId ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}
               </select>
               <input type="number" min="0.0001" step="0.0001" value="${l.qty}" data-i="${i}" data-f="qty" style="width:84px" title="${t('qty')}">
               <input type="number" min="0" step="0.0001" value="${l.price}" data-i="${i}" data-f="price" style="width:96px" title="${t('price')}">
@@ -173,7 +176,7 @@ export default function PurchasingView() {
 
   async function openPO(id) {
     let po;
-    try { po = await Api.purchaseOrder(id); } catch (e) { UI.err(e); return; }
+    try { po = await Api.purchaseOrder(id); } catch (e) { UI.errorState(null, e, typeof reload === 'function' ? reload : null); return; }
     modal({
       title: po.poNo, sub: `${po.supplier || po.supplierName || ''} · ${dt(po.date)}`, size: 'xwide',
       body: `
@@ -230,7 +233,7 @@ export default function PurchasingView() {
   async function receiveDialog(poId) {
     const warehouses = warehousesRef.current;
     let po;
-    try { po = await Api.purchaseOrder(poId); } catch (e) { UI.err(e); return; }
+    try { po = await Api.purchaseOrder(poId); } catch (e) { UI.errorState(null, e, typeof reload === 'function' ? reload : null); return; }
     const open = (po.items || []).filter(i => i.qty - (i.receivedQty || 0) > 1e-9);
     if (!open.length) return UI.toast(UI.getLang() === 'tr' ? 'Tüm kalemler teslim alınmış.' : 'All lines already received.');
 
@@ -335,7 +338,7 @@ export default function PurchasingView() {
   /* ================= SUPPLIERS ================= */
   async function renderSuppliers(body, actions) {
     let res;
-    try { res = await Api.suppliers({ pageSize: 50 }); } catch (e) { UI.err(e); return; }
+    try { res = await Api.suppliers({ page: pagesRef.current.suppliers || 1, pageSize: 50 }); } catch (e) { UI.errorState(typeof body !== 'undefined' ? body : null, e, typeof reload === 'function' ? reload : null); return; }
     const rows = res.data || res;
     actions.innerHTML = can('write') ? `<button class="btn btn-primary btn-sm" id="supNew">${UI.icon(UI.ICONS.plus)}${t('newSupplier')}</button>` : '';
 
@@ -350,7 +353,7 @@ export default function PurchasingView() {
       { key: 'act', label: t('actions'), render: r => `<div class="row-actions">
           ${can('write') ? `<button class="icon-btn" data-edit="${r.id}">${UI.icon(UI.ICONS.edit)}</button>` : ''}
           ${can('delete') ? `<button class="icon-btn danger" data-del="${r.id}">${UI.icon(UI.ICONS.trash)}</button>` : ''}</div>` }
-    ], rows)}</div>`;
+    ], rows)}${pager(res, p => { pagesRef.current.suppliers = p; reload(); })}</div>`;
 
     document.getElementById('supNew')?.addEventListener('click', () => supForm(null));
     body.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openSupplier(b.dataset.open));
@@ -409,7 +412,7 @@ export default function PurchasingView() {
 
   async function openSupplier(id) {
     let s;
-    try { s = await Api.supplier(id); } catch (e) { UI.err(e); return; }
+    try { s = await Api.supplier(id); } catch (e) { UI.errorState(null, e, typeof reload === 'function' ? reload : null); return; }
     const perf = s.performance || {};
     modal({
       title: s.name, sub: `${s.code || ''} · ${s.country || ''}`, size: 'wide',
@@ -482,7 +485,7 @@ export default function PurchasingView() {
 
   async function renderRequests(body, actions) {
     let res;
-    try { res = await Api.requests({ pageSize: 50 }); } catch (e) { UI.err(e); return; }
+    try { res = await Api.requests({ page: pagesRef.current.requests || 1, pageSize: 50 }); } catch (e) { UI.errorState(typeof body !== 'undefined' ? body : null, e, typeof reload === 'function' ? reload : null); return; }
     const rows = res.data || res;
     actions.innerHTML = can('write') ? `<button class="btn btn-primary btn-sm" id="reqNew">${UI.icon(UI.ICONS.plus)}${t('newRequest')}</button>` : '';
 
@@ -496,7 +499,7 @@ export default function PurchasingView() {
           ${r.status === 'submitted' && can('approve') ? `<button class="icon-btn ok" data-ap="${esc(r.id)}">${UI.icon(UI.ICONS.check)}</button>
              <button class="icon-btn danger" data-rj="${esc(r.id)}">${UI.icon(UI.ICONS.x)}</button>` : ''}
         </div>` }
-    ], rows)}</div>`;
+    ], rows)}${pager(res, p => { pagesRef.current.requests = p; reload(); })}</div>`;
 
     document.getElementById('reqNew')?.addEventListener('click', () => reqForm());
     body.querySelectorAll('[data-ap]').forEach(b => b.onclick = async () => {
@@ -527,7 +530,7 @@ export default function PurchasingView() {
         const draw = () => {
           box.querySelector('#rqLines').innerHTML = lines.map((l, i) => `
             <div class="dyn-row">
-              <select data-i="${i}" data-f="itemId" style="flex:1">${items.map(o => `<option value="${esc(o.id)}" ${o.id === l.itemId ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}</select>
+              <select data-i="${i}" data-f="itemId" data-search="items" style="flex:1">${UI.missingOption(items, l.itemId)}${items.map(o => `<option value="${esc(o.id)}" ${o.id === l.itemId ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}</select>
               <input type="number" min="0.0001" step="0.0001" value="${l.qty}" data-i="${i}" data-f="qty" style="width:96px">
               <button class="rm" data-rm="${i}">${UI.icon(UI.ICONS.x)}</button>
             </div>`).join('');
@@ -562,7 +565,7 @@ export default function PurchasingView() {
 
   async function renderRfqs(body, actions) {
     let res;
-    try { res = await Api.rfqs({ pageSize: 50 }); } catch (e) { UI.err(e); return; }
+    try { res = await Api.rfqs({ page: pagesRef.current.rfqs || 1, pageSize: 50 }); } catch (e) { UI.errorState(typeof body !== 'undefined' ? body : null, e, typeof reload === 'function' ? reload : null); return; }
     const rows = res.data || res;
     actions.innerHTML = can('write') ? `<button class="btn btn-primary btn-sm" id="rfqNew">${UI.icon(UI.ICONS.plus)}${t('newRfq')}</button>` : '';
 
@@ -574,7 +577,7 @@ export default function PurchasingView() {
       { key: 'act', label: t('actions'), render: r => `<div class="row-actions">
           <button class="btn btn-ghost btn-sm" data-cmp="${esc(r.id)}">${t('compareQuotes')}</button>
           ${can('write') ? `<button class="btn btn-ghost btn-sm" data-q="${esc(r.id)}">${t('addQuote')}</button>` : ''}</div>` }
-    ], rows)}</div>`;
+    ], rows)}${pager(res, p => { pagesRef.current.rfqs = p; reload(); })}</div>`;
 
     document.getElementById('rfqNew')?.addEventListener('click', () => rfqForm());
     body.querySelectorAll('[data-cmp]').forEach(b => b.onclick = () => compareDialog(b.dataset.cmp));
@@ -596,7 +599,7 @@ export default function PurchasingView() {
         const draw = () => {
           box.querySelector('#rfLines').innerHTML = lines.map((l, i) => `
             <div class="dyn-row">
-              <select data-i="${i}" data-f="itemId" style="flex:1">${items.map(o => `<option value="${esc(o.id)}" ${o.id === l.itemId ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}</select>
+              <select data-i="${i}" data-f="itemId" data-search="items" style="flex:1">${UI.missingOption(items, l.itemId)}${items.map(o => `<option value="${esc(o.id)}" ${o.id === l.itemId ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}</select>
               <input type="number" min="0.0001" step="0.0001" value="${l.qty}" data-i="${i}" data-f="qty" style="width:96px">
               <button class="rm" data-rm="${i}">${UI.icon(UI.ICONS.x)}</button>
             </div>`).join('');
@@ -620,7 +623,7 @@ export default function PurchasingView() {
     modal({
       title: t('addQuote'), sub: rfq.rfqNo || rfq.rfq_no,
       body: `
-        ${field(t('supplierName'), select('qSup', suppliers.map(s => ({ v: s.id, l: s.name }))))}
+        ${field(t('supplierName'), select('qSup', suppliers.map(s => ({ v: s.id, l: s.name })), undefined, { search: 'suppliers' }))}
         ${field(t('itemName'), select('qItem', (rfq.lines || []).map(l => ({ v: l.itemId || l.item_id, l: l.itemName || l.item_name }))))}
         <div class="field-row">
           ${field(t('price'), input('qPrice', { type: 'number', min: 0, step: '0.0001', value: 0 }))}
@@ -641,7 +644,7 @@ export default function PurchasingView() {
 
   async function compareDialog(rfqId) {
     let cmp;
-    try { cmp = await Api.compareQuotes(rfqId); } catch (e) { UI.err(e); return; }
+    try { cmp = await Api.compareQuotes(rfqId); } catch (e) { UI.errorState(null, e, typeof reload === 'function' ? reload : null); return; }
     // Api.compareQuotes() satır bazlı iç içe bir yapı döner:
     // { rfqNo, lines: [{ itemName, quotes: [{supplier, unitPrice, ...}], best }] }
     // düz bir "comparison"/"quotes"/"data" alanı hiç yok — önceki kod bunları
@@ -672,28 +675,45 @@ export default function PurchasingView() {
 
   /* ================= INVOICES (3-way match) ================= */
   async function renderInvoices(body, actions) {
+    const tr = UI.getLang() === 'tr';
     let res;
-    try { res = await Api.supplierInvoices({ pageSize: 50 }); } catch (e) { UI.err(e); return; }
+    try { res = await Api.supplierInvoices({ page: invoicePageRef.current, pageSize: 50 }); } catch (e) { UI.errorState(typeof body !== 'undefined' ? body : null, e, typeof reload === 'function' ? reload : null); return; }
     const rows = res.data || res;
     actions.innerHTML = can('write') ? `<button class="btn btn-primary btn-sm" id="invNew">${UI.icon(UI.ICONS.plus)}${t('newInvoice')}</button>` : '';
+    const byId = new Map(rows.map(r => [r.id, r]));
+    const stateBadge = r => {
+      if (r.allocationState === 'legacy') return `<span class="badge warn">${tr ? 'Mutabakat bekliyor' : 'Needs reconciliation'}</span>`;
+      const s = r.matchStatus;
+      const m = { matched: ['ok', t('matchOk')], discrepancy: ['crit', t('matchDiscrepancy')], unmatched: ['warn', t('matchUnmatched')],
+        approved: ['ok', tr ? 'Ödemeye onaylı' : 'Approved'], paid: ['ok', tr ? 'Ödendi' : 'Paid'] };
+      const [c, l] = m[s] || ['plain', s];
+      return `<span class="badge ${c}">${esc(l)}</span>`;
+    };
 
     body.innerHTML = `
-      <div class="alert info">${UI.getLang() === 'tr'
-        ? '3\'lü eşleştirme: fatura tutarı, sipariş ve teslim alınan miktarla otomatik karşılaştırılır.'
-        : '3-way match: invoice amount is compared against the order and the received quantity.'}</div>
+      <div class="alert info">${tr
+        ? '3\'lü eşleştirme: fatura tutarı, sipariş ve teslim alınan miktarla karşılaştırılır. Eski (eşleştirilmemiş) faturalar mutabakat yapılmadan onaylanamaz ve ödenemez.'
+        : '3-way match: invoice amount is compared against the order and received quantity. Legacy (unmatched) invoices cannot be approved or paid before reconciliation.'}</div>
       <div class="card">${table([
-        { key: 'invoiceNo', label: t('invoiceNo'), render: r => `<span class="mono">${esc(r.invoiceNo)}</span>` },
+        { key: 'invoiceNo', label: t('invoiceNo'), render: r => `<span class="mono">${esc(r.invoiceNo)}</span><div class="sub-line">${esc(r.poNo || '')}</div>` },
         { key: 'supplier', label: t('supplierName'), render: r => esc(r.supplier || '—') },
-        { key: 'invoiceDate', label: t('date'), render: r => dt(r.invoiceDate) },
-        { key: 'amount', label: UI.getLang() === 'tr' ? 'Tutar' : 'Amount', num: true, render: r => `${num(r.amount, 2)} ${cur(r.currency)}` },
-        { key: 'matchStatus', label: t('threeWayMatch'), render: r => {
-            const s = r.matchStatus;
-            const m = { matched: ['ok', t('matchOk')], discrepancy: ['crit', t('matchDiscrepancy')], unmatched: ['warn', t('matchUnmatched')], approved: ['ok', t('approve')], paid: ['ok', 'OK'] };
-            const [c, l] = m[s] || ['plain', s];
-            return `<span class="badge ${c}">${esc(l)}</span>`;
-          } },
-        { key: 'note', label: '', render: r => esc(r.discrepancyNote || '') }
-      ], rows)}</div>`;
+        { key: 'invoiceDate', label: t('date'), render: r => dt(r.invoiceDate), cls: 'nowrap' },
+        { key: 'amount', label: tr ? 'Net tutar' : 'Net amount', num: true, render: r => `${num(r.amount, 2)} ${cur(r.currency)}` },
+        { key: 'gross', label: tr ? 'KDV dahil / kalan' : 'Gross / open', num: true, render: r => r.grossAmount == null ? '—'
+            : `${num(r.grossAmount, 2)}<div class="sub-line">${tr ? 'Kalan' : 'Open'}: ${num(r.openAmount, 2)}</div>` },
+        { key: 'matchStatus', label: t('threeWayMatch'), render: stateBadge },
+        { key: 'note', label: '', render: r => esc(r.discrepancyNote || '') },
+        { key: 'act', label: t('actions'), render: r => `<div class="row-actions">
+            ${r.allocationState === 'legacy' && can('approve') ? `<button class="btn btn-ghost btn-sm" data-reconcile="${esc(r.id)}">${tr ? 'Mutabakat' : 'Reconcile'}</button>` : ''}
+            ${r.allocationState !== 'legacy' && ['matched', 'discrepancy', 'unmatched'].includes(r.matchStatus) && can('approve')
+              ? `<button class="btn btn-ghost btn-sm" data-inv-approve="${esc(r.id)}">${t('approve')}</button>` : ''}
+            ${r.matchStatus === 'approved' && can('approve') ? `<button class="btn btn-ghost btn-sm" data-inv-pay="${esc(r.id)}">${tr ? 'Ödeme' : 'Pay'}</button>` : ''}
+          </div>` }
+      ], rows)}${pager(res, page => { invoicePageRef.current = page; reload(); })}</div>`;
+
+    body.querySelectorAll('[data-reconcile]').forEach(b => b.onclick = () => reconcileDialog(byId.get(b.dataset.reconcile)));
+    body.querySelectorAll('[data-inv-approve]').forEach(b => b.onclick = () => approveInvoiceDialog(byId.get(b.dataset.invApprove)));
+    body.querySelectorAll('[data-inv-pay]').forEach(b => b.onclick = () => payInvoiceDialog(byId.get(b.dataset.invPay)));
 
     document.getElementById('invNew')?.addEventListener('click', async () => {
       const pos = await Api.purchaseOrders({ pageSize: 100 }).then(r => r.data || r);
@@ -707,6 +727,8 @@ export default function PurchasingView() {
             ${field(t('currency'), select('ivCur', [{ v: 'TRY', l: 'TRY' }, { v: 'USD', l: 'USD' }, { v: 'EUR', l: 'EUR' }], 'TRY'))}
           </div>
           ${field(t('date'), input('ivDate', { type: 'date', value: UI.today() }))}
+          ${field(UI.getLang() === 'tr' ? 'Faturadaki KDV tutarı (boşsa satır oranlarından hesaplanır)' : 'VAT amount on invoice (blank = from line rates)',
+            input('ivVat', { type: 'number', min: 0, step: '0.01' }))}
           <div id="ivReceiptLines" aria-live="polite"></div>`,
         footer: `<button class="btn btn-ghost" data-close>${t('cancel')}</button><button class="btn btn-primary" id="ivGo">${t('save')}</button>`,
         onOpen: (box) => {
@@ -764,13 +786,126 @@ export default function PurchasingView() {
                 .filter(line => line.qty > 0);
               if (availableLines.length && !lines.length) throw new Error(UI.getLang() === 'tr'
                 ? 'En az bir teslim satırı miktarı girin.' : 'Enter a quantity for at least one receipt line.');
+              const vatText = val('ivVat');
+              if (vatText !== '' && !(Number(vatText) >= 0)) throw new Error(UI.getLang() === 'tr' ? 'KDV tutarı geçersiz.' : 'Invalid VAT amount.');
               await Api.createSupplierInvoice({ poId: val('ivPo'), invoiceNo: val('ivNo'), amount: numVal('ivAmt'),
-                currency: val('ivCur'), invoiceDate: val('ivDate'), ...(lines.length ? { lines } : {}) });
+                currency: val('ivCur'), invoiceDate: val('ivDate'), ...(vatText !== '' ? { vatAmount: Number(vatText) } : {}),
+                ...(lines.length ? { lines } : {}) });
               closeModal(); UI.ok(t('saved')); reload();
             } catch (e) { UI.err(e); }
           };
         }
       });
+    });
+  }
+
+
+  /** Runs one submit at a time for a modal button; prevents double posting. */
+  function guardedSubmit(button, work) {
+    button.onclick = async () => {
+      if (button.disabled) return;
+      button.disabled = true;
+      try { await work(); } catch (e) { UI.err(e); } finally { button.disabled = false; }
+    };
+  }
+
+  async function reconcileDialog(inv) {
+    const tr = UI.getLang() === 'tr';
+    let lines = [];
+    try { lines = (await Api.supplierInvoiceReceivableLines(inv.poId)).lines.filter(l => l.availableQty > 0); }
+    catch (e) { UI.errorState(null, e, typeof reload === 'function' ? reload : null); return; }
+    modal({
+      title: `${tr ? 'Fatura mutabakatı' : 'Invoice reconciliation'} — ${inv.invoiceNo}`, size: 'wide',
+      body: `
+        <div class="alert warn">${tr
+          ? 'Bu fatura teslim satırı eşleştirmesi olmadan kaydedilmiş. Faturada gerçekten yer alan teslim miktarlarını girin. Mutabakat bir kez yapılır ve denetim kaydına yazılır.'
+          : 'This invoice was recorded without receipt-line matching. Enter the receipt quantities it really bills. Reconciliation happens once and is audited.'}</div>
+        <p>${tr ? 'Fatura net tutarı' : 'Invoice net amount'}: <strong>${num(inv.amount, 2)} ${cur(inv.currency)}</strong></p>
+        ${lines.length ? lines.map(line => `<div class="field-row three">
+            <div class="field"><label>${esc(line.receiptNo)} · ${esc(line.itemName)}</label>
+              <div class="sub-line">${num(line.availableQty, 3)} ${tr ? 'faturalanmamış' : 'uninvoiced'} · ${num(line.price, 4)} ${cur(line.currency)}</div></div>
+            <div class="field"><label for="rcQ${line.receiptLineId}">${tr ? 'Miktar' : 'Qty'}</label>
+              <input id="rcQ${line.receiptLineId}" type="number" min="0" max="${line.availableQty}" step="any" value="0"></div>
+            <div class="field"><label for="rcV${line.receiptLineId}">${tr ? 'KDV %' : 'VAT %'}</label>
+              <input id="rcV${line.receiptLineId}" type="number" min="0" max="100" step="any" value="${line.vatRate ?? ''}"></div>
+          </div>`).join('')
+          : `<div class="empty">${tr ? 'Faturalanmamış teslim satırı yok; fatura teslimatsız (hizmet/masraf) olarak kaydedilir.' : 'No uninvoiced receipt lines; the invoice is recorded as not tied to receipts.'}</div>`}
+        ${field(tr ? 'Faturadaki KDV tutarı (boşsa satır oranlarından hesaplanır)' : 'VAT amount on invoice (blank = from line rates)',
+          input('rcVat', { type: 'number', min: 0, step: '0.01' }))}
+        ${field(tr ? 'Mutabakat gerekçesi (zorunlu)' : 'Reconciliation note (required)', textarea('rcNote'))}`,
+      footer: `<button class="btn btn-ghost" data-close>${t('cancel')}</button><button class="btn btn-primary" id="rcGo">${t('save')}</button>`,
+      onOpen: (box) => guardedSubmit(box.querySelector('#rcGo'), async () => {
+        const chosen = [];
+        for (const line of lines) {
+          const qty = Number(box.querySelector(`#rcQ${line.receiptLineId}`).value || 0);
+          if (!(qty > 0)) continue;
+          const vatRaw = box.querySelector(`#rcV${line.receiptLineId}`).value;
+          const vatRate = Number(vatRaw);
+          if (vatRaw === '' || !Number.isFinite(vatRate) || vatRate < 0 || vatRate > 100) {
+            throw new Error(tr ? 'Her satıra 0–100 arası KDV oranı girin.' : 'Enter a VAT rate from 0 to 100 for each line.');
+          }
+          if (qty > line.availableQty + 1e-9) throw new Error(tr ? 'Miktar faturalanmamış teslimi aşıyor.' : 'Quantity exceeds uninvoiced receipt.');
+          chosen.push({ receiptLineId: line.receiptLineId, qty, vatRate });
+        }
+        const note = val('rcNote');
+        if (note.length < 5) throw new Error(tr ? 'Mutabakat gerekçesi en az 5 karakter olmalı.' : 'Reconciliation note must be at least 5 characters.');
+        const vatText = val('rcVat');
+        await Api.reconcileSupplierInvoice(inv.id, { lines: chosen, note, ...(vatText !== '' ? { vatAmount: Number(vatText) } : {}) });
+        closeModal(); UI.ok(t('saved')); reload();
+      })
+    });
+  }
+
+  function approveInvoiceDialog(inv) {
+    const tr = UI.getLang() === 'tr';
+    const needsVat = inv.vatAmount == null;
+    modal({
+      title: `${t('approve')} — ${inv.invoiceNo}`,
+      body: `
+        ${inv.matchStatus === 'discrepancy' ? `<div class="alert warn">${esc(inv.discrepancyNote || '')}<br>${tr
+          ? 'Uyuşmazlıklı fatura için onay gerekçesi zorunludur.' : 'An approval note is required for a discrepancy.'}</div>` : ''}
+        <p>${tr ? 'Net' : 'Net'}: <strong>${num(inv.amount, 2)} ${cur(inv.currency)}</strong>${inv.vatAmount != null
+          ? ` · ${tr ? 'KDV' : 'VAT'}: <strong>${num(inv.vatAmount, 2)}</strong>` : ''}</p>
+        ${needsVat ? field(tr ? 'Faturadaki KDV tutarı (zorunlu)' : 'VAT amount on invoice (required)', input('apVat', { type: 'number', min: 0, step: '0.01' })) : ''}
+        ${field(tr ? 'Onay notu' : 'Approval note', textarea('apNote'))}`,
+      footer: `<button class="btn btn-ghost" data-close>${t('cancel')}</button><button class="btn btn-primary" id="apGo">${t('approve')}</button>`,
+      onOpen: (box) => guardedSubmit(box.querySelector('#apGo'), async () => {
+        const note = val('apNote');
+        const payload = note ? { note } : {};
+        if (needsVat) {
+          const raw = val('apVat');
+          if (raw === '' || !(Number(raw) >= 0)) throw new Error(tr ? 'KDV tutarı girin.' : 'Enter the VAT amount.');
+          payload.vatAmount = Number(raw);
+        }
+        await Api.approveSupplierInvoice(inv.id, payload);
+        closeModal(); UI.ok(t('saved')); reload();
+      })
+    });
+  }
+
+  function payInvoiceDialog(inv) {
+    const tr = UI.getLang() === 'tr';
+    const requestKey = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
+    modal({
+      title: `${tr ? 'Ödeme' : 'Payment'} — ${inv.invoiceNo}`,
+      body: `
+        <p>${tr ? 'Kalan' : 'Open'}: <strong>${num(inv.openAmount, 2)} ${cur(inv.currency)}</strong></p>
+        <div class="field-row">
+          ${field(tr ? 'Tutar' : 'Amount', input('pyAmt', { type: 'number', min: 0, step: '0.01', value: inv.openAmount }))}
+          ${field(t('date'), input('pyDate', { type: 'date', value: UI.today() }))}
+        </div>
+        ${field(tr ? 'Yöntem' : 'Method', select('pyMethod', [{ v: 'bank', l: tr ? 'Banka' : 'Bank' }, { v: 'cash', l: tr ? 'Nakit' : 'Cash' },
+          { v: 'check', l: tr ? 'Çek' : 'Check' }, { v: 'card', l: tr ? 'Kart' : 'Card' }, { v: 'other', l: tr ? 'Diğer' : 'Other' }], 'bank'))}
+        ${field(tr ? 'Referans (dekont no)' : 'Reference', input('pyRef'))}`,
+      footer: `<button class="btn btn-ghost" data-close>${t('cancel')}</button><button class="btn btn-primary" id="pyGo">${t('save')}</button>`,
+      onOpen: (box) => guardedSubmit(box.querySelector('#pyGo'), async () => {
+        const amount = Number(val('pyAmt'));
+        if (!(amount > 0)) throw new Error(tr ? 'Pozitif bir tutar girin.' : 'Enter a positive amount.');
+        if (amount > inv.openAmount + 0.005) throw new Error(tr ? 'Tutar kalan borcu aşıyor.' : 'Amount exceeds the open balance.');
+        await Api.paySupplierInvoice(inv.id, { amount, paidOn: val('pyDate'), method: val('pyMethod'),
+          ...(val('pyRef') ? { reference: val('pyRef') } : {}), requestKey });
+        closeModal(); UI.ok(t('saved')); reload();
+      })
     });
   }
 

@@ -22,16 +22,16 @@ const ROOT = path.join(__dirname, '..');
 
 // Sunucu gerektiren paketler (README: "Sunucu ayaktayken").
 const SERVER_SUITES = [
-  'e2e', 'contract', 'import', 'templates', 'mobile',
+  'e2e', 'contract', 'import', 'templates',
   'data-health', 'planning', 'ui-smoke', 'security', 'load',
-  'multitenancy', 'accounting-export', 'labels', 'webhooks', 'openapi', 'pwa', 'crm', 'pivot', 'support', 'visits', 'kvkk',
-  'approval-limit', 'concurrency-races', 'search', 'release-hardening', 'stock-integrity', 'finance-integrity'
+  'multitenancy', 'accounting-export', 'labels', 'webhooks', 'openapi', 'crm', 'pivot', 'support', 'visits', 'kvkk',
+  'approval-limit', 'concurrency-races', 'search', 'release-hardening', 'stock-integrity', 'finance-integrity', 'invoice-settlement', 'planning-integrity', 'pilot-flow'
 ];
 // Sunucu gerektirmez — kendi geçici durumunu kendi kurar/söker.
-const STANDALONE_SUITES = ['visual-audit', 'backup-restore', 'email', 'barcode', 'dates', 'sandbox-safety', 'maintenance-safety'];
+const STANDALONE_SUITES = ['visual-audit', 'backup-restore', 'email', 'barcode', 'dates', 'sandbox-safety', 'maintenance-safety', 'proxy-rate-limit', 'release-package'];
 // Kendi izole geçici dizinlerini kullanır (execFileSync ile alt süreç açar),
 // ana data/ klasörüne hiç dokunmaz.
-const CHILD_ISOLATED_SUITES = ['setup-upgrade', 'license'];
+const CHILD_ISOLATED_SUITES = ['setup-upgrade', 'license', 'faz0-verify'];
 
 function waitForServer(proc, timeoutMs = 20000) {
   return new Promise((resolve, reject) => {

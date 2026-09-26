@@ -3,7 +3,7 @@ const express = require('express');
 const db = require('../db');
 const { logAudit } = require('../lib/core');
 const { requireAuth, requireRole } = require('../middleware/auth');
-const { validate, validateQuery, z } = require('../middleware/validate');
+const { validate, validateQuery, z, localDate } = require('../middleware/validate');
 const { companyIdOf } = require('../lib/tenant');
 const accountingExport = require('../services/accounting-export');
 
@@ -45,8 +45,8 @@ router.put('/mappings', MANAGER, validate(mappingSchema), (req, res) => {
 /* ============================ DIŞA AKTARIM ============================ */
 
 router.get('/export', MANAGER, validateQuery(z.object({
-  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+  from: localDate,
+  to: localDate
 })), (req, res, next) => {
   try {
     const result = accountingExport.generateJournalEntries({ from: req.query.from, to: req.query.to, companyId: companyIdOf(req) });

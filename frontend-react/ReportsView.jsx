@@ -33,7 +33,7 @@ export default function ReportsView() {
     const fns = { valuation, trends, deadStock, turnover, abc, reorder, supplier, quality: qualityKpi, prodCost, custom: customReport };
     (async () => {
       try { await fns[tab](body, actions); }
-      catch (e) { UI.err(e); body.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+      catch (e) { UI.errorState(body, e, reload); }
     })();
   }, [tab, reloadToken]);
 
@@ -376,7 +376,7 @@ export default function ReportsView() {
     actions.innerHTML = '';
     let meta, saved;
     try { [meta, saved] = await Promise.all([Api.pivotMeta(), Api.savedReports()]); }
-    catch (e) { UI.err(e); return; }
+    catch (e) { UI.errorState(typeof body !== 'undefined' ? body : null, e, typeof reload === 'function' ? reload : null); return; }
     const cfg = pivotConfigRef.current;
     const dsOf = (key) => meta.dataSources.find(d => d.key === key) || meta.dataSources[0];
 

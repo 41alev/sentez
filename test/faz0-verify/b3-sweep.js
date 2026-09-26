@@ -15,7 +15,10 @@ const PREFIX = {
 function discoverRoutes() {
   const out = [];
   for (const [file, prefix] of Object.entries(PREFIX)) {
-    const src = fs.readFileSync(path.join(ROOT, 'server', 'routes', file + '.js'), 'utf8');
+    // 26.09: mobil terminal kaldırıldı; artık olmayan route dosyası atlanır.
+    const routeFile = path.join(ROOT, 'server', 'routes', file + '.js');
+    if (!fs.existsSync(routeFile)) continue;
+    const src = fs.readFileSync(routeFile, 'utf8');
     for (const m of src.matchAll(/router\.(get|post|put|patch|delete)\(\s*'([^']+)'/g)) out.push({ method: m[1].toUpperCase(), path: prefix + (m[2] === '/' ? '' : m[2]), file });
   }
   return out;

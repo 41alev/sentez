@@ -40,12 +40,7 @@ function parseArgs(argv) {
  * bir yönetici şifresi bırakır.
  */
 function passwordProblem(p) {
-  if (!p || p.length < 8) return 'En az 8 karakter olmalı';
-  if (!/[a-zA-ZğüşıöçĞÜŞİÖÇ]/.test(p)) return 'En az bir harf içermeli';
-  if (!/[0-9]/.test(p)) return 'En az bir rakam içermeli';
-  const weak = ['12345678', 'password', 'sifre123', 'admin123', 'qwerty123', 'Admin123!'];
-  if (weak.some(w => p.toLowerCase() === w.toLowerCase())) return 'Bu şifre çok yaygın, başka bir şey seçin';
-  return null;
+  return require('../lib/password-policy').passwordProblem(p);
 }
 
 function usernameProblem(u) {

@@ -63,7 +63,7 @@ export default function ItemsView() {
       if (cancelled) return;
       let res;
       try { res = await Api.items({ ...filters, pageSize: 25 }); }
-      catch (e) { UI.err(e); return; }
+      catch (e) { UI.errorState(null, e, typeof reload === 'function' ? reload : null); return; }
       if (cancelled) return;
       allItemsRef.current = res.data;
       setPhase({ status: 'ready', res, error: null });
@@ -268,8 +268,8 @@ export default function ItemsView() {
       const opts = allItems.filter(i => i.id !== item?.id);
       list.innerHTML = bom.map((b, i) => `
         <div class="dyn-row">
-          <select data-i="${i}" data-f="componentItemId" style="flex:1;min-width:160px">
-            ${opts.map(o => `<option value="${esc(o.id)}" ${o.id === b.componentItemId ? 'selected' : ''}>${esc(o.name)} (${esc(o.unit)})</option>`).join('')}
+          <select data-i="${i}" data-f="componentItemId" data-search="items" style="flex:1;min-width:160px">
+            ${UI.missingOption(opts, b.componentItemId)}${opts.map(o => `<option value="${esc(o.id)}" ${o.id === b.componentItemId ? 'selected' : ''}>${esc(o.name)} (${esc(o.unit)})</option>`).join('')}
           </select>
           <input type="number" step="0.0001" min="0" value="${b.qtyPerUnit}" data-i="${i}" data-f="qtyPerUnit" style="width:96px" title="${t('bomQtyPer')}">
           <input type="number" step="0.1" min="0" value="${b.scrapPct || 0}" data-i="${i}" data-f="scrapPct" style="width:74px" title="${t('bomScrapPct')}">
@@ -327,7 +327,7 @@ export default function ItemsView() {
         Api.documents({ refType: 'item', refId: id }).catch(() => ({ data: [] })),
         Api.priceHistory(id).catch(() => [])
       ]);
-    } catch (e) { UI.err(e); return; }
+    } catch (e) { UI.errorState(null, e, typeof reload === 'function' ? reload : null); return; }
 
     const st = item.stockByStatus || {};
     modal({
