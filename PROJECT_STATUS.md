@@ -1,5 +1,58 @@
 # PROJECT_STATUS.md
 
+## 26 Eylül 2026 — Claude sonrası Codex bağımsız denetimi
+
+**Aktif hedef:** `c1714b4` ile `origin/main` üzerine alınan Claude Code
+değişikliklerini kod ve canlı test kanıtıyla doğrulamak; ilk ücretli müşteri
+kurulumundan önce kalan işleri yanlış "tamamlandı" iddiası olmadan sıralamak.
+
+**Karar:** Claude turu T06 mutabakat/ödeme, MRP snapshot'ı, kapasite,
+sayfalama, arayüz dayanıklılığı, lisans operasyonu ve release paketi alanlarında
+gerçek ilerleme sağladı. Ancak ürün **genel satışa hazır değildir**. Ayrıntılı
+kanıt ve kabul ölçütleri
+[`docs/CODEX-SON-DENETIM-2026-09-26.md`](docs/CODEX-SON-DENETIM-2026-09-26.md)
+dosyasındadır.
+
+**İlk ücretli üretim kurulumu öncesi 7 teknik iş:** ürün kodu/barkod
+benzersizliği ve BOM soft-delete koruması; ödeme ve mal kabul ters kayıtları;
+muhasebe export kapsamı (COGS/stok ve ödeme fişleri); kesin para temsili;
+Faz 0 `INFO` gözlemlerinin gerçek assertion/kapsam kararına dönüşmesi; makul
+onay limiti üst sınırı; kırık script ve çelişkili release/durum belgeleri.
+
+**Saha/ticari 7 kapı:** temiz Windows+servis restart; gerçek TLS/proxy; gerçek
+off-site restore; müşteri cihaz/yazıcı/barkod doğrulaması; temsili büyük veri ve
+yükseltme/rollback; gerçek müşteri pilotu ve imzalı kabul; hukukçu onaylı
+sözleşme/KVKK/destek kapsamı.
+
+**Canlı doğrulama:** `node test/run-all.js` 40 paket **Geçti**;
+`npm run test:e2e-browser` 39/39 **Geçti**; build, typecheck ve lint (0 hata,
+45 uyarı) **Geçti**; `npm audit --omit=dev --audit-level=high` 0 bulgu;
+`npm run release` **Geçti** ve 160 dosyalık `dream-plus-2.0.0` paketi üretti.
+`npm run test:mobile` ile `npm run test:pwa` kaldırılmış paketlere işaret ettiği
+için **Kaldı**. `git diff --check b34ed42..c1714b4`, arşiv belgede iki trailing
+whitespace nedeniyle **Kaldı**. Temiz Windows/TLS/off-site restore/pilot
+**Doğrulanamadı**.
+
+**Kanıtlanan yanlış yeşiller:** Faz 0 sonuçlarında aynı ürün kodu/barkodu iki
+kez 201, reçete bileşeni soft-delete 204, script içeren SVG logo 201, RFQ award
+404, receipt reverse uçları 404, `approvalLimit=1e300` 200 ve muhasebe
+exportunda COGS/stok alacağı yok; ilgili testler yine de PASS yazıyor. SVG için
+bu denetimde çalıştırılabilir XSS kanıtlanmadı; sertleştirme açığı olarak
+sınıflandırıldı.
+
+**Bağımsız inceleme:** `ai_team.py --phase review --rounds 2 --timeout 300`
+çağrısı 10 dakika 50 saniye sonuç/ara çıktı vermedi; Gemini alt süreci ajan
+sınırını aştığı için durduruldu. Claude/Gemini görüşü **Doğrulanamadı** ve
+alınmış sayılmadı; kör tekrar yapılmadı.
+
+**Git/durum notu:** Üstteki Claude kaydında "commit edilmedi" yazsa da değişiklik
+`c1714b4` merge commit'iyle `origin/main` üzerindedir. Aşağıdaki 23 Eylül bölümü
+tarihsel kayıttır; oradaki açık liste güncel durum olarak kullanılmamalıdır.
+
+**Sonraki tek somut adım:** Faz 0 `INFO` kayıtlarını açık/kapsam dışı/beklenen
+olarak sınıflandırıp gerçek açıkları CI'da kırmızıya çevirmek; ardından ürün
+kimliği/BOM bütünlüğünü migration ve eşzamanlı negatif testlerle kapatmak.
+
 ## 26 Eylül 2026 — kalan satış engellerini kapatma turu (Claude) — kod tarafı tamamlandı
 
 **Kullanıcı talimatı (26 Eylül):** kalan işlerin tamamı durmadan, soru
