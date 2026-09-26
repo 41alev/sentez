@@ -110,13 +110,17 @@ const Api = (() => {
     createRfq: (d) => req('POST', '/purchasing/rfqs', d),
     addQuote: (id, d) => req('POST', `/purchasing/rfqs/${id}/quotes`, d),
     compareQuotes: (id) => req('GET', `/purchasing/rfqs/${id}/compare`),
+    awardRfq: (id, d) => req('POST', `/purchasing/rfqs/${id}/award`, d),
     purchaseOrders: (p) => req('GET', '/purchasing/orders' + qs(p)),
     purchaseOrder: (id) => req('GET', '/purchasing/orders/' + id),
     createPO: (d) => req('POST', '/purchasing/orders', d),
     approvePO: (id) => req('POST', `/purchasing/orders/${id}/approve`),
     rejectPO: (id, reason) => req('POST', `/purchasing/orders/${id}/reject`, { reason }),
+    cancelPO: (id, reason) => req('POST', `/purchasing/orders/${id}/cancel`, { reason }),
+    closePO: (id, reason) => req('POST', `/purchasing/orders/${id}/close`, { reason }),
     receivePO: (id, d) => req('POST', `/purchasing/orders/${id}/receipts`, d),
     receipt: (id) => req('GET', '/purchasing/receipts/' + id),
+    reverseReceipt: (id, d) => req('POST', `/purchasing/receipts/${id}/reverse`, d),
     addLandedCost: (receiptId, d) => req('POST', `/purchasing/receipts/${receiptId}/landed-costs`, d),
     supplierInvoices: (p) => req('GET', '/purchasing/invoices' + qs(p)),
     supplierInvoiceReceivableLines: (poId) => req('GET', '/purchasing/invoices/receivable-lines' + qs({ poId })),
@@ -125,7 +129,10 @@ const Api = (() => {
     reconcileSupplierInvoice: (id, d) => req('POST', `/purchasing/invoices/${id}/reconcile`, d),
     approveSupplierInvoice: (id, d) => req('POST', `/purchasing/invoices/${id}/approve`, d || {}),
     paySupplierInvoice: (id, d) => req('POST', `/purchasing/invoices/${id}/payments`, d),
+    reverseSupplierPayment: (invoiceId, paymentId, d) => req('POST', `/purchasing/invoices/${invoiceId}/payments/${paymentId}/reverse`, d),
     createSupplierReturn: (d) => req('POST', '/purchasing/returns', d),
+    supplierReturns: (p) => req('GET', '/purchasing/returns' + qs(p)),
+    setSupplierReturnStatus: (id, d) => req('POST', `/purchasing/returns/${id}/status`, d),
 
     // crm
     opportunities: (p) => req('GET', '/crm/opportunities' + qs(p)),
@@ -170,10 +177,12 @@ const Api = (() => {
     advanceShipment: (id) => req('PATCH', `/sales/shipments/${id}/status`),
     deleteShipment: (id) => req('DELETE', '/sales/shipments/' + id),
     customerInvoices: (p) => req('GET', '/sales/invoices' + qs(p)),
+    customerInvoice: (id) => req('GET', '/sales/invoices/' + id),
     createCustomerInvoice: (d) => req('POST', '/sales/invoices', d),
     customerInvoicePreview: (id) => req('GET', '/sales/orders/' + id + '/invoice-preview'),
     payInvoice: (id) => req('POST', `/sales/invoices/${id}/pay`),
     addInvoicePayment: (id, d) => req('POST', `/sales/invoices/${id}/payments`, d),
+    reverseInvoicePayment: (invoiceId, paymentId, d) => req('POST', `/sales/invoices/${invoiceId}/payments/${paymentId}/reverse`, d),
     profitability: (p) => req('GET', '/sales/profitability' + qs(p)),
 
     // quality
@@ -282,7 +291,6 @@ const Api = (() => {
     convertSuggestion: (id, d) => req('POST', `/planning/mrp/suggestions/${id}/convert`, d || {}),
     dismissSuggestion: (id) => req('POST', `/planning/mrp/suggestions/${id}/dismiss`),
 
-    customerInvoice: (id) => req('GET', '/sales/invoices/' + id),
     search: (q) => req('GET', '/search?q=' + encodeURIComponent(q)),
 
     // admin

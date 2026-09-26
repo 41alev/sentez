@@ -68,12 +68,15 @@ const findCheck = (report, id) => report.checks.find(c => c.id === id);
     token: admin, body: { name: 'Birimsiz Test Ürünü', code: 'DH-NOUNIT', unit: 'adet', category: 'Test' } });
   await api('PUT', `/api/items/${noUnit.data.id}`, { token: admin, body: { unit: 'adet' } });
 
-  // 2) Aynı barkodu iki üründe kullan
+  // 2) Kimlik alanı tekilliği: ikinci kayıt/veri bozulması artık DB katmanında engellenir.
   const dupe1 = await api('POST', '/api/items', {
     token: admin, body: { name: 'Kopya Barkod A', code: 'DH-DUP-A', unit: 'adet', barcode: '9990001112223' } });
   const dupe2 = await api('POST', '/api/items', {
-    token: admin, body: { name: 'Kopya Barkod B', code: 'DH-DUP-B', unit: 'adet', barcode: '9990001112223' } });
+    token: admin, body: { name: 'Kopya Barkod B', code: 'DH-DUP-B', unit: 'adet', barcode: '9990001112224' } });
   ok('test verisi oluşturuldu', dupe1.status === 201 && dupe2.status === 201);
+  const rejectedDuplicate = await api('PUT', `/api/items/${dupe2.data.id}`, {
+    token: admin, body: { barcode: '9990001112223' } });
+  ok('tekrarlayan barkod veri katmanında engellendi', rejectedDuplicate.status === 409, `got ${rejectedDuplicate.status}`);
 
   // 3) Reçetesi olmayan "üretilir" ürün
   const makeNoBom = await api('POST', '/api/items', {
@@ -107,11 +110,8 @@ const findCheck = (report, id) => report.checks.find(c => c.id === id);
   ok('puan düştü', dirty.score < 100, `puan ${dirty.score}`);
 
   const dupBarcode = findCheck(dirty, 'duplicate_barcode');
-  ok('tekrarlayan barkod bulundu', dupBarcode.count >= 1, `${dupBarcode.count} bulgu`);
-  ok('hangi barkodun tekrarlandığı gösteriliyor',
-    dupBarcode.sample.some(s => s.label === '9990001112223'),
-    JSON.stringify(dupBarcode.sample.map(s => s.label)));
-  ok('tekrarlayan barkod kritik sayılıyor', dupBarcode.severity === 'critical');
+  ok('tekillik koruması sonrası tekrarlayan barkod yok', dupBarcode.count === 0, `${dupBarcode.count} bulgu`);
+  ok('tekrarlayan barkod kontrolü kritik kalıyor', dupBarcode.severity === 'critical');
 
   const noBom = findCheck(dirty, 'make_without_bom');
   ok('reçetesiz "üretilir" ürün bulundu', noBom.count >= 1, `${noBom.count} bulgu`);
@@ -159,7 +159,7 @@ const findCheck = (report, id) => report.checks.find(c => c.id === id);
   ok('maliyetsiz partilere ürün maliyeti uygulandı', fixCost.status === 200,
     JSON.stringify(fixCost.data));
 
-  // Düzeltilemeyecekler açıkça reddedilmeli — sessizce "başarılı" demek yanıltıcıdır
+  // Düzeltilemeyecek kontrol, bulgu olmasa da otomatik veri değiştirmez.
   const cantFix = await api('POST', '/api/data-health/check/duplicate_barcode/fix', { token: manager });
   ok('otomatik düzeltilemeyen bulgu reddediliyor (400)', cantFix.status === 400, `got ${cantFix.status}`);
   ok('neden düzeltilemediği açıklanıyor',
@@ -238,7 +238,7 @@ const findCheck = (report, id) => report.checks.find(c => c.id === id);
   ok('kaynak kayıt kaldırıldı', sourceAfter.status === 404, `got ${sourceAfter.status}`);
 
   const dupAfter = await api('GET', '/api/data-health/check/duplicate_barcode', { token: admin });
-  ok('birleştirme sonrası tekrarlayan barkod bulgusu düştü',
+  ok('birleştirme sonrası tekrarlayan barkod bulgusu yok',
     !dupAfter.data.rows.some(r => r.label === '9990001112223'),
     JSON.stringify(dupAfter.data.rows.map(r => r.label)));
 

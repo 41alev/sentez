@@ -60,9 +60,14 @@ const { invariants } = require('./inv');
     };
     const res = {}; for (const [k, b] of Object.entries(cases)) res[k] = (await api('POST', `/purchasing/rfqs/${rfq}/quotes`, b)).status;
     info('RFQ-01b', 'teklif doğrulama sonuçları', res);
-    const aw = await api('POST', `/purchasing/rfqs/${rfq}/award`, {}); info('RFQ-01c', 'RFQ ödüllendirme ucu', { status: aw.status });
+    statusIn(await api('POST', `/purchasing/rfqs/${rfq}/award`, {}), [422]);
+    await ok('POST', `/purchasing/rfqs/${rfq}/quotes`, { supplierId: sups[0], itemId: it.id, unitPrice: 12, currency: 'TRY' });
+    const aw = await api('POST', `/purchasing/rfqs/${rfq}/award`, { supplierId: sups[0], warehouseId: whs[0] });
+    info('RFQ-01c', 'RFQ ödüllendirme ve sipariş dönüşümü', { status: aw.status, poId: aw.data?.id });
     assert(Object.values(res).every(s => s < 500), 'teklifte 500: ' + JSON.stringify(res));
     assert.equal(res.negatifFiyat, 422); assert(res.rfqDisiUrun >= 400, 'RFQ satırında olmayan ürüne teklif kabul edildi');
+    assert.equal(aw.status, 201); assert.equal(aw.data.rfqId, rfq); assert.equal(aw.data.items.length, 1);
+    statusIn(await api('POST', `/purchasing/rfqs/${rfq}/award`, { supplierId: sups[0] }), [409]);
   });
 
   console.log('\n[PO] satın alma siparişi');
@@ -113,11 +118,16 @@ const { invariants } = require('./inv');
     info('PO-05b', 'kısmen teslim alınmış siparişi reddet', { http: r.status, durum: st });
     assert(r.status >= 400, `kısmen teslim alınmış sipariş reddedilebildi → durum ${st.status}`);
   });
-  await check('PO-06', 'sipariş iptal/kapatma/düzenleme uçları var mı (bilgi)', async () => {
-    const it = await item(); const p = await poOk([{ itemId: it.id, qty: 1, price: 1 }]);
-    const res = {};
-    for (const [m, u] of [['POST', `/purchasing/orders/${p.id}/cancel`], ['POST', `/purchasing/orders/${p.id}/close`], ['PUT', `/purchasing/orders/${p.id}`], ['DELETE', `/purchasing/orders/${p.id}`]]) res[m + ' ' + u.split('/').pop()] = (await api(m, u, {})).status;
-    info('PO-06b', 'iptal/kapat/düzenle/sil', res);
+  await check('PO-06', 'sipariş iptali ve kısmi teslim sonrası gerekçeli kapatma güvenli durum geçişidir', async () => {
+    const it = await item(); const p = await poOk([{ itemId: it.id, qty: 5, price: 1 }]);
+    statusIn(await api('POST', `/purchasing/orders/${p.id}/cancel`, { reason: 'İhtiyaç ortadan kalktı' }), [200]);
+    assert.equal(db.prepare('SELECT status FROM purchase_orders WHERE id=?').get(p.id).status, 'cancelled');
+    statusIn(await recv(p.id, [{ poItemId: p.items[0].id, qty: 1 }]), [400]);
+    const p2 = await poOk([{ itemId: it.id, qty: 5, price: 1 }]);
+    await ok('POST', `/purchasing/orders/${p2.id}/receipts`, { lines: [{ poItemId: p2.items[0].id, qty: 2 }] });
+    statusIn(await api('POST', `/purchasing/orders/${p2.id}/cancel`, { reason: 'Teslimat var, iptal edilmemeli' }), [409]);
+    statusIn(await api('POST', `/purchasing/orders/${p2.id}/close`, { reason: 'Kalan miktar tedarik edilemeyecek' }), [200]);
+    assert.equal(db.prepare('SELECT status FROM purchase_orders WHERE id=?').get(p2.id).status, 'closed');
   });
 
   console.log('\n[RECEIPT] mal kabul');
@@ -154,9 +164,17 @@ const { invariants } = require('./inv');
     for (const who of ['viewer', 'quality']) await unchanged(() => recv(p.id, [{ poItemId: p.items[0].id, qty: 1 }], who), [403]);
     const r = await recv(p.id, [{ poItemId: p.items[0].id, qty: 1 }], 'operator'); info('RC-05b', 'operator mal kabul', { status: r.status });
   });
-  await check('RC-06', 'yanlış mal kabulü geri alma/düzeltme yolu var mı (bilgi)', async () => {
-    const res = {}; for (const [m, u] of [['DELETE', '/purchasing/receipts/x'], ['POST', '/purchasing/receipts/x/cancel'], ['POST', '/purchasing/receipts/x/reverse']]) res[m + u] = (await api(m, u, {})).status;
-    info('RC-06b', 'mal kabul iptal uçları', res);
+  await check('RC-06', 'kullanılmamış mal kabul yetkili, idempotent ve izli ters kaydedilir', async () => {
+    const it = await item(); const p = await poOk([{ itemId: it.id, qty: 2, price: 3 }]);
+    const rc = (await ok('POST', `/purchasing/orders/${p.id}/receipts`, { lines: [{ poItemId: p.items[0].id, qty: 2 }] })).receiptId;
+    statusIn(await api('POST', `/purchasing/receipts/${rc}/reverse`, { reason: 'Yetkisiz düzeltme', requestKey: 'rc-denied-01' }, 'operator'), [403]);
+    const body = { reason: 'Yanlış siparişe teslim kaydı', requestKey: 'rc-reverse-01' };
+    statusIn(await api('POST', `/purchasing/receipts/${rc}/reverse`, body), [201]);
+    const replay = await api('POST', `/purchasing/receipts/${rc}/reverse`, body); statusIn(replay, [200]);
+    assert.equal(cacheOf(it.id), 0);
+    assert.equal(db.prepare('SELECT received_qty FROM po_items WHERE id=?').get(p.items[0].id).received_qty, 0);
+    assert.equal(db.prepare('SELECT status FROM purchase_orders WHERE id=?').get(p.id).status, 'approved');
+    assert.equal(db.prepare("SELECT COUNT(*) c FROM audit_log WHERE action_key='auditPOReceiptReversed' AND entity_id=?").get(rc).c, 1);
   });
 
   console.log('\n[LANDED] ek maliyet');
@@ -375,6 +393,7 @@ const { invariants } = require('./inv');
     const u = await ok('POST', '/users', { username: 'updtest', password: 'Upd12345!', role: 'operator', mustChangePassword: false });
     for (const b of [{ email: 'bad' }, { approvalLimit: -1 }, { approvalLimit: 'x' }, { fullName: 'x'.repeat(5000) }, { role: 'root' }]) statusIn(await api('PUT', '/users/' + u.id, b), [400, 422]);
     const big = await api('PUT', '/users/' + u.id, { approvalLimit: 1e300 }); info('AD-08b', 'approvalLimit=1e300', { status: big.status });
+    assert.equal(big.status, 422, 'iş açısından anlamsız onay limiti kabul edildi');
   });
   await check('AD-09', 'denetim kaydı: yazma işlemleri kayıt bırakır; kayıtlar silinemez/değiştirilemez uç yok', async () => {
     const before = db.prepare('SELECT COUNT(*) c FROM audit_log').get().c; await ok('POST', '/warehouses', { name: 'Audit Depo ' + Date.now() });

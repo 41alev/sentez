@@ -243,7 +243,7 @@ tr: {
   // belge şablonları
   tabTemplates:"Belge Şablonları", templateTitle:"Yazdırılabilir Belge Şablonları",
   branding:"Firma Kimliği", logo:"Logo", uploadLogo:"Logo Yükle", removeLogo:"Logoyu Kaldır",
-  logoHint:"PNG, JPEG, SVG veya WEBP · en fazla 512 KB · belgelerin üstünde çıkar",
+  logoHint:"PNG, JPEG veya WEBP · en fazla 512 KB · belgelerin üstünde çıkar",
   printFooter:"Ortak dipnot", printFooterHint:"Tüm belgelerin altında görünür (ör. banka bilgisi, KVKK notu).",
   docShipment:"Sevk İrsaliyesi", docPurchaseOrder:"Satın Alma Siparişi",
   docProductionOrder:"Üretim Emri", docInspection:"Muayene Raporu",
@@ -609,7 +609,7 @@ en: {
   // document templates
   tabTemplates:"Document Templates", templateTitle:"Printable Document Templates",
   branding:"Company Identity", logo:"Logo", uploadLogo:"Upload Logo", removeLogo:"Remove Logo",
-  logoHint:"PNG, JPEG, SVG or WEBP · 512 KB max · appears on top of documents",
+  logoHint:"PNG, JPEG or WEBP · 512 KB max · appears on top of documents",
   printFooter:"Shared footer", printFooterHint:"Shown at the bottom of every document (bank details, legal note).",
   docShipment:"Packing List", docPurchaseOrder:"Purchase Order",
   docProductionOrder:"Production Order", docInspection:"Inspection Report",

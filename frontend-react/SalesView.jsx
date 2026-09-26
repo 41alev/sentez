@@ -616,10 +616,61 @@ export default function SalesView() {
       { key: 'status', label: t('status'), render: r => invoiceStatusBadge(r.status) },
       { key: 'act', label: t('actions'), render: r => `<div class="row-actions">
           ${r.status === 'issued' && r.invoice_type !== 'iade' && can('write') ? `<button class="btn btn-ghost btn-sm" data-pay="${esc(r.id)}">${tr ? 'Tahsilat' : 'Collect'}</button>` : ''}
+          ${(r.paidAmount || 0) > 0 ? `<button class="btn btn-ghost btn-sm" data-payments="${esc(r.id)}">${tr ? 'Hareketler' : 'Payments'}</button>` : ''}
         </div>` }
     ], rows)}${pager(res, page => { invoicePageRef.current = page; reload(); })}</div>`;
 
     body.querySelectorAll('[data-pay]').forEach(b => b.onclick = () => collectDialog(byId.get(b.dataset.pay)));
+    body.querySelectorAll('[data-payments]').forEach(b => b.onclick = () => customerPaymentHistory(b.dataset.payments));
+  }
+
+  async function customerPaymentHistory(invoiceId) {
+    const tr = UI.getLang() === 'tr';
+    let inv;
+    try { inv = await Api.customerInvoice(invoiceId); } catch (e) { UI.err(e); return; }
+    modal({
+      title: `${tr ? 'Tahsilat hareketleri' : 'Payment history'} — ${inv.invoiceNo}`,
+      body: (inv.payments || []).length ? table([
+        { key: 'paidOn', label: t('date'), render: r => dt(r.paidOn) },
+        { key: 'amount', label: tr ? 'Tutar' : 'Amount', num: true, render: r => `${num(r.amount, 2)} ${cur(inv.currency)}` },
+        { key: 'method', label: tr ? 'Yöntem' : 'Method', render: r => esc(r.method || '—') },
+        { key: 'reference', label: tr ? 'Referans' : 'Reference', render: r => esc(r.reference || '—') },
+        { key: 'state', label: t('status'), render: r => r.reversed
+          ? `<span class="badge plain">${tr ? 'Ters kayıt' : 'Reversed'}</span><div class="sub-line">${esc(r.reversal?.reason || '')}</div>`
+          : `<span class="badge ok">${tr ? 'Geçerli' : 'Posted'}</span>` },
+        { key: 'act', label: '', render: r => !r.reversed && can('admin')
+          ? `<button class="btn btn-ghost btn-sm" data-reverse-payment="${esc(r.id)}">${tr ? 'Ters kayıt' : 'Reverse'}</button>` : '' }
+      ], inv.payments) : `<div class="empty">${t('noData')}</div>`,
+      footer: `<button class="btn btn-ghost" data-close>${t('close')}</button>`,
+      onOpen: box => box.querySelectorAll('[data-reverse-payment]').forEach(button => {
+        button.onclick = () => { closeModal(); reverseCustomerPaymentDialog(inv, button.dataset.reversePayment); };
+      })
+    });
+  }
+
+  function reverseCustomerPaymentDialog(inv, paymentId) {
+    const tr = UI.getLang() === 'tr';
+    const requestKey = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
+    modal({
+      title: `${tr ? 'Tahsilatı ters kaydet' : 'Reverse collection'} — ${inv.invoiceNo}`,
+      body: `<div class="alert warn">${tr ? 'Asıl kayıt silinmez; tarihçeye bağlantılı bir ters kayıt eklenir.' : 'The original entry stays intact and a linked reversal is recorded.'}</div>
+        ${field(tr ? 'Gerekçe (zorunlu)' : 'Reason (required)', textarea('payRevReason'))}
+        ${field(t('date'), input('payRevDate', { type: 'date', value: UI.today() }))}`,
+      footer: `<button class="btn btn-ghost" data-close>${t('cancel')}</button><button class="btn btn-primary" id="payRevGo">${tr ? 'Ters kaydet' : 'Reverse'}</button>`,
+      onOpen: box => {
+        const button = box.querySelector('#payRevGo');
+        button.onclick = async () => {
+          if (button.disabled) return;
+          const reason = val('payRevReason');
+          if (reason.trim().length < 3) return UI.toast(tr ? 'En az 3 karakter gerekçe girin.' : 'Enter a reason of at least 3 characters.');
+          button.disabled = true;
+          try {
+            await Api.reverseInvoicePayment(inv.id, paymentId, { reason, reversedOn: val('payRevDate'), requestKey });
+            closeModal(); UI.ok(t('saved')); reload();
+          } catch (e) { UI.err(e); } finally { button.disabled = false; }
+        };
+      }
+    });
   }
 
   /** K-05: partial or full collection; one request key per dialog blocks double posting. */

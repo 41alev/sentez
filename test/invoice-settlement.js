@@ -38,6 +38,49 @@ async function receivedOrder(qty = 10, price = 10) {
   return { order, receipt, lineId, item };
 }
 
+async function receiptReversalSide() {
+  const clean = await receivedOrder(4, 7);
+  const receiptId = clean.receipt.receiptId;
+  const lotBefore = db.prepare('SELECT * FROM stock_lots WHERE source_id=?').get(receiptId);
+  assert.equal(lotBefore.qty, 4);
+  const operator = await login('operator', 'Operator123!');
+  assert.equal((await call(operator, 'POST', `/purchasing/receipts/${receiptId}/reverse`, {
+    reason: 'Yetkisiz ters kayıt denemesi', requestKey: 'receipt-denied-01'
+  })).status, 403);
+  const reversed = await ok('POST', `/purchasing/receipts/${receiptId}/reverse`, {
+    reason: 'Yanlış teslimat siparişe işlendi', requestKey: 'receipt-rev-0001'
+  });
+  assert.equal(reversed.poStatus, 'approved');
+  const replay = await ok('POST', `/purchasing/receipts/${receiptId}/reverse`, {
+    reason: 'Yanlış teslimat siparişe işlendi', requestKey: 'receipt-rev-0001'
+  });
+  assert.equal(replay.alreadyReversed, true);
+  assert.equal(db.prepare('SELECT qty,status FROM stock_lots WHERE id=?').get(lotBefore.id).qty, 0);
+  assert.equal(db.prepare('SELECT received_qty FROM po_items WHERE po_id=?').get(clean.order.id).received_qty, 0);
+  assert.equal(db.prepare('SELECT status FROM purchase_orders WHERE id=?').get(clean.order.id).status, 'approved');
+  assert.equal(db.prepare("SELECT COUNT(*) c FROM audit_log WHERE action_key='auditPOReceiptReversed' AND entity_id=?").get(receiptId).c, 1);
+  assert.equal((await api('POST', `/purchasing/receipts/${receiptId}/landed-costs`, { costType: 'freight', amount: 1 })).status, 409);
+  assert.equal((await api('POST', '/purchasing/invoices', {
+    invoiceNo: 'REVERSED-RCPT-1', poId: clean.order.id, receiptId, amount: 28
+  })).status, 422);
+  const available = await ok('GET', `/purchasing/invoices/receivable-lines?poId=${clean.order.id}`);
+  assert.equal(available.lines.length, 0);
+
+  const changed = await receivedOrder(2, 5);
+  const changedLot = db.prepare('SELECT id FROM stock_lots WHERE source_id=?').get(changed.receipt.receiptId);
+  db.prepare('UPDATE stock_lots SET qty=1 WHERE id=?').run(changedLot.id);
+  assert.equal((await api('POST', `/purchasing/receipts/${changed.receipt.receiptId}/reverse`, {
+    reason: 'Stok değişmiş teslimat', requestKey: 'receipt-rev-0002'
+  })).status, 409);
+
+  const invoiced = await receivedOrder(3, 6);
+  await ok('POST', '/purchasing/invoices', { invoiceNo: 'RECEIPT-BLOCK-1', poId: invoiced.order.id, amount: 18 });
+  assert.equal((await api('POST', `/purchasing/receipts/${invoiced.receipt.receiptId}/reverse`, {
+    reason: 'Faturalanmış teslimat', requestKey: 'receipt-rev-0003'
+  })).status, 409);
+  console.log('✓ goods receipt reversal: authorization, idempotency, inventory rollback, dependent-record guards');
+}
+
 async function customerSide() {
   const customer = await ok('POST', '/sales/customers', { name: 'Settlement customer', creditLimit: 0 });
   const inv = await ok('POST', '/sales/invoices', { customerId: customer.id, amount: 100 });
@@ -82,7 +125,20 @@ async function customerSide() {
   const full = await ok('POST', `/sales/invoices/${other.id}/pay`);
   assert.equal(full.status, 'paid');
   assert.equal(full.paidAmount, 50);
-
+  const fullPaymentId = db.prepare('SELECT id FROM customer_invoice_payments WHERE invoice_id=?').get(other.id).id;
+  const operator = await login('operator', 'Operator123!');
+  assert.equal((await call(operator, 'POST', `/sales/invoices/${other.id}/payments/${fullPaymentId}/reverse`,
+    { reason: 'Yetkisiz ters kayıt', requestKey: 'cust-rev-denied' })).status, 403);
+  const reversed = await ok('POST', `/sales/invoices/${other.id}/payments/${fullPaymentId}/reverse`,
+    { reason: 'Banka hareketi yanlış faturaya işlendi', reversedOn: '2026-01-11', requestKey: 'cust-rev-0001' });
+  assert.equal(reversed.status, 'issued'); assert.equal(reversed.openAmount, 50);
+  const reversedReplay = await ok('POST', `/sales/invoices/${other.id}/payments/${fullPaymentId}/reverse`,
+    { reason: 'Banka hareketi yanlış faturaya işlendi', reversedOn: '2026-01-11', requestKey: 'cust-rev-0001' });
+  assert.equal(reversedReplay.duplicate, true);
+  const paymentList = await ok('GET', `/sales/invoices/${other.id}/payments`);
+  assert.equal(paymentList.payments[0].reversed, true);
+  assert.throws(() => db.prepare('UPDATE customer_invoice_payment_reversals SET reason=? WHERE payment_id=?')
+    .run('değiştir', fullPaymentId), /Payment reversals are immutable/);
   // A pre-ledger 'paid' invoice (no rows) stays fully paid; a later credit is owed back.
   const legacy = await ok('POST', '/sales/invoices', { customerId: customer.id, amount: 40 });
   db.prepare("UPDATE customer_invoices SET status='paid', paid_legacy=1 WHERE id=?").run(legacy.id);
@@ -113,7 +169,14 @@ async function supplierSide() {
   assert.equal(rest.status, 'paid');
   assert.equal(rest.openAmount, 0);
   assert.equal((await api('POST', `/purchasing/invoices/${inv.id}/payments`, { amount: 1 })).data.alreadyPaid, true);
-
+  const reversed = await ok('POST', `/purchasing/invoices/${inv.id}/payments/${part.paymentId}/reverse`,
+    { reason: 'Ödeme yanlış banka hesabına işlendi', reversedOn: '2026-01-11', requestKey: 'sup-rev-0001' });
+  assert.equal(reversed.status, 'approved'); assert.equal(reversed.openAmount, 50);
+  assert.equal((await ok('POST', `/purchasing/invoices/${inv.id}/payments/${part.paymentId}/reverse`,
+    { reason: 'Ödeme yanlış banka hesabına işlendi', requestKey: 'sup-rev-0001' })).duplicate, true);
+  const replacement = await ok('POST', `/purchasing/invoices/${inv.id}/payments`,
+    { amount: 50, paidOn: '2026-01-12', method: 'bank', requestKey: 'sup-key-replace' });
+  assert.equal(replacement.status, 'paid');
   // Discrepancy needs an explicit approval note.
   const diffOrder = await receivedOrder(5, 10);
   const diffInv = await ok('POST', '/purchasing/invoices', { invoiceNo: 'SET-DIFF-1', poId: diffOrder.order.id, amount: 80 });
@@ -192,6 +255,7 @@ async function supplierSide() {
 
 (async () => {
   token = await login('admin', 'Admin123!');
+  await receiptReversalSide();
   await customerSide();
   await supplierSide();
   console.log('invoice-settlement: all checks passed');

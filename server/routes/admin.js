@@ -63,7 +63,7 @@ const userUpdateSchema = z.object({
   password: z.string().max(200).optional(),
   fullName: z.string().max(1000).optional(),
   email: z.string().email().or(z.literal('')).optional(),
-  approvalLimit: z.number().finite().min(0).optional(),
+  approvalLimit: z.number().finite().min(0).max(1_000_000_000_000).optional(),
   isActive: z.boolean().optional()
 });
 

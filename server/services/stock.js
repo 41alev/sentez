@@ -22,6 +22,15 @@ function recalcItemQty(itemId) {
   return row.q;
 }
 
+/** Rebuild moving-average cost from the stock that still exists after a correction. */
+function recalcAverageCost(itemId) {
+  const row = db.prepare(`SELECT COALESCE(SUM(qty*unit_cost),0) value, COALESCE(SUM(qty),0) qty
+    FROM stock_lots WHERE item_id=? AND status='available' AND qty>0`).get(itemId);
+  const average = row.qty > 0 ? row.value / row.qty : 0;
+  db.prepare('UPDATE items SET avg_cost=? WHERE id=?').run(average, itemId);
+  return average;
+}
+
 /**
  * @param {{
  *   itemId: number|string, itemName?: string, lotId?: string, lotNo?: string,
@@ -303,7 +312,7 @@ function stockValueBase(warehouseId = null) {
 }
 
 module.exports = {
-  ACTIVE_STATUSES, recalcItemQty, recordMovement, updateAverageCost,
+  ACTIVE_STATUSES, recalcItemQty, recalcAverageCost, recordMovement, updateAverageCost,
   receiveLot, pickLotsFEFO, availableQty, issueStock, allocate, consume,
   changeLotStatus, transferLot, adjustLot, stockValueBase
 };

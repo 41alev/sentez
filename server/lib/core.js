@@ -108,6 +108,7 @@ const TRIGGER_MESSAGES = {
   'Invoice VAT is not reconciled': 'Fatura KDV tutarı mutabık değil / Invoice VAT is not reconciled',
   'Legacy invoice requires reconciliation': 'Eski fatura önce mutabakat gerektirir / Legacy invoice requires reconciliation',
   'Payments are immutable': 'Ödeme kaydı değiştirilemez / Payments are immutable',
+  'Payment reversals are immutable': 'Ödeme ters kaydı değiştirilemez / Payment reversals are immutable',
   'Receipt quantity already invoiced': 'Teslim miktarı daha önce faturalanmış / Receipt quantity already invoiced',
   'Receipt line belongs to another order': 'Teslim satırı başka siparişe ait / Receipt line belongs to another order'
 };

@@ -19,7 +19,9 @@ const EPS = 0.005;
 const round2 = value => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 
 function customerPaid(invoiceId) {
-  return db.prepare('SELECT COALESCE(SUM(amount),0) s FROM customer_invoice_payments WHERE invoice_id=?').get(invoiceId).s;
+  return db.prepare(`SELECT COALESCE(SUM(p.amount),0) s FROM customer_invoice_payments p
+    WHERE p.invoice_id=? AND NOT EXISTS
+      (SELECT 1 FROM customer_invoice_payment_reversals r WHERE r.payment_id=p.id)`).get(invoiceId).s;
 }
 function customerCredits(invoiceId) {
   return db.prepare(`SELECT COALESCE(SUM(amount),0) s FROM customer_invoices
@@ -98,16 +100,43 @@ function recordCustomerPayment(req, invoiceId, input = {}) {
 }
 
 function listCustomerPayments(invoiceId) {
-  return db.prepare(`SELECT id, amount, paid_on, method, reference, note, created_at, created_by
-    FROM customer_invoice_payments WHERE invoice_id=? ORDER BY created_at, id`).all(invoiceId)
+  return db.prepare(`SELECT p.id, p.amount, p.paid_on, p.method, p.reference, p.note, p.created_at, p.created_by,
+      r.id reversal_id, r.reversed_on, r.reason reversal_reason, r.created_at reversal_created_at, r.created_by reversal_created_by
+    FROM customer_invoice_payments p LEFT JOIN customer_invoice_payment_reversals r ON r.payment_id=p.id
+    WHERE p.invoice_id=? ORDER BY p.created_at, p.id`).all(invoiceId)
     .map(p => ({ id: p.id, amount: p.amount, paidOn: p.paid_on, method: p.method, reference: p.reference,
-      note: p.note, createdAt: p.created_at, createdBy: p.created_by }));
+      note: p.note, createdAt: p.created_at, createdBy: p.created_by, reversed: !!p.reversal_id,
+      reversal: p.reversal_id ? { id: p.reversal_id, reversedOn: p.reversed_on, reason: p.reversal_reason,
+        createdAt: p.reversal_created_at, createdBy: p.reversal_created_by } : null }));
+}
+
+function reverseCustomerPayment(req, invoiceId, paymentId, input) {
+  return db.txImmediate(() => {
+    const payment = db.prepare(`SELECT p.*, ci.invoice_no FROM customer_invoice_payments p
+      JOIN customer_invoices ci ON ci.id=p.invoice_id WHERE p.id=? AND p.invoice_id=?`).get(paymentId, invoiceId);
+    if (!payment) throw new AppError('Tahsilat bulunamadı / Payment not found', 404);
+    const existing = db.prepare('SELECT * FROM customer_invoice_payment_reversals WHERE payment_id=? OR request_key=?')
+      .get(payment.id, input.requestKey || null);
+    if (existing) return { ok: true, reversalId: existing.id, duplicate: true };
+    const id = uuid();
+    db.prepare(`INSERT INTO customer_invoice_payment_reversals
+      (id,payment_id,reversed_on,reason,request_key,created_at,created_by) VALUES (?,?,?,?,?,?,?)`)
+      .run(id, payment.id, input.reversedOn || toLocalDateStr(), input.reason, input.requestKey || null, Date.now(), req.user?.id || null);
+    db.prepare("UPDATE customer_invoices SET status='issued' WHERE id=? AND status='paid'").run(invoiceId);
+    const status = refreshCustomerInvoiceStatus(invoiceId);
+    logAudit(req, 'auditCustomerInvoicePaymentReversed', { entityType: 'customer_invoice', entityId: invoiceId,
+      oldValue: { paymentId: payment.id, amount: payment.amount }, newValue: { reversalId: id, status },
+      detail: `${payment.invoice_no}: ${input.reason}` });
+    return { ok: true, reversalId: id, status, ...customerSettlement(db.prepare('SELECT * FROM customer_invoices WHERE id=?').get(invoiceId)) };
+  });
 }
 
 /* ------------------------------ supplier ------------------------------ */
 
 function supplierPaid(invoiceId) {
-  return db.prepare('SELECT COALESCE(SUM(amount),0) s FROM supplier_invoice_payments WHERE invoice_id=?').get(invoiceId).s;
+  return db.prepare(`SELECT COALESCE(SUM(p.amount),0) s FROM supplier_invoice_payments p
+    WHERE p.invoice_id=? AND NOT EXISTS
+      (SELECT 1 FROM supplier_invoice_payment_reversals r WHERE r.payment_id=p.id)`).get(invoiceId).s;
 }
 
 function supplierSettlement(inv) {
@@ -162,13 +191,38 @@ function recordSupplierPayment(req, invoiceId, input = {}) {
 }
 
 function listSupplierPayments(invoiceId) {
-  return db.prepare(`SELECT id, amount, paid_on, method, reference, note, created_at, created_by
-    FROM supplier_invoice_payments WHERE invoice_id=? ORDER BY created_at, id`).all(invoiceId)
+  return db.prepare(`SELECT p.id, p.amount, p.paid_on, p.method, p.reference, p.note, p.created_at, p.created_by,
+      r.id reversal_id, r.reversed_on, r.reason reversal_reason, r.created_at reversal_created_at, r.created_by reversal_created_by
+    FROM supplier_invoice_payments p LEFT JOIN supplier_invoice_payment_reversals r ON r.payment_id=p.id
+    WHERE p.invoice_id=? ORDER BY p.created_at, p.id`).all(invoiceId)
     .map(p => ({ id: p.id, amount: p.amount, paidOn: p.paid_on, method: p.method, reference: p.reference,
-      note: p.note, createdAt: p.created_at, createdBy: p.created_by }));
+      note: p.note, createdAt: p.created_at, createdBy: p.created_by, reversed: !!p.reversal_id,
+      reversal: p.reversal_id ? { id: p.reversal_id, reversedOn: p.reversed_on, reason: p.reversal_reason,
+        createdAt: p.reversal_created_at, createdBy: p.reversal_created_by } : null }));
+}
+
+function reverseSupplierPayment(req, invoiceId, paymentId, input) {
+  return db.txImmediate(() => {
+    const payment = db.prepare(`SELECT p.*, si.invoice_no FROM supplier_invoice_payments p
+      JOIN supplier_invoices si ON si.id=p.invoice_id WHERE p.id=? AND p.invoice_id=?`).get(paymentId, invoiceId);
+    if (!payment) throw new AppError('Ödeme bulunamadı / Payment not found', 404);
+    const existing = db.prepare('SELECT * FROM supplier_invoice_payment_reversals WHERE payment_id=? OR request_key=?')
+      .get(payment.id, input.requestKey || null);
+    if (existing) return { ok: true, reversalId: existing.id, duplicate: true };
+    const id = uuid();
+    db.prepare(`INSERT INTO supplier_invoice_payment_reversals
+      (id,payment_id,reversed_on,reason,request_key,created_at,created_by) VALUES (?,?,?,?,?,?,?)`)
+      .run(id, payment.id, input.reversedOn || toLocalDateStr(), input.reason, input.requestKey || null, Date.now(), req.user?.id || null);
+    db.prepare("UPDATE supplier_invoices SET match_status='approved' WHERE id=? AND match_status='paid'").run(invoiceId);
+    const inv = db.prepare('SELECT * FROM supplier_invoices WHERE id=?').get(invoiceId);
+    logAudit(req, 'auditSupplierInvoicePaymentReversed', { entityType: 'supplier_invoice', entityId: invoiceId,
+      oldValue: { paymentId: payment.id, amount: payment.amount }, newValue: { reversalId: id, status: inv.match_status },
+      detail: `${payment.invoice_no}: ${input.reason}` });
+    return { ok: true, reversalId: id, status: inv.match_status, ...supplierSettlement(inv) };
+  });
 }
 
 module.exports = {
-  round2, customerSettlement, refreshCustomerInvoiceStatus, recordCustomerPayment, listCustomerPayments,
-  supplierSettlement, snapshotVatAmount, recordSupplierPayment, listSupplierPayments
+  round2, customerSettlement, refreshCustomerInvoiceStatus, recordCustomerPayment, listCustomerPayments, reverseCustomerPayment,
+  supplierSettlement, snapshotVatAmount, recordSupplierPayment, listSupplierPayments, reverseSupplierPayment
 };

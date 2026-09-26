@@ -21,8 +21,8 @@ const logoUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 512 * 1024, files: 1 },
   fileFilter: (req, file, cb) => {
-    if (!['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp'].includes(file.mimetype)) {
-      return cb(new AppError('Logo PNG, JPEG, SVG veya WEBP olmalı / Logo must be PNG, JPEG, SVG or WEBP', 415));
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.mimetype)) {
+      return cb(new AppError('Logo PNG, JPEG veya WEBP olmalı / Logo must be PNG, JPEG or WEBP', 415));
     }
     cb(null, true);
   }

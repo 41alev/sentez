@@ -195,6 +195,24 @@ function buildOpenApiSpec() {
             }
           }
         },
+        ReceiptReversal: {
+          type: 'object', required: ['reason'], additionalProperties: false,
+          properties: {
+            reason: { type: 'string', minLength: 5, maxLength: 1000 },
+            requestKey: { type: 'string', minLength: 8, maxLength: 100 }
+          }
+        },
+        RfqAward: {
+          type: 'object', required: ['supplierId'], additionalProperties: false,
+          properties: {
+            supplierId: { type: 'integer', minimum: 1 }, warehouseId: { type: 'integer', minimum: 1, nullable: true },
+            notes: { type: 'string', maxLength: 2000 }
+          }
+        },
+        ReasonRequired: {
+          type: 'object', required: ['reason'], additionalProperties: false,
+          properties: { reason: { type: 'string', minLength: 5, maxLength: 2000 } }
+        },
         Customer: {
           type: 'object',
           properties: {
@@ -354,6 +372,14 @@ function buildOpenApiSpec() {
             paidOn: { type: 'string', format: 'date' }, method: { type: 'string', enum: ['cash', 'bank', 'card', 'check', 'other'] },
             reference: { type: 'string', maxLength: 200 }, note: { type: 'string', maxLength: 1000 },
             requestKey: { type: 'string', minLength: 8, maxLength: 100, description: 'Tekrar gönderimde çift kaydı önler / Idempotency key' }
+          }
+        },
+        PaymentReversal: {
+          type: 'object', required: ['reason'], additionalProperties: false,
+          properties: {
+            reason: { type: 'string', minLength: 3, maxLength: 1000 },
+            reversedOn: { type: 'string', format: 'date' },
+            requestKey: { type: 'string', minLength: 8, maxLength: 100 }
           }
         },
         InvoiceSettlement: {
@@ -614,8 +640,25 @@ function buildOpenApiSpec() {
       '/purchasing/orders/{id}': {
         get: { tags: ['Purchasing'], summary: 'Sipariş detayı / Order detail', security: bearerAuth, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: jsonResponse('Sipariş', ref('PurchaseOrder')), 404: errorResponse } }
       },
+      '/purchasing/rfqs/{id}/award': {
+        post: {
+          tags: ['Purchasing'], summary: 'RFQ sonucunu tedarikçiye ver ve sipariş oluştur / Award RFQ and create PO', security: bearerAuth,
+          parameters: [idParam], requestBody: { required: true, content: { 'application/json': { schema: ref('RfqAward') } } },
+          responses: { 201: jsonResponse('Sipariş oluşturuldu', ref('PurchaseOrder')), 409: errorResponse, 422: errorResponse }
+        }
+      },
       '/purchasing/orders/{id}/approve': {
         post: { tags: ['Purchasing'], summary: 'Siparişi onayla / Approve order', security: bearerAuth, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: jsonResponse('Onaylandı — webhook: purchase_order.approved', { type: 'object', properties: { ok: { type: 'boolean' } } }), 403: errorResponse, 404: errorResponse } }
+      },
+      '/purchasing/orders/{id}/cancel': {
+        post: { tags: ['Purchasing'], summary: 'Teslimatsız siparişi gerekçeyle iptal et / Cancel an unreceived order', security: bearerAuth,
+          parameters: [idParam], requestBody: { required: true, content: { 'application/json': { schema: ref('ReasonRequired') } } },
+          responses: { 200: jsonResponse('İptal edildi', { type: 'object' }), 409: errorResponse, 422: errorResponse } }
+      },
+      '/purchasing/orders/{id}/close': {
+        post: { tags: ['Purchasing'], summary: 'Teslim edilmiş veya kısmi siparişi gerekçeyle kapat / Close a received order', security: bearerAuth,
+          parameters: [idParam], requestBody: { required: true, content: { 'application/json': { schema: ref('ReasonRequired') } } },
+          responses: { 200: jsonResponse('Kapatıldı', { type: 'object' }), 409: errorResponse, 422: errorResponse } }
       },
       '/purchasing/orders/{id}/receipts': {
         post: {
@@ -623,6 +666,13 @@ function buildOpenApiSpec() {
           parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
           requestBody: { required: true, content: { 'application/json': { schema: ref('PurchaseReceiptCreate') } } },
           responses: { 201: jsonResponse('Kaydedildi — webhook: purchase_order.received', { type: 'object' }), 400: errorResponse, 404: errorResponse }
+        }
+      },
+      '/purchasing/receipts/{id}/reverse': {
+        post: {
+          tags: ['Purchasing'], summary: 'Kullanılmamış mal kabulü denetimli ters kayıtla düzelt / Reverse an untouched receipt', security: bearerAuth,
+          parameters: [idParam], requestBody: { required: true, content: { 'application/json': { schema: ref('ReceiptReversal') } } },
+          responses: { 201: jsonResponse('Ters kayıt oluşturuldu', { type: 'object' }), 200: jsonResponse('Aynı istek tekrarlandı', { type: 'object' }), 409: errorResponse, 422: errorResponse }
         }
       },
       '/sales/customers': {
@@ -665,6 +715,14 @@ function buildOpenApiSpec() {
           responses: { 201: jsonResponse('Kaydedildi', ref('InvoiceSettlement')), 200: jsonResponse('Aynı requestKey ile tekrar / idempotent replay', ref('InvoiceSettlement')), 409: jsonResponse('Açık tutar aşıldı veya fatura kapalı / Exceeds open amount or not open', ref('Error')), 422: errorResponse }
         }
       },
+      '/sales/invoices/{id}/payments/{paymentId}/reverse': {
+        post: {
+          tags: ['Sales'], summary: 'Tahsilatı silmeden ters kayıt oluştur / Reverse a collection without deleting it', security: bearerAuth,
+          parameters: [idParam, { name: 'paymentId', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: { required: true, content: { 'application/json': { schema: ref('PaymentReversal') } } },
+          responses: { 201: jsonResponse('Ters kayıt oluşturuldu', ref('InvoiceSettlement')), 200: jsonResponse('Aynı istek tekrarlandı', ref('InvoiceSettlement')), 403: errorResponse, 409: errorResponse }
+        }
+      },
       '/purchasing/invoices/{id}': {
         get: { tags: ['Purchasing'], summary: 'Tedarikçi faturası, tahsisler ve ödemeler / Supplier invoice with allocations and payments', security: bearerAuth, parameters: [idParam], responses: { 200: jsonResponse('Fatura', { type: 'object' }), 404: errorResponse } }
       },
@@ -688,6 +746,28 @@ function buildOpenApiSpec() {
           requestBody: { required: true, content: { 'application/json': { schema: ref('PaymentCreate') } } },
           responses: { 201: jsonResponse('Kaydedildi', { type: 'object' }), 409: jsonResponse('Onaysız fatura veya açık tutar aşıldı / Not approved or exceeds open amount', ref('Error')), 422: errorResponse }
         }
+      },
+      '/purchasing/invoices/{id}/payments/{paymentId}/reverse': {
+        post: {
+          tags: ['Purchasing'], summary: 'Tedarikçi ödemesini silmeden ters kayıt oluştur / Reverse a supplier payment without deleting it', security: bearerAuth,
+          parameters: [idParam, { name: 'paymentId', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: { required: true, content: { 'application/json': { schema: ref('PaymentReversal') } } },
+          responses: { 201: jsonResponse('Ters kayıt oluşturuldu', { type: 'object' }), 200: jsonResponse('Aynı istek tekrarlandı', { type: 'object' }), 403: errorResponse, 409: errorResponse }
+        }
+      },
+      '/purchasing/returns': {
+        get: { tags: ['Purchasing'], summary: 'Tedarikçi iadelerini listele / List supplier returns', security: bearerAuth,
+          responses: { 200: jsonResponse('Sayfalanmış liste', { type: 'object' }) } },
+        post: { tags: ['Purchasing'], summary: 'Kaynak tedarikçisi belli partiden iade oluştur / Create supplier return', security: bearerAuth,
+          requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['supplierId', 'lotId', 'qty'],
+            properties: { supplierId: { type: 'integer' }, lotId: { type: 'string' }, qty: { type: 'number', exclusiveMinimum: 0 }, reason: { type: 'string' }, ncrId: { type: 'string', nullable: true } } } } } },
+          responses: { 201: jsonResponse('İade oluşturuldu', { type: 'object' }), 422: errorResponse } }
+      },
+      '/purchasing/returns/{id}/status': {
+        post: { tags: ['Purchasing'], summary: 'İadeyi sevk, alacak ve kapanış sırasıyla ilerlet / Advance supplier return', security: bearerAuth,
+          parameters: [idParam], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['status'], properties: {
+            status: { type: 'string', enum: ['shipped', 'credited', 'closed'] }, note: { type: 'string' } } } } } },
+          responses: { 200: jsonResponse('İlerletildi', { type: 'object' }), 409: errorResponse, 422: errorResponse } }
       },
       '/production': {
         get: { tags: ['Production'], summary: 'Üretim emirlerini listele / List production orders', security: bearerAuth, responses: { 200: jsonResponse('Sayfalanmış liste', envelope('ProductionOrder')) } },

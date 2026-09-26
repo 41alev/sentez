@@ -498,6 +498,11 @@ const paymentSchema = z.object({
   note: z.string().trim().max(1000).optional(),
   requestKey: z.string().trim().min(8).max(100).optional()
 }).strict();
+const paymentReversalSchema = z.object({
+  reason: z.string().trim().min(3).max(1000),
+  reversedOn: z.string().refine(isValidLocalDate, 'Geçerli tarih gerekli / Valid date required').optional(),
+  requestKey: z.string().trim().min(8).max(100).optional()
+}).strict();
 
 /** Full settlement of the open amount; kept for the one-click UI action. */
 router.post('/invoices/:id/pay', WRITE, (req, res) => {
@@ -514,6 +519,11 @@ router.get('/invoices/:id/payments', (req, res) => {
   const inv = db.prepare('SELECT * FROM customer_invoices WHERE id=?').get(req.params.id);
   if (!inv) throw new AppError('Fatura bulunamadı / Invoice not found', 404);
   res.json({ ...payments.customerSettlement(inv), payments: payments.listCustomerPayments(inv.id) });
+});
+
+router.post('/invoices/:id/payments/:paymentId/reverse', ADMIN, validate(paymentReversalSchema), (req, res) => {
+  const result = payments.reverseCustomerPayment(req, req.params.id, req.params.paymentId, req.valid);
+  res.status(result.duplicate ? 200 : 201).json(result);
 });
 
 /* ============================ PROFITABILITY ============================ */

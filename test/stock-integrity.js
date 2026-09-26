@@ -73,6 +73,7 @@ async function main() {
 
   db.prepare("UPDATE stock_lots SET status='rejected' WHERE id=?").run(lotB.id);
   const supplier = db.prepare('SELECT id FROM suppliers LIMIT 1').get().id;
+  db.prepare('UPDATE stock_lots SET supplier_id=? WHERE id=?').run(supplier, lotB.id);
   await success('POST', '/purchasing/returns', { supplierId: supplier, lotId: lotB.id, qty: 3 });
   assert.equal(db.prepare('SELECT qty FROM stock_lots WHERE id=?').get(lotB.id).qty, 97);
   assert.equal(db.prepare('SELECT qty FROM stock_lots WHERE id=?').get(lotA.id).qty, 95);

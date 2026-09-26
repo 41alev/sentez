@@ -33,6 +33,20 @@ async function main() {
   assert.equal(db.prepare('SELECT COUNT(*) c FROM item_bom WHERE item_id=?').get(product.id).c, 0);
   console.log('✓ F18: omitted product fields preserved; explicit zero/empty array applied');
 
+  const identityA = await success('POST', '/items', { name: 'Identity A', code: 'PART-UNIQUE', barcode: '869000000001' });
+  const duplicateCode = await api('POST', '/items', { name: 'Identity B', code: ' part-unique ' });
+  const duplicateBarcode = await api('POST', '/items', { name: 'Identity C', barcode: '869000000001' });
+  assert.equal(duplicateCode.status, 409);
+  assert.equal(duplicateBarcode.status, 409);
+  const bomParent = await success('POST', '/items', { name: 'BOM parent', itemType: 'finished',
+    bom: [{ componentItemId: identityA.id, qtyPerUnit: 1 }] });
+  const deleteComponent = await api('DELETE', '/items/' + identityA.id);
+  assert.equal(deleteComponent.status, 409);
+  assert.equal(db.prepare('SELECT deleted_at FROM items WHERE id=?').get(identityA.id).deleted_at, null);
+  assert.equal(db.prepare('SELECT COUNT(*) c FROM item_bom WHERE item_id=? AND component_item_id=?')
+    .get(bomParent.id, identityA.id).c, 1);
+  console.log('✓ item identity is unique and active BOM components cannot be deleted');
+
   /** @type {Array<[string, string, Record<string, unknown>, Record<string, unknown>, string]>} */
   const cases = [
     ['/sales/customers', 'customers', { name: 'Customer', currency: 'USD', creditLimit: 321, paymentTermsDays: 90 }, { name: 'Renamed' }, 'name'],

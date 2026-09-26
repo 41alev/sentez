@@ -209,7 +209,13 @@ export default function PurchasingView() {
             { key: 'receivedAt', label: t('date'), render: r => ts(r.receivedAt) },
             { key: 'waybillNo', label: t('waybillNo'), render: r => esc(r.waybillNo || '—') },
             { key: 'lines', label: UI.getLang() === 'tr' ? 'Kalem' : 'Lines', num: true, render: r => num((r.lines || []).length) },
-            { key: 'act', label: '', render: r => can('write') ? `<button class="btn btn-ghost btn-sm" data-landed="${esc(r.id)}">${t('addLandedCost')}</button>` : '' }
+            { key: 'state', label: t('status'), render: r => r.reversedAt
+              ? `<span class="badge plain">${UI.getLang() === 'tr' ? 'Ters kayıt' : 'Reversed'}</span>`
+              : `<span class="badge ok">${UI.getLang() === 'tr' ? 'Geçerli' : 'Posted'}</span>` },
+            { key: 'act', label: '', render: r => r.reversedAt ? '' : `<div class="row-actions">
+                ${can('write') ? `<button class="btn btn-ghost btn-sm" data-landed="${esc(r.id)}">${t('addLandedCost')}</button>` : ''}
+                ${can('approve') ? `<button class="btn btn-ghost btn-sm" data-reverse-receipt="${esc(r.id)}">${UI.getLang() === 'tr' ? 'Ters kayıt' : 'Reverse'}</button>` : ''}
+              </div>` }
           ], po.receipts)}` : ''}
 
         ${po.landedCosts && po.landedCosts.length ? `
@@ -221,11 +227,59 @@ export default function PurchasingView() {
           ], po.landedCosts)}` : ''}`,
       footer: `<button class="btn btn-ghost" data-close>${t('close')}</button>
                <button class="btn btn-ghost" id="poPrint">${UI.icon(UI.ICONS.print)}${t('print')}</button>
+               ${['draft', 'pending_approval', 'approved', 'rejected'].includes(po.status) && can('approve') ? `<button class="btn btn-ghost" id="poCancel">${UI.getLang() === 'tr' ? 'Siparişi iptal et' : 'Cancel order'}</button>` : ''}
+               ${['partially_received', 'received'].includes(po.status) && can('approve') ? `<button class="btn btn-ghost" id="poClose">${UI.getLang() === 'tr' ? 'Siparişi kapat' : 'Close order'}</button>` : ''}
                ${['approved', 'partially_received'].includes(po.status) && can('write') ? `<button class="btn btn-primary" id="poRec">${t('receive')}</button>` : ''}`,
       onOpen: (box) => {
         box.querySelector('#poPrint').onclick = () => printPO(po);
+        box.querySelector('#poCancel')?.addEventListener('click', () => { closeModal(); poLifecycleDialog(po, 'cancel'); });
+        box.querySelector('#poClose')?.addEventListener('click', () => { closeModal(); poLifecycleDialog(po, 'close'); });
         box.querySelector('#poRec')?.addEventListener('click', () => { closeModal(); receiveDialog(po.id); });
         box.querySelectorAll('[data-landed]').forEach(b => b.onclick = () => { closeModal(); landedDialog(b.dataset.landed); });
+        box.querySelectorAll('[data-reverse-receipt]').forEach(b => b.onclick = () => { closeModal(); reverseReceiptDialog(b.dataset.reverseReceipt); });
+      }
+    });
+  }
+
+  function poLifecycleDialog(po, action) {
+    const tr = UI.getLang() === 'tr';
+    const isCancel = action === 'cancel';
+    modal({
+      title: `${isCancel ? (tr ? 'Siparişi iptal et' : 'Cancel order') : (tr ? 'Siparişi kapat' : 'Close order')} — ${po.poNo}`,
+      body: `${isCancel ? '' : `<div class="alert warn">${tr ? 'Kalan teslim miktarı kapatılır ve yeni mal kabul engellenir.' : 'Remaining quantities are closed and further receipts are blocked.'}</div>`}
+        ${field(tr ? 'Gerekçe (zorunlu)' : 'Reason (required)', textarea('poLifecycleReason'))}`,
+      footer: `<button class="btn btn-ghost" data-close>${t('cancel')}</button><button class="btn btn-primary" id="poLifecycleGo">${t('confirm')}</button>`,
+      onOpen: box => guardedSubmit(box.querySelector('#poLifecycleGo'), async () => {
+        const reason = val('poLifecycleReason').trim();
+        if (reason.length < 5) throw new Error(tr ? 'En az 5 karakter gerekçe girin.' : 'Enter a reason of at least 5 characters.');
+        if (isCancel) await Api.cancelPO(po.id, reason); else await Api.closePO(po.id, reason);
+        closeModal(); UI.ok(t('saved')); reload();
+      })
+    });
+  }
+
+  function reverseReceiptDialog(receiptId) {
+    const tr = UI.getLang() === 'tr';
+    const requestKey = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
+    modal({
+      title: tr ? 'Mal kabulü ters kaydet' : 'Reverse goods receipt',
+      body: `<div class="alert warn">${tr
+        ? 'Yalnız henüz kullanılmamış, faturalanmamış ve ek maliyet uygulanmamış teslimatlar ters kaydedilebilir. Asıl kayıt ve denetim izi korunur.'
+        : 'Only untouched, uninvoiced receipts without landed costs can be reversed. The original record and audit trail remain.'}</div>
+        ${field(tr ? 'Gerekçe (zorunlu)' : 'Reason (required)', textarea('receiptRevReason'))}`,
+      footer: `<button class="btn btn-ghost" data-close>${t('cancel')}</button><button class="btn btn-primary" id="receiptRevGo">${tr ? 'Ters kaydet' : 'Reverse'}</button>`,
+      onOpen: box => {
+        const button = box.querySelector('#receiptRevGo');
+        button.onclick = async () => {
+          if (button.disabled) return;
+          const reason = val('receiptRevReason');
+          if (reason.trim().length < 5) return UI.toast(tr ? 'En az 5 karakter gerekçe girin.' : 'Enter a reason of at least 5 characters.');
+          button.disabled = true;
+          try {
+            await Api.reverseReceipt(receiptId, { reason, requestKey });
+            closeModal(); UI.ok(t('saved')); reload();
+          } catch (e) { UI.err(e); } finally { button.disabled = false; }
+        };
       }
     });
   }
@@ -576,12 +630,36 @@ export default function PurchasingView() {
       { key: 'status', label: t('status'), render: r => rfqStatusBadge(r.status) },
       { key: 'act', label: t('actions'), render: r => `<div class="row-actions">
           <button class="btn btn-ghost btn-sm" data-cmp="${esc(r.id)}">${t('compareQuotes')}</button>
-          ${can('write') ? `<button class="btn btn-ghost btn-sm" data-q="${esc(r.id)}">${t('addQuote')}</button>` : ''}</div>` }
+          ${r.status === 'open' && can('write') ? `<button class="btn btn-ghost btn-sm" data-q="${esc(r.id)}">${t('addQuote')}</button>` : ''}
+          ${r.status === 'open' && (r.quotes || []).length && can('approve') ? `<button class="btn btn-primary btn-sm" data-award="${esc(r.id)}">${UI.getLang() === 'tr' ? 'Sonuçlandır' : 'Award'}</button>` : ''}</div>` }
     ], rows)}${pager(res, p => { pagesRef.current.rfqs = p; reload(); })}</div>`;
 
     document.getElementById('rfqNew')?.addEventListener('click', () => rfqForm());
     body.querySelectorAll('[data-cmp]').forEach(b => b.onclick = () => compareDialog(b.dataset.cmp));
     body.querySelectorAll('[data-q]').forEach(b => b.onclick = () => quoteForm(rows.find(x => x.id === b.dataset.q)));
+    body.querySelectorAll('[data-award]').forEach(b => b.onclick = () => awardRfqDialog(rows.find(x => x.id === b.dataset.award)));
+  }
+
+  function awardRfqDialog(rfq) {
+    const tr = UI.getLang() === 'tr';
+    const supplierIds = [...new Set((rfq.quotes || []).map(q => Number(q.supplierId)))];
+    const suppliers = suppliersRef.current.filter(s => supplierIds.includes(Number(s.id)));
+    const warehouses = warehousesRef.current;
+    modal({
+      title: `${tr ? 'Teklif talebini sonuçlandır' : 'Award RFQ'} — ${rfq.rfqNo}`,
+      body: `<div class="alert info">${tr
+        ? 'Seçilen tedarikçinin tüm kalemler için en son geçerli teklifleri tek bir satın alma siparişine dönüştürülür.'
+        : 'The selected supplier’s latest valid quotes for every line become one purchase order.'}</div>
+        ${field(t('supplierName'), select('awardSupplier', suppliers.map(s => ({ v: s.id, l: s.name }))))}
+        ${field(t('warehouse'), select('awardWarehouse', warehouses.map(w => ({ v: w.id, l: w.name }))))}
+        ${field(t('notes'), textarea('awardNotes'))}`,
+      footer: `<button class="btn btn-ghost" data-close>${t('cancel')}</button><button class="btn btn-primary" id="awardGo">${tr ? 'Sipariş oluştur' : 'Create order'}</button>`,
+      onOpen: box => guardedSubmit(box.querySelector('#awardGo'), async () => {
+        if (!suppliers.length) throw new Error(tr ? 'Geçerli tedarikçi teklifi yok.' : 'No valid supplier quote.');
+        await Api.awardRfq(rfq.id, { supplierId: intVal('awardSupplier'), warehouseId: intVal('awardWarehouse'), notes: val('awardNotes') });
+        closeModal(); UI.ok(t('saved')); reload();
+      })
+    });
   }
 
   function rfqForm() {
@@ -708,12 +786,14 @@ export default function PurchasingView() {
             ${r.allocationState !== 'legacy' && ['matched', 'discrepancy', 'unmatched'].includes(r.matchStatus) && can('approve')
               ? `<button class="btn btn-ghost btn-sm" data-inv-approve="${esc(r.id)}">${t('approve')}</button>` : ''}
             ${r.matchStatus === 'approved' && can('approve') ? `<button class="btn btn-ghost btn-sm" data-inv-pay="${esc(r.id)}">${tr ? 'Ödeme' : 'Pay'}</button>` : ''}
+            ${(r.paidAmount || 0) > 0 ? `<button class="btn btn-ghost btn-sm" data-inv-payments="${esc(r.id)}">${tr ? 'Hareketler' : 'Payments'}</button>` : ''}
           </div>` }
       ], rows)}${pager(res, page => { invoicePageRef.current = page; reload(); })}</div>`;
 
     body.querySelectorAll('[data-reconcile]').forEach(b => b.onclick = () => reconcileDialog(byId.get(b.dataset.reconcile)));
     body.querySelectorAll('[data-inv-approve]').forEach(b => b.onclick = () => approveInvoiceDialog(byId.get(b.dataset.invApprove)));
     body.querySelectorAll('[data-inv-pay]').forEach(b => b.onclick = () => payInvoiceDialog(byId.get(b.dataset.invPay)));
+    body.querySelectorAll('[data-inv-payments]').forEach(b => b.onclick = () => supplierPaymentHistory(b.dataset.invPayments));
 
     document.getElementById('invNew')?.addEventListener('click', async () => {
       const pos = await Api.purchaseOrders({ pageSize: 100 }).then(r => r.data || r);
@@ -906,6 +986,55 @@ export default function PurchasingView() {
           ...(val('pyRef') ? { reference: val('pyRef') } : {}), requestKey });
         closeModal(); UI.ok(t('saved')); reload();
       })
+    });
+  }
+
+  async function supplierPaymentHistory(invoiceId) {
+    const tr = UI.getLang() === 'tr';
+    let inv;
+    try { inv = await Api.supplierInvoice(invoiceId); } catch (e) { UI.err(e); return; }
+    modal({
+      title: `${tr ? 'Ödeme hareketleri' : 'Payment history'} — ${inv.invoiceNo}`,
+      body: (inv.payments || []).length ? table([
+        { key: 'paidOn', label: t('date'), render: r => dt(r.paidOn) },
+        { key: 'amount', label: tr ? 'Tutar' : 'Amount', num: true, render: r => `${num(r.amount, 2)} ${cur(inv.currency)}` },
+        { key: 'method', label: tr ? 'Yöntem' : 'Method', render: r => esc(r.method || '—') },
+        { key: 'reference', label: tr ? 'Referans' : 'Reference', render: r => esc(r.reference || '—') },
+        { key: 'state', label: t('status'), render: r => r.reversed
+          ? `<span class="badge plain">${tr ? 'Ters kayıt' : 'Reversed'}</span><div class="sub-line">${esc(r.reversal?.reason || '')}</div>`
+          : `<span class="badge ok">${tr ? 'Geçerli' : 'Posted'}</span>` },
+        { key: 'act', label: '', render: r => !r.reversed && can('approve')
+          ? `<button class="btn btn-ghost btn-sm" data-reverse-supplier-payment="${esc(r.id)}">${tr ? 'Ters kayıt' : 'Reverse'}</button>` : '' }
+      ], inv.payments) : `<div class="empty">${t('noData')}</div>`,
+      footer: `<button class="btn btn-ghost" data-close>${t('close')}</button>`,
+      onOpen: box => box.querySelectorAll('[data-reverse-supplier-payment]').forEach(button => {
+        button.onclick = () => { closeModal(); reverseSupplierPaymentDialog(inv, button.dataset.reverseSupplierPayment); };
+      })
+    });
+  }
+
+  function reverseSupplierPaymentDialog(inv, paymentId) {
+    const tr = UI.getLang() === 'tr';
+    const requestKey = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
+    modal({
+      title: `${tr ? 'Ödemeyi ters kaydet' : 'Reverse payment'} — ${inv.invoiceNo}`,
+      body: `<div class="alert warn">${tr ? 'Asıl ödeme silinmez; bağlantılı bir ters kayıt eklenir.' : 'The original payment remains and a linked reversal is recorded.'}</div>
+        ${field(tr ? 'Gerekçe (zorunlu)' : 'Reason (required)', textarea('supplierPayRevReason'))}
+        ${field(t('date'), input('supplierPayRevDate', { type: 'date', value: UI.today() }))}`,
+      footer: `<button class="btn btn-ghost" data-close>${t('cancel')}</button><button class="btn btn-primary" id="supplierPayRevGo">${tr ? 'Ters kaydet' : 'Reverse'}</button>`,
+      onOpen: box => {
+        const button = box.querySelector('#supplierPayRevGo');
+        button.onclick = async () => {
+          if (button.disabled) return;
+          const reason = val('supplierPayRevReason');
+          if (reason.trim().length < 3) return UI.toast(tr ? 'En az 3 karakter gerekçe girin.' : 'Enter a reason of at least 3 characters.');
+          button.disabled = true;
+          try {
+            await Api.reverseSupplierPayment(inv.id, paymentId, { reason, reversedOn: val('supplierPayRevDate'), requestKey });
+            closeModal(); UI.ok(t('saved')); reload();
+          } catch (e) { UI.err(e); } finally { button.disabled = false; }
+        };
+      }
     });
   }
 

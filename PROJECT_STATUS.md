@@ -1,5 +1,49 @@
 # PROJECT_STATUS.md
 
+## 26 Eylül 2026 — satış engellerini kapatma turu (Codex, devam ediyor)
+
+**Aktif hedef:** Kullanıcının tam yetkisiyle denetimde kalan teknik, operasyonel
+ve ticari hazırlık eksiklerini kapatmak; her güvenlik/veri değişikliğini test
+etmek ve doğrulanmış kontrol noktalarını `main` dalına commit/push etmektir.
+
+**Bu kontrol noktasında tamamlananlar:** migration `026` aktif ürün kodu ve
+barkodunu şirket içinde tekilleştirdi; stoklu/BOM/sipariş bağlı ürün silme
+korumaları güçlendi. Migration `027` müşteri ve tedarikçi ödeme ters kayıtlarını
+değiştirilemez defter olarak ekledi; mal kabul ters kaydı stok, ortalama maliyet
+ve sipariş miktarını atomik geri alıyor, bağımlı mali/kalite kayıtlarında
+mutabakat istiyor. Muhasebe aktarımı COGS/stok ile tahsilat, ödeme ve ters kayıt
+fişlerini kapsıyor. RFQ sonuçlandırma siparişi atomik oluşturuyor; PO iptal ve
+kapatma, tedarikçi iadesi liste/durum akışı, gerçek kaynak tedarikçisi kontrolü
+ve ilgili kullanıcı ekranları/OpenAPI eklendi. SVG logo, aşırı onay limiti,
+ürün kimliği/BOM silme ve kırık mobil/PWA script açıkları kapandı.
+
+**Doğrulama:** build, typecheck, OpenAPI/contract, lint (0 hata, 45 mevcut
+uyarı), Faz 0 `b1b-stock` 52/52 ve `b2-purch-auth` 43/43, ödeme/mutabakat,
+muhasebe, veri sağlığı ve stok bütünlüğü paketleri **Geçti**. Tam `run-all`
+koşusunda 38 paket geçti; yeni tekillik/tedarikçi kaynağı kuralıyla eski test
+kurulumları çakıştığı için `data-health` ve `stock-integrity` kaldı. Test
+kurulumları yeni veri sözleşmesine uyarlandı ve iki paket ayrı tekrar koşuda
+**Geçti**; tüm paket tek koşu son doğrulaması sonraki kontrol noktasında
+yenilenecek.
+
+**Bağımsız inceleme:** `ai_team.py --phase review --timeout 300` çalıştı.
+Claude kota sınırı nedeniyle gerçek inceleme veremedi (**Doğrulanamadı**).
+Gemini kod değişikliklerinde yeni somut hata bildirmedi, ancak bağlam sınırı
+testleri dışarıda bıraktı ve temiz kurulum/TLS/off-site restore/pilot kapılarını
+doğru biçimde açık saydı; bu görüş test kanıtının yerine kullanılmadı.
+
+**Açık teknik sıra:** kullanıcıya özgü bildirim okundu durumu; yüklenen belgenin
+gerçek dosya imzası doğrulaması; finansal toplamların tam kuruş cinsinden
+saklanması/hesaplanması; gerçek sevkiyatlı COGS ve ödeme/ters kayıt yevmiye
+regresyonları; tedarikçi iade ekranı; belge ve release durumunun yenilenmesi.
+Ardından temiz paket kurulumu, ayrı konuma gerçek restore, servis yeniden
+başlatma ve temsili büyük veri provasının yerel olarak yapılabilen kısmı
+tamamlanacak. Müşteri ağı/TLS sertifikası, fiziksel yazıcı-barkod cihazı,
+hukukçu onayı ve imzalı müşteri pilotu dış saha kanıtı gerektirir.
+
+**Sonraki tek somut adım:** bildirim okundu bilgisini kullanıcı bazlı tabloya
+taşıyıp viewer işleminin admin rozetini değiştirmediğini negatif testle kanıtla.
+
 ## 26 Eylül 2026 — Claude sonrası Codex bağımsız denetimi
 
 **Aktif hedef:** `c1714b4` ile `origin/main` üzerine alınan Claude Code

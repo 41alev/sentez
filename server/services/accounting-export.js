@@ -26,7 +26,8 @@ function getMappings(companyId = 1) {
     .all(companyId);
   const byKey = {};
   rows.forEach(r => { byKey[r.mapping_key] = { code: r.account_code, name: r.account_name }; });
-  const required = ['sales_revenue', 'sales_vat', 'accounts_receivable', 'purchase_vat', 'accounts_payable', 'inventory'];
+  const required = ['sales_revenue', 'sales_vat', 'accounts_receivable', 'purchase_vat', 'accounts_payable',
+    'inventory', 'cost_of_goods_sold', 'cash', 'bank', 'card', 'check', 'payment_clearing'];
   const missing = required.filter(k => !byKey[k]);
   if (missing.length) {
     throw new AppError(`Hesap kodu eşlemesi eksik / Missing account code mapping: ${missing.join(', ')}`, 400);
@@ -81,6 +82,20 @@ function generateJournalEntries({ from, to, companyId = 1 }) {
         accountName: map.sales_vat.name, description: desc, debit: isReturn ? vatBase : 0, credit: isReturn ? 0 : vatBase,
         sourceType: 'customer_invoice', sourceId: inv.id });
     }
+    // Inventory leaves the books when a real shipment exists. Stand-alone
+    // service invoices have no stock cost and therefore no COGS entry.
+    if (!isReturn && inv.shipment_id) {
+      const costBase = Math.round((db.prepare(`SELECT COALESCE(SUM(qty*unit_cost),0) value
+        FROM shipment_items WHERE shipment_id=?`).get(inv.shipment_id).value || 0) * 100) / 100;
+      if (costBase > 0) {
+        rows.push({ date: inv.invoice_date, docNo: inv.invoice_no, accountCode: map.cost_of_goods_sold.code,
+          accountName: map.cost_of_goods_sold.name, description: desc, debit: costBase, credit: 0,
+          sourceType: 'customer_invoice_cogs', sourceId: inv.id });
+        rows.push({ date: inv.invoice_date, docNo: inv.invoice_no, accountCode: map.inventory.code,
+          accountName: map.inventory.name, description: desc, debit: 0, credit: costBase,
+          sourceType: 'customer_invoice_cogs', sourceId: inv.id });
+      }
+    }
   });
 
   const purchases = db.prepare(`
@@ -117,6 +132,73 @@ function generateJournalEntries({ from, to, companyId = 1 }) {
     rows.push({ date: inv.invoice_date, docNo: inv.invoice_no, accountCode: map.accounts_payable.code,
       accountName: map.accounts_payable.name, description: desc, debit: 0, credit: grossBase,
       sourceType: 'supplier_invoice', sourceId: inv.id });
+  });
+
+  const paymentAccount = method => map[(['cash', 'bank', 'card', 'check'].includes(method) ? method : 'payment_clearing')];
+  const customerPayments = db.prepare(`SELECT p.*, ci.invoice_no, c.name customer_name
+    FROM customer_invoice_payments p
+    JOIN customer_invoices ci ON ci.id=p.invoice_id
+    LEFT JOIN customers c ON c.id=ci.customer_id
+    WHERE p.paid_on BETWEEN ? AND ?
+    ORDER BY p.paid_on,p.created_at,p.id`).all(from, to);
+  customerPayments.forEach(p => {
+    const amount = Math.round(p.amount * 100) / 100;
+    const account = paymentAccount(p.method);
+    const desc = `Tahsilat ${p.invoice_no} — ${p.customer_name || ''}`;
+    rows.push({ date: p.paid_on, docNo: p.reference || p.invoice_no, accountCode: account.code,
+      accountName: account.name, description: desc, debit: amount, credit: 0,
+      sourceType: 'customer_payment', sourceId: p.id });
+    rows.push({ date: p.paid_on, docNo: p.reference || p.invoice_no, accountCode: map.accounts_receivable.code,
+      accountName: map.accounts_receivable.name, description: desc, debit: 0, credit: amount,
+      sourceType: 'customer_payment', sourceId: p.id });
+  });
+
+  const supplierPayments = db.prepare(`SELECT p.*, si.invoice_no, s.name supplier_name
+    FROM supplier_invoice_payments p
+    JOIN supplier_invoices si ON si.id=p.invoice_id
+    LEFT JOIN suppliers s ON s.id=si.supplier_id
+    WHERE p.paid_on BETWEEN ? AND ?
+    ORDER BY p.paid_on,p.created_at,p.id`).all(from, to);
+  supplierPayments.forEach(p => {
+    const amount = Math.round(p.amount * 100) / 100;
+    const account = paymentAccount(p.method);
+    const desc = `Tedarikçi ödemesi ${p.invoice_no} — ${p.supplier_name || ''}`;
+    rows.push({ date: p.paid_on, docNo: p.reference || p.invoice_no, accountCode: map.accounts_payable.code,
+      accountName: map.accounts_payable.name, description: desc, debit: amount, credit: 0,
+      sourceType: 'supplier_payment', sourceId: p.id });
+    rows.push({ date: p.paid_on, docNo: p.reference || p.invoice_no, accountCode: account.code,
+      accountName: account.name, description: desc, debit: 0, credit: amount,
+      sourceType: 'supplier_payment', sourceId: p.id });
+  });
+
+  const customerReversals = db.prepare(`SELECT r.*,p.amount,p.method,p.reference,ci.invoice_no,c.name customer_name
+    FROM customer_invoice_payment_reversals r JOIN customer_invoice_payments p ON p.id=r.payment_id
+    JOIN customer_invoices ci ON ci.id=p.invoice_id LEFT JOIN customers c ON c.id=ci.customer_id
+    WHERE r.reversed_on BETWEEN ? AND ? ORDER BY r.reversed_on,r.created_at,r.id`).all(from, to);
+  customerReversals.forEach(r => {
+    const amount = Math.round(r.amount * 100) / 100; const account = paymentAccount(r.method);
+    const desc = `Tahsilat ters kaydı ${r.invoice_no} — ${r.customer_name || ''}: ${r.reason}`;
+    rows.push({ date: r.reversed_on, docNo: r.reference || r.invoice_no, accountCode: map.accounts_receivable.code,
+      accountName: map.accounts_receivable.name, description: desc, debit: amount, credit: 0,
+      sourceType: 'customer_payment_reversal', sourceId: r.id });
+    rows.push({ date: r.reversed_on, docNo: r.reference || r.invoice_no, accountCode: account.code,
+      accountName: account.name, description: desc, debit: 0, credit: amount,
+      sourceType: 'customer_payment_reversal', sourceId: r.id });
+  });
+
+  const supplierReversals = db.prepare(`SELECT r.*,p.amount,p.method,p.reference,si.invoice_no,s.name supplier_name
+    FROM supplier_invoice_payment_reversals r JOIN supplier_invoice_payments p ON p.id=r.payment_id
+    JOIN supplier_invoices si ON si.id=p.invoice_id LEFT JOIN suppliers s ON s.id=si.supplier_id
+    WHERE r.reversed_on BETWEEN ? AND ? ORDER BY r.reversed_on,r.created_at,r.id`).all(from, to);
+  supplierReversals.forEach(r => {
+    const amount = Math.round(r.amount * 100) / 100; const account = paymentAccount(r.method);
+    const desc = `Tedarikçi ödeme ters kaydı ${r.invoice_no} — ${r.supplier_name || ''}: ${r.reason}`;
+    rows.push({ date: r.reversed_on, docNo: r.reference || r.invoice_no, accountCode: account.code,
+      accountName: account.name, description: desc, debit: amount, credit: 0,
+      sourceType: 'supplier_payment_reversal', sourceId: r.id });
+    rows.push({ date: r.reversed_on, docNo: r.reference || r.invoice_no, accountCode: map.accounts_payable.code,
+      accountName: map.accounts_payable.name, description: desc, debit: 0, credit: amount,
+      sourceType: 'supplier_payment_reversal', sourceId: r.id });
   });
 
   // Dönem sonu kontrolü: toplam borç = toplam alacak. Aksi halde sessizce

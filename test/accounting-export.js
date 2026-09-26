@@ -43,7 +43,7 @@ const db = new Database(dbPath, { readonly: true });
 
   console.log('\n=== HESAP KODU EŞLEMESİ / ACCOUNT CODE MAPPINGS ===');
   const mappings = await api('GET', '/api/accounting/mappings', { token: admin });
-  ok('6 varsayılan eşleme geldi', mappings.status === 200 && mappings.data.length === 6, JSON.stringify(mappings.data));
+  ok('12 varsayılan eşleme geldi', mappings.status === 200 && mappings.data.length === 12, JSON.stringify(mappings.data));
   const salesRevMap = mappings.data.find(m => m.key === 'sales_revenue');
   ok('satış geliri varsayılan kodu 600', salesRevMap && salesRevMap.accountCode === '600', JSON.stringify(salesRevMap));
 

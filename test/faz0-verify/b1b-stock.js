@@ -113,12 +113,13 @@ const { invariants } = require('./inv');
   });
 
   console.log('\n[RETURN] tedarikçi iadesi');
-  await check('RET-01', 'lot tedarikçisi farklıysa 422; tedarikçisiz lot için mevcut davranış', async () => {
+  await check('RET-01', 'lot tedarikçisi farklıysa veya belli değilse rastgele tedarikçiye iade edilemez', async () => {
     const a = await item(20); db.prepare('UPDATE stock_lots SET supplier_id=? WHERE id=?').run(sups[0], a.lot.id);
     await unchanged(() => api('POST', '/purchasing/returns', { supplierId: sups[1], lotId: a.lot.id, qty: 1 }), [422]);
     const b = await item(20);
     const r = await api('POST', '/purchasing/returns', { supplierId: sups[1], lotId: b.lot.id, qty: 1 });
     info('RET-01b', 'tedarikçisi olmayan lot, rastgele tedarikçiye iade', { status: r.status });
+    assert.equal(r.status, 422);
   });
   await check('RET-02', 'geçersiz miktar/lot/tedarikçi: 4xx (500 değil)', async () => {
     const a = await item(10); db.prepare('UPDATE stock_lots SET supplier_id=? WHERE id=?').run(sups[0], a.lot.id);
@@ -134,11 +135,16 @@ const { invariants } = require('./inv');
     const r = await api('POST', '/purchasing/returns', { supplierId: sups[0], lotId: a.lot.id, qty: 2 });
     info('RET-03b', 'available lottan tedarikçi iadesi', { status: r.status });
   });
-  await check('RET-04', 'iade kayıtlarını listeleme/ilerletme uçları var mı', async () => {
-    const g = await api('GET', '/purchasing/returns'); const p = await api('PATCH', '/purchasing/returns/x/status', {});
-    info('RET-04b', 'GET /purchasing/returns', { status: g.status }); info('RET-04c', 'PATCH .../status', { status: p.status });
+  await check('RET-04', 'iade kayıtları listelenir ve yalnız sıralı, yetkili durum geçişi kabul edilir', async () => {
+    const a = await item(10); db.prepare('UPDATE stock_lots SET supplier_id=? WHERE id=?').run(sups[0], a.lot.id);
+    const created = await ok('POST', '/purchasing/returns', { supplierId: sups[0], lotId: a.lot.id, qty: 2, reason: 'Hasarlı malzeme' });
+    const g = await api('GET', '/purchasing/returns'); statusIn(g, [200]);
+    assert(g.data.data.some(x => x.id === created.id && x.status === 'open'));
+    statusIn(await api('POST', `/purchasing/returns/${created.id}/status`, { status: 'credited' }), [409]);
+    for (const status of ['shipped', 'credited', 'closed']) statusIn(await api('POST', `/purchasing/returns/${created.id}/status`, { status }), [200]);
+    assert.equal(db.prepare('SELECT status FROM supplier_returns WHERE id=?').get(created.id).status, 'closed');
     const mv = db.prepare("SELECT item_name FROM movements WHERE ref_type='supplier_return' LIMIT 1").get();
-    info('RET-04d', 'iade hareketinde ürün adı', { itemName: mv && mv.item_name });
+    info('RET-04d', 'iade hareketinde ürün adı', { itemName: mv && mv.item_name }); assert(mv.item_name, 'ürün adı hareket izinde yok');
   });
   await check('RET-05', 'eşzamanlı iadeler lot miktarını aşamaz', async () => {
     const a = await item(100); db.prepare('UPDATE stock_lots SET supplier_id=? WHERE id=?').run(sups[0], a.lot.id);
@@ -333,13 +339,14 @@ const { invariants } = require('./inv');
     const pr = await api('POST', '/production', { itemId: z.id, qty: 1 });
     info('IT-01b', 'silinmiş ürüne: sipariş / stok girişi / üretim', { siparis: so.status, giris: mv.status, uretim: pr.status });
   });
-  await check('IT-02', 'reçetede kullanılan ürün silinebiliyor mu (bilgi); mükerrer kod/barkod 4xx', async () => {
+  await check('IT-02', 'reçetede kullanılan ürün silinemez; mükerrer kod/barkod 409', async () => {
     const comp = await item(0); const fin = await ok('POST', '/items', { name: 'F', itemType: 'finished', bom: [{ componentItemId: comp.id, qtyPerUnit: 1 }] });
     const d = await api('DELETE', '/items/' + comp.id); info('IT-02b', 'reçete bileşeni ürünü sil', { status: d.status });
     const c1 = await api('POST', '/items', { name: 'dupA', code: 'DUPCODE', barcode: 'DUPBAR' });
     const c2 = await api('POST', '/items', { name: 'dupB', code: 'DUPCODE', barcode: 'DUPBAR' });
     info('IT-02c', 'mükerrer kod/barkod', { ilk: c1.status, ikinci: c2.status });
-    assert(c2.status < 500, 'mükerrer kayıt 500 verdi');
+    assert.equal(d.status, 409, 'aktif reçete bileşeni silinebildi');
+    assert.equal(c1.status, 201); assert.equal(c2.status, 409, 'mükerrer kod/barkod reddedilmedi');
   });
   await check('IT-03', 'BOM: dolaylı döngü (A→B→A) reddedilmeli; mükerrer/olmayan bileşen davranışı', async () => {
     const a = await item(0), b = await item(0);

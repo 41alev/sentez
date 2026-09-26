@@ -1198,7 +1198,9 @@ export default function AdminView() {
         ${table([
           { key: 'key', label: UI.getLang() === 'tr' ? 'Kalem' : 'Item', render: r => {
               const m = { accounts_payable: 'Satıcılar', accounts_receivable: 'Alıcılar', inventory: 'Stok',
-                purchase_vat: 'İndirilecek KDV', sales_revenue: 'Yurtiçi Satışlar', sales_vat: 'Hesaplanan KDV' };
+                purchase_vat: 'İndirilecek KDV', sales_revenue: 'Yurtiçi Satışlar', sales_vat: 'Hesaplanan KDV',
+                cost_of_goods_sold: 'Satış Maliyeti', cash: 'Kasa', bank: 'Banka', card: 'Kart Tahsilatları',
+                check: 'Çekler', payment_clearing: 'Diğer Ödeme/Tahsilat' };
               const label = UI.getLang() === 'tr' ? (m[r.key] || r.key) : r.key.replace(/_/g, ' ');
               return `${esc(label)} <span class="mono" style="color:var(--text-muted);font-size:11px">${esc(r.key)}</span>`;
             } },

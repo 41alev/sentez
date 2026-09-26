@@ -73,7 +73,7 @@ router.get('/suppliers/:id', (req, res, next) => {
 /** On-time delivery, rejection rate and NCR count — the numbers that decide who keeps the business. */
 function supplierPerformance(supplierId) {
   const receipts = db.prepare(`SELECT r.received_at, po.expected FROM po_receipts r
-    JOIN purchase_orders po ON po.id = r.po_id WHERE po.supplier_id = ?`).all(supplierId);
+    JOIN purchase_orders po ON po.id = r.po_id WHERE po.supplier_id = ? AND r.reversed_at IS NULL`).all(supplierId);
   const withExpected = receipts.filter(r => r.expected);
   const onTime = withExpected.filter(r => toLocalDateStr(r.received_at) <= r.expected).length;
 
@@ -347,6 +347,72 @@ router.get('/rfqs/:id/compare', (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+const awardRfqSchema = z.object({
+  supplierId: z.coerce.number().int().positive(),
+  warehouseId: z.coerce.number().int().positive().nullable().optional(),
+  notes: z.string().trim().max(2000).optional()
+}).strict();
+
+/** Award the whole RFQ to one supplier and atomically create its purchase order. */
+router.post('/rfqs/:id/award', requirePermission('purchase.approve'), validate(awardRfqSchema), (req, res, next) => {
+  try {
+    const result = db.txImmediate(() => {
+      const rfq = db.prepare('SELECT * FROM rfqs WHERE id=?').get(req.params.id);
+      if (!rfq) throw new AppError('Teklif talebi bulunamadı / RFQ not found', 404);
+      if (rfq.status !== 'open') throw new AppError('Yalnız açık teklif talebi sonuçlandırılabilir / Only an open RFQ can be awarded', 409);
+      const supplier = db.prepare('SELECT * FROM suppliers WHERE id=?').get(req.valid.supplierId);
+      if (!supplier) throw new AppError('Tedarikçi bulunamadı / Supplier not found', 404);
+      if (!supplier.is_active || !supplier.is_approved || supplier.anonymized_at) {
+        throw new AppError('Yalnız aktif ve onaylı tedarikçiye verilebilir / Supplier must be active and approved', 409);
+      }
+      if (req.valid.warehouseId && !db.prepare('SELECT id FROM warehouses WHERE id=? AND is_active=1').get(req.valid.warehouseId)) {
+        throw new AppError('Aktif depo bulunamadı / Active warehouse not found', 404);
+      }
+      const lines = db.prepare('SELECT * FROM rfq_lines WHERE rfq_id=? ORDER BY id').all(rfq.id);
+      if (!lines.length) throw new AppError('Teklif talebinde kalem yok / RFQ has no lines', 409);
+      const quotes = lines.map(line => {
+        const quote = db.prepare(`SELECT * FROM rfq_quotes WHERE rfq_id=? AND item_id=? AND supplier_id=?
+          ORDER BY id DESC LIMIT 1`).get(rfq.id, line.item_id, supplier.id);
+        if (!quote) throw new AppError('Seçilen tedarikçinin her kalem için teklifi gerekli / Supplier must quote every RFQ line', 409);
+        if (quote.valid_until && quote.valid_until < toLocalDateStr()) {
+          throw new AppError('Seçilen tekliflerden biri geçerliliğini yitirmiş / A selected quote has expired', 409);
+        }
+        return { line, quote };
+      });
+      const date = toLocalDateStr();
+      const totalBase = quotes.reduce((sum, x) => sum + x.line.qty * x.quote.unit_price * fxRate(x.quote.currency, date), 0);
+      const rule = approvalRequired(totalBase);
+      const poId = uuid();
+      const poNo = nextNumber('purchase_order', 'SA');
+      db.prepare(`INSERT INTO purchase_orders (id,po_no,supplier_id,supplier_name,request_id,rfq_id,date,
+        warehouse_id,currency,fx_rate,incoterm,status,approval_status,total_base,notes,created_by,created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+        poId, poNo, supplier.id, supplier.name, rfq.request_id || null, rfq.id, date,
+        req.valid.warehouseId || null, supplier.currency || 'TRY', fxRate(supplier.currency || 'TRY', date), supplier.incoterm || null,
+        rule ? 'pending_approval' : 'approved', rule ? 'pending' : 'not_required', totalBase,
+        req.valid.notes || `RFQ ${rfq.rfq_no}`, req.user.id, Date.now());
+      const addLine = db.prepare(`INSERT INTO po_items
+        (po_id,item_id,item_name,qty,price,currency,over_delivery_tolerance_pct,fx_rate) VALUES (?,?,?,?,?,?,0,?)`);
+      for (const { line, quote } of quotes) addLine.run(poId, line.item_id, line.item_name, line.qty,
+        quote.unit_price, quote.currency, fxRate(quote.currency, date));
+      db.prepare(`INSERT INTO po_revisions (po_id,revision,changed_by,changed_at,change_summary,snapshot)
+        VALUES (?,?,?,?,?,?)`).run(poId, 1, req.user.id, Date.now(), 'RFQ sonucu oluşturuldu / Created from RFQ',
+        JSON.stringify({ rfqId: rfq.id, supplierId: supplier.id }));
+      const changed = db.prepare("UPDATE rfqs SET status='awarded',awarded_supplier_id=? WHERE id=? AND status='open'")
+        .run(supplier.id, rfq.id).changes;
+      if (changed !== 1) throw new AppError('Teklif talebi eşzamanlı değiştirildi / RFQ changed concurrently', 409);
+      logAudit(req, 'auditRfqAward', { entityType: 'rfq', entityId: rfq.id,
+        oldValue: { status: 'open' }, newValue: { status: 'awarded', supplierId: supplier.id, poId }, detail: rfq.rfq_no });
+      logAudit(req, 'auditPOAdd', { entityType: 'purchase_order', entityId: poId,
+        newValue: { poNo, totalBase, supplier: supplier.name, rfqId: rfq.id }, detail: poNo });
+      return { poId, poNo, approvalRequired: !!rule };
+    });
+    const po = serializePO(db.prepare('SELECT * FROM purchase_orders WHERE id=?').get(result.poId));
+    dispatchEvent('purchase_order.created', { ...po, approvalRequired: result.approvalRequired }, companyIdOf(req));
+    res.status(201).json({ ...po, approvalRequired: result.approvalRequired });
+  } catch (e) { next(e); }
+});
+
 // ============================ PURCHASE ORDERS ============================
 function approvalRequired(totalBase) {
   const rule = db.prepare(`SELECT * FROM approval_rules WHERE doc_type='purchase_order' AND is_active=1
@@ -362,16 +428,19 @@ function serializePO(r) {
       price: x.price, currency: x.currency, fxRate: x.fx_rate, tolerancePct: x.over_delivery_tolerance_pct
     }));
   const wh = r.warehouse_id ? db.prepare('SELECT name FROM warehouses WHERE id = ?').get(r.warehouse_id) : null;
-  const receipts = db.prepare(`SELECT id, receipt_no, received_at, waybill_no FROM po_receipts WHERE po_id = ? ORDER BY received_at`).all(r.id);
+  const receipts = db.prepare(`SELECT id, receipt_no, received_at, waybill_no, reversed_at, reversal_reason
+    FROM po_receipts WHERE po_id = ? ORDER BY received_at`).all(r.id);
   const landed = db.prepare('SELECT * FROM landed_costs WHERE po_id = ?').all(r.id);
   return {
-    id: r.id, poNo: r.po_no, supplierId: r.supplier_id, supplier: r.supplier_name, date: r.date,
+    id: r.id, poNo: r.po_no, supplierId: r.supplier_id, supplier: r.supplier_name,
+    requestId: r.request_id, rfqId: r.rfq_id, date: r.date,
     expected: r.expected, warehouseId: r.warehouse_id, warehouse: wh ? wh.name : null,
     currency: r.currency, fxRate: r.fx_rate, incoterm: r.incoterm, status: r.status,
     approvalStatus: r.approval_status, approvedBy: r.approved_by, approvedAt: r.approved_at,
     revision: r.revision, totalBase: r.total_base, notes: r.notes, createdAt: r.created_at,
     items,
-    receipts: receipts.map(x => ({ id: x.id, receiptNo: x.receipt_no, receivedAt: x.received_at, waybillNo: x.waybill_no })),
+    receipts: receipts.map(x => ({ id: x.id, receiptNo: x.receipt_no, receivedAt: x.received_at,
+      waybillNo: x.waybill_no, reversedAt: x.reversed_at, reversalReason: x.reversal_reason })),
     landedCosts: landed.map(l => ({ id: l.id, costType: l.cost_type, amount: l.amount, currency: l.currency, method: l.allocation_method }))
   };
 }
@@ -532,6 +601,49 @@ router.post('/orders/:id/reject', requirePermission('purchase.approve'), (req, r
   } catch (e) { next(e); }
 });
 
+const poLifecycleSchema = z.object({
+  reason: z.string().trim().min(5).max(2000)
+}).strict();
+
+router.post('/orders/:id/cancel', requirePermission('purchase.approve'), validate(poLifecycleSchema), (req, res, next) => {
+  try {
+    db.txImmediate(() => {
+      const po = db.prepare('SELECT * FROM purchase_orders WHERE id=?').get(req.params.id);
+      if (!po) throw new AppError('Sipariş bulunamadı / Order not found', 404);
+      if (!['draft', 'pending_approval', 'approved', 'rejected'].includes(po.status)) {
+        throw new AppError('Bu durumdaki sipariş iptal edilemez / Order cannot be cancelled in this state', 409);
+      }
+      const received = db.prepare('SELECT COALESCE(SUM(received_qty),0) qty FROM po_items WHERE po_id=?').get(po.id).qty;
+      const activeReceipt = db.prepare('SELECT 1 FROM po_receipts WHERE po_id=? AND reversed_at IS NULL LIMIT 1').get(po.id);
+      if (received > 1e-9 || activeReceipt) throw new AppError('Teslim alınmış sipariş iptal edilemez; iade veya mutabakat gerekir / Received order requires return or reconciliation', 409);
+      db.prepare("UPDATE purchase_orders SET status='cancelled',notes=COALESCE(notes,'') || ? WHERE id=?")
+        .run(`\nİptal / Cancel: ${req.valid.reason}`, po.id);
+      logAudit(req, 'auditPOCancelled', { entityType: 'purchase_order', entityId: po.id,
+        oldValue: { status: po.status }, newValue: { status: 'cancelled', reason: req.valid.reason }, detail: po.po_no });
+    });
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+router.post('/orders/:id/close', requirePermission('purchase.approve'), validate(poLifecycleSchema), (req, res, next) => {
+  try {
+    db.txImmediate(() => {
+      const po = db.prepare('SELECT * FROM purchase_orders WHERE id=?').get(req.params.id);
+      if (!po) throw new AppError('Sipariş bulunamadı / Order not found', 404);
+      if (!['approved', 'partially_received', 'received'].includes(po.status)) {
+        throw new AppError('Bu durumdaki sipariş kapatılamaz / Order cannot be closed in this state', 409);
+      }
+      const received = db.prepare('SELECT COALESCE(SUM(received_qty),0) qty FROM po_items WHERE po_id=?').get(po.id).qty;
+      if (received <= 1e-9) throw new AppError('Teslimatsız sipariş kapatmak yerine iptal edin / Cancel an order with no receipts', 409);
+      db.prepare("UPDATE purchase_orders SET status='closed',notes=COALESCE(notes,'') || ? WHERE id=?")
+        .run(`\nKapatma / Close: ${req.valid.reason}`, po.id);
+      logAudit(req, 'auditPOClosed', { entityType: 'purchase_order', entityId: po.id,
+        oldValue: { status: po.status }, newValue: { status: 'closed', reason: req.valid.reason }, detail: po.po_no });
+    });
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
 // ---------------- PARTIAL RECEIPTS ----------------
 const receiptSchema = z.object({
   waybillNo: z.string().max(1000).optional(),
@@ -630,6 +742,7 @@ router.get('/receipts/:id', (req, res, next) => {
     res.json({
       id: r.id, receiptNo: r.receipt_no, poId: r.po_id, poNo: r.po_no, supplier: r.supplier_name,
       receivedAt: r.received_at, waybillNo: r.waybill_no, customsDeclNo: r.customs_decl_no, notes: r.notes,
+      reversedAt: r.reversed_at, reversedBy: r.reversed_by, reversalReason: r.reversal_reason,
       lines: lines.map(l => ({
         id: l.id, itemId: l.item_id, itemName: l.item_name, qty: l.qty, lotNo: l.lot_no, lotId: l.lot_id,
         expiryDate: l.expiry_date, unitCost: l.unit_cost, lotStatus: l.lot_status, quarantined: !!l.to_quarantine
@@ -637,6 +750,72 @@ router.get('/receipts/:id', (req, res, next) => {
       landedCosts: db.prepare('SELECT * FROM landed_costs WHERE receipt_id = ?').all(r.id)
         .map(l => ({ id: l.id, costType: l.cost_type, amount: l.amount, currency: l.currency, method: l.allocation_method }))
     });
+  } catch (e) { next(e); }
+});
+
+const receiptReversalSchema = z.object({
+  reason: z.string().trim().min(5).max(1000),
+  requestKey: z.string().trim().min(8).max(100).optional()
+}).strict();
+
+router.post('/receipts/:id/reverse', requirePermission('purchase.approve'), validate(receiptReversalSchema), (req, res, next) => {
+  try {
+    const result = db.txImmediate(() => {
+      const receipt = db.prepare('SELECT * FROM po_receipts WHERE id=?').get(req.params.id);
+      if (!receipt) throw new AppError('İrsaliye bulunamadı / Receipt not found', 404);
+      if (receipt.source_type && receipt.source_type !== 'purchase') {
+        throw new AppError('Yalnızca satın alma teslimatı ters çevrilebilir / Only purchase receipts can be reversed', 409);
+      }
+      if (receipt.reversed_at) return { ok: true, alreadyReversed: true, receiptId: receipt.id };
+      if (req.valid.requestKey) {
+        const replay = db.prepare('SELECT id FROM po_receipts WHERE reversal_request_key=?').get(req.valid.requestKey);
+        if (replay) {
+          if (replay.id !== receipt.id) throw new AppError('İstek anahtarı başka bir ters kayıtta kullanılmış / Request key already used', 409);
+          return { ok: true, alreadyReversed: true, receiptId: receipt.id };
+        }
+      }
+      const allocated = db.prepare(`SELECT COUNT(*) count FROM supplier_invoice_allocations a
+        JOIN po_receipt_lines rl ON rl.id=a.receipt_line_id WHERE rl.receipt_id=?`).get(receipt.id).count;
+      if (allocated) throw new AppError('Faturalanmış teslimat ters çevrilemez; önce mali mutabakat gerekir / Invoiced receipt requires financial reconciliation', 409);
+      if (db.prepare('SELECT 1 FROM landed_costs WHERE receipt_id=? LIMIT 1').get(receipt.id)) {
+        throw new AppError('Ek maliyet uygulanmış teslimat ters çevrilemez; önce mali mutabakat gerekir / Receipt with landed cost requires reconciliation', 409);
+      }
+      if (db.prepare("SELECT 1 FROM inspections WHERE receipt_id=? AND result!='pending' LIMIT 1").get(receipt.id)) {
+        throw new AppError('Kalite kararı verilmiş teslimat ters çevrilemez / Inspected receipt cannot be reversed', 409);
+      }
+      const lines = db.prepare('SELECT * FROM po_receipt_lines WHERE receipt_id=? ORDER BY id').all(receipt.id);
+      if (!lines.length) throw new AppError('İrsaliye satırı bulunamadı / Receipt has no lines', 409);
+      for (const line of lines) {
+        const lot = db.prepare('SELECT * FROM stock_lots WHERE id=?').get(line.lot_id);
+        const children = db.prepare('SELECT COUNT(*) count FROM stock_lots WHERE parent_lot_id=?').get(line.lot_id).count;
+        const movementCount = db.prepare('SELECT COUNT(*) count FROM movements WHERE lot_id=?').get(line.lot_id).count;
+        if (!lot || Math.abs(lot.qty - line.qty) > 1e-9 || children || movementCount !== 1) {
+          throw new AppError('Teslimat stoku kullanılmış, bölünmüş veya değiştirilmiş; otomatik ters kayıt güvenli değil / Receipt stock changed; reconciliation required', 409);
+        }
+      }
+      for (const line of lines) {
+        const lot = db.prepare('SELECT * FROM stock_lots WHERE id=?').get(line.lot_id);
+        db.prepare("UPDATE stock_lots SET qty=0,status='consumed',notes=COALESCE(notes,'') || ? WHERE id=?")
+          .run(` | Ters kayıt: ${req.valid.reason}`, lot.id);
+        stock.recordMovement({ itemId: line.item_id, itemName: line.item_name, lotId: lot.id, lotNo: lot.lot_no,
+          warehouseId: lot.warehouse_id, type: 'adjust', qty: -line.qty, unitCost: lot.unit_cost,
+          fromStatus: lot.status, toStatus: 'consumed', note: req.valid.reason,
+          refType: 'purchase_receipt_reversal', refId: receipt.id, userId: req.user.id });
+        db.prepare('UPDATE po_items SET received_qty=MAX(0,received_qty-?) WHERE id=?').run(line.qty, line.po_item_id);
+        stock.recalcItemQty(line.item_id); stock.recalcAverageCost(line.item_id);
+      }
+      const received = db.prepare('SELECT COALESCE(SUM(received_qty),0) qty FROM po_items WHERE po_id=?').get(receipt.po_id).qty;
+      const remaining = db.prepare('SELECT COALESCE(SUM(MAX(0,qty-received_qty)),0) qty FROM po_items WHERE po_id=?').get(receipt.po_id).qty;
+      const nextStatus = received <= 1e-9 ? 'approved' : (remaining <= 1e-9 ? 'received' : 'partially_received');
+      db.prepare('UPDATE purchase_orders SET status=? WHERE id=?').run(nextStatus, receipt.po_id);
+      db.prepare(`UPDATE po_receipts SET reversed_at=?,reversed_by=?,reversal_reason=?,reversal_request_key=? WHERE id=? AND reversed_at IS NULL`)
+        .run(Date.now(), req.user.id, req.valid.reason, req.valid.requestKey || null, receipt.id);
+      logAudit(req, 'auditPOReceiptReversed', { entityType: 'po_receipt', entityId: receipt.id,
+        oldValue: { poId: receipt.po_id }, newValue: { status: 'reversed', poStatus: nextStatus },
+        detail: `${receipt.receipt_no}: ${req.valid.reason}` });
+      return { ok: true, receiptId: receipt.id, poStatus: nextStatus };
+    });
+    res.status(result.alreadyReversed ? 200 : 201).json(result);
   } catch (e) { next(e); }
 });
 
@@ -653,6 +832,7 @@ router.post('/receipts/:id/landed-costs', requirePermission('purchase.write'), v
   try {
     const receipt = db.prepare('SELECT * FROM po_receipts WHERE id = ?').get(req.params.id);
     if (!receipt) throw new AppError('İrsaliye bulunamadı / Receipt not found', 404);
+    if (receipt.reversed_at) throw new AppError('Ters çevrilmiş irsaliyeye ek maliyet eklenemez / Reversed receipt cannot receive landed costs', 409);
     const b = req.body;
     const result = db.txImmediate(() => {
       db.prepare(`INSERT INTO landed_costs (receipt_id,po_id,cost_type,amount,currency,fx_rate,allocation_method,notes,created_at)
@@ -702,7 +882,7 @@ router.get('/invoices/receivable-lines', requirePermission('purchase.write'),
         JOIN po_receipts pr ON pr.id=rl.receipt_id
         JOIN po_items pi ON pi.id=rl.po_item_id AND pi.po_id=pr.po_id
         LEFT JOIN items i ON i.id=rl.item_id
-        WHERE pr.po_id=? ORDER BY pr.received_at, rl.id`).all(poId);
+        WHERE pr.po_id=? AND pr.reversed_at IS NULL ORDER BY pr.received_at, rl.id`).all(poId);
       res.json({ legacy, lines: lines.map(line => ({
         receiptLineId: line.receipt_line_id, receiptId: line.receipt_id,
         receiptNo: line.receipt_no, itemName: line.item_name,
@@ -728,7 +908,7 @@ router.post('/invoices', requirePermission('purchase.write'), validate(invoiceSc
         throw new AppError('Bu tedarikçinin fatura numarası zaten kayıtlı / Duplicate supplier invoice number', 409);
       }
       if (b.receiptId) {
-        const receipt = db.prepare('SELECT po_id FROM po_receipts WHERE id=?').get(b.receiptId);
+        const receipt = db.prepare('SELECT po_id FROM po_receipts WHERE id=? AND reversed_at IS NULL').get(b.receiptId);
         if (!receipt || receipt.po_id !== po.id) throw new AppError('İrsaliye bu siparişe ait değil / Receipt does not belong to order', 422);
       }
       const lines = db.prepare(`SELECT rl.id, rl.qty, rl.receipt_id, pi.price, pi.currency,
@@ -739,7 +919,7 @@ router.post('/invoices', requirePermission('purchase.write'), validate(invoiceSc
         JOIN po_receipts pr ON pr.id=rl.receipt_id
         JOIN po_items pi ON pi.id=rl.po_item_id AND pi.po_id=pr.po_id
         LEFT JOIN items i ON i.id=rl.item_id
-        WHERE pr.po_id=? AND (? IS NULL OR pr.id=?)
+        WHERE pr.po_id=? AND pr.reversed_at IS NULL AND (? IS NULL OR pr.id=?)
         ORDER BY pr.received_at, rl.id`).all(po.id, b.receiptId || null, b.receiptId || null);
       if (lines.some(line => !(line.fx_rate > 0))) {
         throw new AppError('Teslim satırında kayıtlı kur yok / Receipt line has no historical FX rate', 409);
@@ -896,7 +1076,7 @@ router.post('/invoices/:id/reconcile', requirePermission('purchase.approve'), va
       JOIN po_receipts pr ON pr.id=rl.receipt_id
       JOIN po_items pi ON pi.id=rl.po_item_id AND pi.po_id=pr.po_id
       LEFT JOIN items i ON i.id=rl.item_id
-      WHERE pr.po_id=? AND (? IS NULL OR pr.id=?)`).all(inv.po_id, inv.receipt_id || null, inv.receipt_id || null);
+      WHERE pr.po_id=? AND pr.reversed_at IS NULL AND (? IS NULL OR pr.id=?)`).all(inv.po_id, inv.receipt_id || null, inv.receipt_id || null);
     const byId = new Map(lines.map(line => [line.id, line]));
     const seen = new Set();
     const chosen = b.lines.map(requested => {
@@ -989,10 +1169,20 @@ const supplierPaymentSchema = z.object({
   note: z.string().trim().max(1000).optional(),
   requestKey: z.string().trim().min(8).max(100).optional()
 }).strict();
+const supplierPaymentReversalSchema = z.object({
+  reason: z.string().trim().min(3).max(1000),
+  reversedOn: z.string().refine(isValidLocalDate, 'Geçerli takvim tarihi gerekli / Valid calendar date required').optional(),
+  requestKey: z.string().trim().min(8).max(100).optional()
+}).strict();
 
 router.post('/invoices/:id/payments', requirePermission('purchase.approve'), validate(supplierPaymentSchema), (req, res) => {
   const result = payments.recordSupplierPayment(req, req.params.id, req.valid);
   res.status(result.paymentId && !result.duplicate ? 201 : 200).json(result);
+});
+
+router.post('/invoices/:id/payments/:paymentId/reverse', requirePermission('purchase.approve'), validate(supplierPaymentReversalSchema), (req, res) => {
+  const result = payments.reverseSupplierPayment(req, req.params.id, req.params.paymentId, req.valid);
+  res.status(result.duplicate ? 200 : 201).json(result);
 });
 
 // ---------------- SUPPLIER RETURN ----------------
@@ -1004,13 +1194,31 @@ const returnSchema = z.object({
   ncrId: z.string().nullable().optional()
 });
 
+router.get('/returns', validateQuery(pageQuery.extend({ status: z.enum(['open', 'shipped', 'credited', 'closed']).optional() })), (req, res) => {
+  const { page, pageSize, status } = req.validatedQuery;
+  const where = status ? 'WHERE sr.status=?' : '';
+  const params = status ? [status] : [];
+  const result = paginate(`SELECT sr.*,s.name supplier_name,i.name item_name,sl.lot_no
+    FROM supplier_returns sr LEFT JOIN suppliers s ON s.id=sr.supplier_id
+    LEFT JOIN items i ON i.id=sr.item_id LEFT JOIN stock_lots sl ON sl.id=sr.lot_id
+    ${where} ORDER BY sr.created_at DESC,sr.id`, params, page, pageSize);
+  res.json({ ...result, data: result.data.map(r => ({ id: r.id, returnNo: r.return_no,
+    supplierId: r.supplier_id, supplier: r.supplier_name, lotId: r.lot_id, lotNo: r.lot_no,
+    itemId: r.item_id, itemName: r.item_name, qty: r.qty, reason: r.reason, ncrId: r.ncr_id,
+    status: r.status, createdAt: r.created_at })) });
+});
+
 router.post('/returns', requirePermission('purchase.write'), validate(returnSchema), (req, res, next) => {
   try {
     const b = req.body;
     const lot = db.prepare('SELECT * FROM stock_lots WHERE id = ?').get(b.lotId);
     if (!lot) throw new AppError('Parti bulunamadı / Lot not found', 404);
+    if (!db.prepare('SELECT id FROM suppliers WHERE id=? AND is_active=1').get(b.supplierId)) {
+      throw new AppError('Aktif tedarikçi bulunamadı / Active supplier not found', 404);
+    }
     if (lot.qty < b.qty) throw new AppError('İade miktarı parti miktarından fazla / Return qty exceeds lot qty');
-    if (lot.supplier_id != null && lot.supplier_id !== b.supplierId) throw new AppError('Lot bu tedarikçiye ait değil / Lot supplier mismatch', 422);
+    if (lot.supplier_id == null || lot.supplier_id !== b.supplierId) throw new AppError('Lot bu tedarikçiye ait değil / Lot supplier mismatch', 422);
+    const itemName = db.prepare('SELECT name FROM items WHERE id=?').get(lot.item_id)?.name || null;
 
     const id = db.txImmediate(() => {
       const retId = uuid();
@@ -1020,7 +1228,7 @@ router.post('/returns', requirePermission('purchase.write'), validate(returnSche
         b.reason || '', b.ncrId || null, Date.now(), req.user.id);
 
       stock.consume([{ lotId: lot.id, qty: b.qty }], {
-        itemId: lot.item_id, itemName: null, warehouseId: lot.warehouse_id,
+        itemId: lot.item_id, itemName, warehouseId: lot.warehouse_id,
         allowedStatuses: ['available', 'quarantine', 'blocked', 'rejected'],
         refType: 'supplier_return', refId: retId, note: `Tedarikçi iadesi ${no}`, userId: req.user.id
       });
@@ -1033,6 +1241,26 @@ router.post('/returns', requirePermission('purchase.write'), validate(returnSche
     });
 
     res.status(201).json({ id });
+  } catch (e) { next(e); }
+});
+
+const returnStatusSchema = z.object({ status: z.enum(['shipped', 'credited', 'closed']),
+  note: z.string().trim().max(2000).optional() }).strict();
+router.post('/returns/:id/status', requirePermission('purchase.approve'), validate(returnStatusSchema), (req, res, next) => {
+  try {
+    const transitions = { open: 'shipped', shipped: 'credited', credited: 'closed' };
+    db.txImmediate(() => {
+      const row = db.prepare('SELECT * FROM supplier_returns WHERE id=?').get(req.params.id);
+      if (!row) throw new AppError('Tedarikçi iadesi bulunamadı / Supplier return not found', 404);
+      if (transitions[row.status] !== req.valid.status) {
+        throw new AppError('Geçersiz iade durum geçişi / Invalid return status transition', 409);
+      }
+      db.prepare('UPDATE supplier_returns SET status=?,reason=reason || ? WHERE id=?')
+        .run(req.valid.status, req.valid.note ? ` | ${req.valid.note}` : '', row.id);
+      logAudit(req, 'auditSupplierReturnStatus', { entityType: 'supplier_return', entityId: row.id,
+        oldValue: { status: row.status }, newValue: { status: req.valid.status, note: req.valid.note || null }, detail: row.return_no });
+    });
+    res.json({ ok: true, status: req.valid.status });
   } catch (e) { next(e); }
 });
 

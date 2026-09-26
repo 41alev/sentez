@@ -332,6 +332,24 @@ router.delete('/:id', requirePermission('stock.delete'), (req, res, next) => {
     if (onHand > 0) {
       throw new AppError(`Stokta ${onHand} ${existing.unit} var, önce stoğu sıfırlayın / Item still has stock`, 400);
     }
+    const activeBom = db.prepare(`SELECT i.id, i.name FROM item_bom b
+      JOIN items i ON i.id=b.item_id
+      WHERE b.component_item_id=? AND i.deleted_at IS NULL AND i.is_active=1 LIMIT 1`).get(existing.id);
+    if (activeBom) {
+      throw new AppError(`Ürün aktif reçetede kullanılıyor: ${activeBom.name} / Item is used by an active BOM`, 409);
+    }
+    const openPurchase = db.prepare(`SELECT po.po_no FROM po_items pi
+      JOIN purchase_orders po ON po.id=pi.po_id
+      WHERE pi.item_id=? AND po.status IN ('draft','pending_approval','approved','partially_received') LIMIT 1`).get(existing.id);
+    if (openPurchase) {
+      throw new AppError(`Ürün açık satın alma siparişinde kullanılıyor: ${openPurchase.po_no} / Item is used by an open purchase order`, 409);
+    }
+    const openSale = db.prepare(`SELECT so.so_no FROM sales_order_lines sol
+      JOIN sales_orders so ON so.id=sol.so_id
+      WHERE sol.item_id=? AND so.status IN ('draft','open','partially_shipped') LIMIT 1`).get(existing.id);
+    if (openSale) {
+      throw new AppError(`Ürün açık satış siparişinde kullanılıyor: ${openSale.so_no} / Item is used by an open sales order`, 409);
+    }
     db.prepare('UPDATE items SET deleted_at = ?, is_active = 0 WHERE id = ?').run(Date.now(), existing.id);
     logAudit(req, 'auditItemDelete', { entityType: 'item', entityId: existing.id, oldValue: { name: existing.name }, detail: existing.name });
     res.status(204).end();

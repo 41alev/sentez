@@ -249,7 +249,9 @@ const assert = require('node:assert/strict');
     const bad = new FormData(); bad.append('logo', new Blob(['x'], { type: 'text/html' }), 'b.html');
     assert.equal((await fetch(state.base + '/api/templates/branding/logo', { method: 'POST', headers: { Authorization: 'Bearer ' + state.tokens.admin }, body: bad })).status, 415);
     const svg = new FormData(); svg.append('logo', new Blob(['<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'], { type: 'image/svg+xml' }), 's.svg');
-    info('TP-02b', 'script içeren SVG logo', { status: (await fetch(state.base + '/api/templates/branding/logo', { method: 'POST', headers: { Authorization: 'Bearer ' + state.tokens.admin }, body: svg })).status });
+    const svgStatus = (await fetch(state.base + '/api/templates/branding/logo', { method: 'POST', headers: { Authorization: 'Bearer ' + state.tokens.admin }, body: svg })).status;
+    info('TP-02b', 'script içeren SVG logo', { status: svgStatus });
+    assert.equal(svgStatus, 415, 'aktif içerik taşıyabilen SVG logo kabul edildi');
     assert(wrongFieldStatus < 500, `beklenmeyen multipart alanı ${wrongFieldStatus} döndü (400 beklenirdi)`);
   });
   await check('TP-03', 'şablon: kısmi güncelleme diğer alanları korur; geçersiz değerler reddedilir; sıfırlama çalışır', async () => {

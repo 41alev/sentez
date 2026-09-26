@@ -22,7 +22,8 @@ router.get('/mappings', MANAGER, (req, res) => {
 
 const mappingSchema = z.object({
   mappings: z.array(z.object({
-    key: z.enum(['sales_revenue', 'sales_vat', 'accounts_receivable', 'purchase_vat', 'accounts_payable', 'inventory']),
+    key: z.enum(['sales_revenue', 'sales_vat', 'accounts_receivable', 'purchase_vat', 'accounts_payable', 'inventory',
+      'cost_of_goods_sold', 'cash', 'bank', 'card', 'check', 'payment_clearing']),
     accountCode: z.string().trim().min(1).max(50),
     accountName: z.string().trim().min(1).max(200)
   })).min(1)
