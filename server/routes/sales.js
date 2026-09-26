@@ -12,6 +12,7 @@ const { prepareInvoiceAllocation, saveInvoiceAllocation } = require('../services
 const payments = require('../services/invoice-payments');
 const kvkk = require('../lib/kvkk');
 const { isValidLocalDate } = require('../lib/dates');
+const { toMinor, fromMinor, multiplyMinor } = require('../lib/money');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -424,34 +425,38 @@ router.post('/invoices', WRITE, validate(invoiceSchema), (req, res) => {
     const prepared = prepareInvoiceAllocation(b, defaultVat);
     const lines = prepared.lines;
 
-    let subtotal = 0, vatTotal = 0, discountTotal = 0;
+    let subtotalMinor = 0, vatTotalMinor = 0, discountTotalMinor = 0;
     const computed = (lines || []).map((l, i) => {
-      const gross = Number(l.qty) * Number(l.unitPrice);
-      const discountAmount = Number((gross * (Number(l.discountRate || 0) / 100)).toFixed(2));
-      const lineTotal = Number((gross - discountAmount).toFixed(2));
+      const grossMinor = toMinor(Number(l.qty) * Number(l.unitPrice));
+      const discountMinor = multiplyMinor(grossMinor, Number(l.discountRate || 0) / 100);
+      const lineMinor = grossMinor - discountMinor;
       const vatRate = l.vatRate ?? defaultVat;
-      const vatAmount = Number((lineTotal * vatRate / 100).toFixed(2));
-      subtotal += lineTotal; vatTotal += vatAmount; discountTotal += discountAmount;
-      return { ...l, lineNo: i + 1, discountAmount, lineTotal, vatRate, vatAmount };
+      const vatMinor = multiplyMinor(lineMinor, Number(vatRate) / 100);
+      subtotalMinor += lineMinor; vatTotalMinor += vatMinor; discountTotalMinor += discountMinor;
+      return { ...l, lineNo: i + 1, discountAmount: fromMinor(discountMinor),
+        lineTotal: fromMinor(lineMinor), vatRate, vatAmount: fromMinor(vatMinor) };
     });
 
     // Kalem yoksa geriye dönük uyumluluk için düz tutar kabul edilir.
-    const amount = computed.length ? Number((subtotal + vatTotal).toFixed(2)) : Number(b.amount || 0);
+    const amountMinor = computed.length ? subtotalMinor + vatTotalMinor : toMinor(b.amount || 0);
+    const amount = fromMinor(amountMinor);
     if (!computed.length && !b.amount) throw new AppError('Fatura tutarı veya kalemleri gerekli / Amount or lines required', 400);
     if (b.invoiceType === 'iade') {
-      const original = db.prepare('SELECT amount FROM customer_invoices WHERE id=?').get(b.originalInvoiceId);
-      const returned = db.prepare("SELECT COALESCE(SUM(amount),0) amount FROM customer_invoices WHERE original_invoice_id=? AND invoice_type='iade' AND status!='cancelled'").get(b.originalInvoiceId).amount;
-      if (returned + amount > original.amount + 1e-9) throw new AppError('İade tutarı kalan fatura tutarını aşıyor / Return exceeds remaining invoice amount', 409);
+      const original = db.prepare('SELECT amount_minor FROM customer_invoices WHERE id=?').get(b.originalInvoiceId);
+      const returnedMinor = db.prepare("SELECT COALESCE(SUM(amount_minor),0) amount FROM customer_invoices WHERE original_invoice_id=? AND invoice_type='iade' AND status!='cancelled'").get(b.originalInvoiceId).amount;
+      if (returnedMinor + amountMinor > original.amount_minor) throw new AppError('İade tutarı kalan fatura tutarını aşıyor / Return exceeds remaining invoice amount', 409);
     }
 
     const id = uuid();
     const invoiceNo = nextNumber('customer_invoice', 'FAT');
     db.prepare(`INSERT INTO customer_invoices (id,invoice_no,customer_id,so_id,shipment_id,invoice_date,due_date,
-        amount,currency,fx_rate,status,invoice_type,original_invoice_id,subtotal,vat_total,discount_total,created_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,'issued',?,?,?,?,?,?)`)
+        amount,amount_minor,currency,fx_rate,status,invoice_type,original_invoice_id,subtotal,subtotal_minor,
+        vat_total,vat_total_minor,discount_total,discount_total_minor,created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,'issued',?,?,?,?,?,?,?,?,?)`)
       .run(id, invoiceNo, customer.id, prepared.soId, b.shipmentId || null, date, due.toISOString().slice(0, 10),
-           amount, b.currency, rate, b.invoiceType || 'satis', b.originalInvoiceId || null,
-           Number(subtotal.toFixed(2)), Number(vatTotal.toFixed(2)), Number(discountTotal.toFixed(2)), Date.now());
+           amount, amountMinor, b.currency, rate, b.invoiceType || 'satis', b.originalInvoiceId || null,
+           fromMinor(subtotalMinor), subtotalMinor, fromMinor(vatTotalMinor), vatTotalMinor,
+           fromMinor(discountTotalMinor), discountTotalMinor, Date.now());
 
     const insLine = db.prepare(`INSERT INTO customer_invoice_lines
       (invoice_id,item_id,item_name,item_code,qty,unit,unit_price,discount_rate,discount_amount,vat_rate,vat_amount,line_total,line_no)

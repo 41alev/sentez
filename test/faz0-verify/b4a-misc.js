@@ -93,10 +93,16 @@ const assert = require('node:assert/strict');
     statusIn(await upload('x.exe', 'application/x-msdownload', 'MZ', { title: 'exe' }), [415]);
     statusIn(await upload('big.txt', 'text/plain', Buffer.alloc(21 * 1024 * 1024, 65), { title: 'big' }), [413]);
   });
-  await check('DOC-02', 'içerik doğrulaması: MIME beyanı sahte (png diye html) — kabul mü (bilgi); indirme başlıkları güvenli mi', async () => {
+  await check('DOC-02', 'içerik doğrulaması: PNG diye bildirilen HTML reddedilir; indirme eki ve nosniff başlıkları güvenlidir', async () => {
     const r = await upload('evil.png', 'image/png', '<html><script>alert(1)</script></html>', { title: 'spoof' });
     info('DOC-02b', "png diye yüklenen HTML", { status: r.status });
-    if (r.status === 201) { const dl = await fetch(state.base + r.data.downloadUrl, { headers: { Authorization: 'Bearer ' + state.tokens.admin } }); info('DOC-02c', 'indirme', { ct: dl.headers.get('content-type'), cd: dl.headers.get('content-disposition'), nosniff: dl.headers.get('x-content-type-options') }); }
+    assert.equal(r.status, 415, 'sahte PNG içeriği kabul edildi');
+    const good = await upload('safe.txt', 'text/plain', 'güvenli içerik', { title: 'download headers' }); statusIn(good, [201]);
+    const dl = await fetch(state.base + good.data.downloadUrl, { headers: { Authorization: 'Bearer ' + state.tokens.admin } });
+    const disposition = dl.headers.get('content-disposition') || '';
+    info('DOC-02c', 'indirme', { ct: dl.headers.get('content-type'), cd: disposition, nosniff: dl.headers.get('x-content-type-options') });
+    assert(disposition.startsWith('attachment;'), 'dosya tarayıcı içinde açılabilecek inline yanıtla dönüyor');
+    assert.equal(dl.headers.get('x-content-type-options'), 'nosniff');
   });
   await check('DOC-03', 'revizyon zinciri: aynı belgeden iki kez revize edilince tek güncel sürüm kalmalı', async () => {
     const d = (await upload('r.txt', 'text/plain', 'v1', { title: 'Rev', docNo: 'REV-1', isControlled: 'true' })).data;
@@ -220,10 +226,19 @@ const assert = require('node:assert/strict');
     await ok('POST', '/notifications/scan', {}); const n2 = db.prepare('SELECT COUNT(*) c FROM notifications').get().c;
     info('NT-01b', 'tarama sonuçları', { ilk: n1, ikinci: n2 });
     assert.equal(n2, n1, 'ikinci tarama tekrar bildirim üretti');
-    const before = (await ok('GET', '/notifications')); const unread = (before.unread ?? (before.data || before).filter?.(x => !x.isRead).length);
+    const adminBefore = await ok('GET', '/notifications');
     await api('POST', '/notifications/read-all', {}, 'viewer');
-    const after = (await ok('GET', '/notifications')); const unread2 = (after.unread ?? (after.data || after).filter?.(x => !x.isRead).length);
-    info('NT-01c', 'viewer "tümünü oku" sonrası admin okunmamış sayısı', { once: unread, sonra: unread2 });
+    const adminAfter = await ok('GET', '/notifications');
+    const viewerAfter = await api('GET', '/notifications', undefined, 'viewer');
+    info('NT-01c', 'viewer "tümünü oku" sonrası kullanıcı bazlı sayılar', { adminOnce: adminBefore.unreadCount, adminAfter: adminAfter.unreadCount, viewerAfter: viewerAfter.data.unreadCount });
+    assert.equal(adminAfter.unreadCount, adminBefore.unreadCount, 'viewer okuması admin bildirimlerini okundu yaptı');
+    assert.equal(viewerAfter.data.unreadCount, 0, 'viewer tümünü oku sonrası okunmamış bildirim kaldı');
+    const first = (adminAfter.data || [])[0];
+    if (first) {
+      await ok('POST', '/notifications/' + first.id + '/read', {});
+      assert.equal((await ok('GET', '/notifications')).data.find(n => n.id === first.id).isRead, true);
+    }
+    assert.equal((await api('POST', '/notifications/not-found/read', {})).status, 404);
   });
 
   // ------------------------------------------------ ŞABLON / FİRMA KİMLİĞİ

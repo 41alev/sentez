@@ -20,6 +20,7 @@
  */
 const db = require('../db');
 const { AppError } = require('../lib/core');
+const { toMinor, fromMinor, multiplyMinor } = require('../lib/money');
 
 function getMappings(companyId = 1) {
   const rows = db.prepare('SELECT mapping_key, account_code, account_name FROM account_code_mappings WHERE company_id = ?')
@@ -67,9 +68,11 @@ function generateJournalEntries({ from, to, companyId = 1 }) {
   sales.forEach(inv => {
     const isReturn = inv.invoice_type === 'iade';
     const rate = inv.fx_rate || 1;
-    const grossBase = Math.round(inv.amount * rate * 100) / 100;
-    const vatBase = Math.round(inv.vat_total * rate * 100) / 100;
-    const revenueBase = Math.round((grossBase - vatBase) * 100) / 100;
+    const grossBaseMinor = multiplyMinor(inv.amount_minor, rate);
+    const vatBaseMinor = multiplyMinor(inv.vat_total_minor, rate);
+    const grossBase = fromMinor(grossBaseMinor);
+    const vatBase = fromMinor(vatBaseMinor);
+    const revenueBase = fromMinor(grossBaseMinor - vatBaseMinor);
     const desc = `${isReturn ? 'Satış iade faturası' : 'Satış faturası'} ${inv.invoice_no} — ${inv.customer_name || ''}`;
     rows.push({ date: inv.invoice_date, docNo: inv.invoice_no, accountCode: map.accounts_receivable.code,
       accountName: map.accounts_receivable.name, description: desc, debit: isReturn ? 0 : grossBase, credit: isReturn ? grossBase : 0,
@@ -85,8 +88,8 @@ function generateJournalEntries({ from, to, companyId = 1 }) {
     // Inventory leaves the books when a real shipment exists. Stand-alone
     // service invoices have no stock cost and therefore no COGS entry.
     if (!isReturn && inv.shipment_id) {
-      const costBase = Math.round((db.prepare(`SELECT COALESCE(SUM(qty*unit_cost),0) value
-        FROM shipment_items WHERE shipment_id=?`).get(inv.shipment_id).value || 0) * 100) / 100;
+      const costBase = fromMinor(toMinor(db.prepare(`SELECT COALESCE(SUM(qty*unit_cost),0) value
+        FROM shipment_items WHERE shipment_id=?`).get(inv.shipment_id).value || 0));
       if (costBase > 0) {
         rows.push({ date: inv.invoice_date, docNo: inv.invoice_no, accountCode: map.cost_of_goods_sold.code,
           accountName: map.cost_of_goods_sold.name, description: desc, debit: costBase, credit: 0,
@@ -107,7 +110,8 @@ function generateJournalEntries({ from, to, companyId = 1 }) {
 
   purchases.forEach(inv => {
     const rate = inv.fx_rate || 1;
-    const netBase = Math.round(inv.amount * rate * 100) / 100;
+    const netBaseMinor = multiplyMinor(inv.amount_minor, rate);
+    const netBase = fromMinor(netBaseMinor);
     const snapshots = inv.allocation_state === 'recorded'
       ? db.prepare(`SELECT qty,unit_price,fx_rate,vat_rate FROM supplier_invoice_allocations
         WHERE invoice_id=?`).all(inv.id) : [];
@@ -116,10 +120,11 @@ function generateJournalEntries({ from, to, companyId = 1 }) {
       ? snapshots.reduce((sum, line) => sum + line.qty * line.unit_price * line.fx_rate * line.vat_rate, 0) / snapshotBase
       : purchaseVatRate(inv.po_id);
     // Mutabık/kayıtlı faturada tedarikçi belgesindeki KDV tutarı otoriterdir.
-    const vatBase = inv.vat_amount != null
-      ? Math.round(inv.vat_amount * rate * 100) / 100
-      : Math.round(netBase * (vatRate / 100) * 100) / 100;
-    const grossBase = Math.round((netBase + vatBase) * 100) / 100;
+    const vatBaseMinor = inv.vat_amount_minor != null
+      ? multiplyMinor(inv.vat_amount_minor, rate)
+      : toMinor(netBase * (vatRate / 100));
+    const vatBase = fromMinor(vatBaseMinor);
+    const grossBase = fromMinor(netBaseMinor + vatBaseMinor);
     const desc = `Alış faturası ${inv.invoice_no} — ${inv.supplier_name || ''}`;
     rows.push({ date: inv.invoice_date, docNo: inv.invoice_no, accountCode: map.inventory.code,
       accountName: map.inventory.name, description: desc, debit: netBase, credit: 0,
@@ -135,14 +140,14 @@ function generateJournalEntries({ from, to, companyId = 1 }) {
   });
 
   const paymentAccount = method => map[(['cash', 'bank', 'card', 'check'].includes(method) ? method : 'payment_clearing')];
-  const customerPayments = db.prepare(`SELECT p.*, ci.invoice_no, c.name customer_name
+  const customerPayments = db.prepare(`SELECT p.*, ci.invoice_no, ci.fx_rate, c.name customer_name
     FROM customer_invoice_payments p
     JOIN customer_invoices ci ON ci.id=p.invoice_id
     LEFT JOIN customers c ON c.id=ci.customer_id
     WHERE p.paid_on BETWEEN ? AND ?
     ORDER BY p.paid_on,p.created_at,p.id`).all(from, to);
   customerPayments.forEach(p => {
-    const amount = Math.round(p.amount * 100) / 100;
+    const amount = fromMinor(multiplyMinor(p.amount_minor, p.fx_rate || 1));
     const account = paymentAccount(p.method);
     const desc = `Tahsilat ${p.invoice_no} — ${p.customer_name || ''}`;
     rows.push({ date: p.paid_on, docNo: p.reference || p.invoice_no, accountCode: account.code,
@@ -153,14 +158,14 @@ function generateJournalEntries({ from, to, companyId = 1 }) {
       sourceType: 'customer_payment', sourceId: p.id });
   });
 
-  const supplierPayments = db.prepare(`SELECT p.*, si.invoice_no, s.name supplier_name
+  const supplierPayments = db.prepare(`SELECT p.*, si.invoice_no, si.fx_rate, s.name supplier_name
     FROM supplier_invoice_payments p
     JOIN supplier_invoices si ON si.id=p.invoice_id
     LEFT JOIN suppliers s ON s.id=si.supplier_id
     WHERE p.paid_on BETWEEN ? AND ?
     ORDER BY p.paid_on,p.created_at,p.id`).all(from, to);
   supplierPayments.forEach(p => {
-    const amount = Math.round(p.amount * 100) / 100;
+    const amount = fromMinor(multiplyMinor(p.amount_minor, p.fx_rate || 1));
     const account = paymentAccount(p.method);
     const desc = `Tedarikçi ödemesi ${p.invoice_no} — ${p.supplier_name || ''}`;
     rows.push({ date: p.paid_on, docNo: p.reference || p.invoice_no, accountCode: map.accounts_payable.code,
@@ -171,12 +176,12 @@ function generateJournalEntries({ from, to, companyId = 1 }) {
       sourceType: 'supplier_payment', sourceId: p.id });
   });
 
-  const customerReversals = db.prepare(`SELECT r.*,p.amount,p.method,p.reference,ci.invoice_no,c.name customer_name
+  const customerReversals = db.prepare(`SELECT r.*,p.amount,p.amount_minor,p.method,p.reference,ci.invoice_no,ci.fx_rate,c.name customer_name
     FROM customer_invoice_payment_reversals r JOIN customer_invoice_payments p ON p.id=r.payment_id
     JOIN customer_invoices ci ON ci.id=p.invoice_id LEFT JOIN customers c ON c.id=ci.customer_id
     WHERE r.reversed_on BETWEEN ? AND ? ORDER BY r.reversed_on,r.created_at,r.id`).all(from, to);
   customerReversals.forEach(r => {
-    const amount = Math.round(r.amount * 100) / 100; const account = paymentAccount(r.method);
+    const amount = fromMinor(multiplyMinor(r.amount_minor, r.fx_rate || 1)); const account = paymentAccount(r.method);
     const desc = `Tahsilat ters kaydı ${r.invoice_no} — ${r.customer_name || ''}: ${r.reason}`;
     rows.push({ date: r.reversed_on, docNo: r.reference || r.invoice_no, accountCode: map.accounts_receivable.code,
       accountName: map.accounts_receivable.name, description: desc, debit: amount, credit: 0,
@@ -186,12 +191,12 @@ function generateJournalEntries({ from, to, companyId = 1 }) {
       sourceType: 'customer_payment_reversal', sourceId: r.id });
   });
 
-  const supplierReversals = db.prepare(`SELECT r.*,p.amount,p.method,p.reference,si.invoice_no,s.name supplier_name
+  const supplierReversals = db.prepare(`SELECT r.*,p.amount,p.amount_minor,p.method,p.reference,si.invoice_no,si.fx_rate,s.name supplier_name
     FROM supplier_invoice_payment_reversals r JOIN supplier_invoice_payments p ON p.id=r.payment_id
     JOIN supplier_invoices si ON si.id=p.invoice_id LEFT JOIN suppliers s ON s.id=si.supplier_id
     WHERE r.reversed_on BETWEEN ? AND ? ORDER BY r.reversed_on,r.created_at,r.id`).all(from, to);
   supplierReversals.forEach(r => {
-    const amount = Math.round(r.amount * 100) / 100; const account = paymentAccount(r.method);
+    const amount = fromMinor(multiplyMinor(r.amount_minor, r.fx_rate || 1)); const account = paymentAccount(r.method);
     const desc = `Tedarikçi ödeme ters kaydı ${r.invoice_no} — ${r.supplier_name || ''}: ${r.reason}`;
     rows.push({ date: r.reversed_on, docNo: r.reference || r.invoice_no, accountCode: account.code,
       accountName: account.name, description: desc, debit: amount, credit: 0,
@@ -203,9 +208,11 @@ function generateJournalEntries({ from, to, companyId = 1 }) {
 
   // Dönem sonu kontrolü: toplam borç = toplam alacak. Aksi halde sessizce
   // yanlış bir dışa aktarım üretmek yerine açıkça hata verilir.
-  const totalDebit = Math.round(rows.reduce((s, r) => s + r.debit, 0) * 100) / 100;
-  const totalCredit = Math.round(rows.reduce((s, r) => s + r.credit, 0) * 100) / 100;
-  if (Math.abs(totalDebit - totalCredit) > 0.01) {
+  const totalDebitMinor = rows.reduce((sum, row) => sum + toMinor(row.debit), 0);
+  const totalCreditMinor = rows.reduce((sum, row) => sum + toMinor(row.credit), 0);
+  const totalDebit = fromMinor(totalDebitMinor);
+  const totalCredit = fromMinor(totalCreditMinor);
+  if (totalDebitMinor !== totalCreditMinor) {
     throw new AppError(
       `Borç/alacak dengesi tutmuyor / Debit-credit imbalance: ${totalDebit} vs ${totalCredit}`, 500);
   }

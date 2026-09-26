@@ -119,8 +119,8 @@ async function customerSide() {
 
   // Database guard: even a direct insert cannot overpay.
   const other = await ok('POST', '/sales/invoices', { customerId: customer.id, amount: 50 });
-  assert.throws(() => db.prepare(`INSERT INTO customer_invoice_payments (id,invoice_id,amount,paid_on,created_at)
-    VALUES ('x-over',?,60,'2026-01-01',?)`).run(other.id, Date.now()), /Payment exceeds open amount/);
+  assert.throws(() => db.prepare(`INSERT INTO customer_invoice_payments (id,invoice_id,amount,amount_minor,paid_on,created_at)
+    VALUES ('x-over',?,60,6000,'2026-01-01',?)`).run(other.id, Date.now()), /Payment exceeds open amount/);
   // One-click full settlement still works and records a ledger row.
   const full = await ok('POST', `/sales/invoices/${other.id}/pay`);
   assert.equal(full.status, 'paid');
@@ -132,6 +132,7 @@ async function customerSide() {
   const reversed = await ok('POST', `/sales/invoices/${other.id}/payments/${fullPaymentId}/reverse`,
     { reason: 'Banka hareketi yanlış faturaya işlendi', reversedOn: '2026-01-11', requestKey: 'cust-rev-0001' });
   assert.equal(reversed.status, 'issued'); assert.equal(reversed.openAmount, 50);
+  assert.equal((await ok('GET', '/sales/customers/' + customer.id)).openBalanceBase, 50, 'reversed payment must reopen receivable');
   const reversedReplay = await ok('POST', `/sales/invoices/${other.id}/payments/${fullPaymentId}/reverse`,
     { reason: 'Banka hareketi yanlış faturaya işlendi', reversedOn: '2026-01-11', requestKey: 'cust-rev-0001' });
   assert.equal(reversedReplay.duplicate, true);
@@ -143,8 +144,18 @@ async function customerSide() {
   const legacy = await ok('POST', '/sales/invoices', { customerId: customer.id, amount: 40 });
   db.prepare("UPDATE customer_invoices SET status='paid', paid_legacy=1 WHERE id=?").run(legacy.id);
   await ok('POST', '/sales/invoices', { customerId: customer.id, amount: 15, invoiceType: 'iade', originalInvoiceId: legacy.id });
-  assert.equal((await ok('GET', '/sales/customers/' + customer.id)).openBalanceBase, -15);
-  console.log('✓ K-05 customer: partial/duplicate/concurrent payments, credit settlement, DB overpay guard, legacy paid');
+  assert.equal((await ok('GET', '/sales/customers/' + customer.id)).openBalanceBase, 35);
+
+  // Posted values use integer minor units: half-cent inputs round once and
+  // direct SQL cannot make the compatibility REAL projection diverge.
+  const exact = await ok('POST', '/sales/invoices', { customerId: customer.id, amount: 1.005 });
+  const exactRow = db.prepare('SELECT amount,amount_minor FROM customer_invoices WHERE id=?').get(exact.id);
+  assert.deepEqual(exactRow, { amount: 1.01, amount_minor: 101 });
+  const exactPay = await ok('POST', `/sales/invoices/${exact.id}/payments`, { amount: 0.005 });
+  assert.equal(exactPay.paidAmount, 0.01);
+  assert.equal(db.prepare('SELECT amount_minor FROM customer_invoice_payments WHERE id=?').get(exactPay.paymentId).amount_minor, 1);
+  assert.throws(() => db.prepare('UPDATE customer_invoices SET amount=2 WHERE id=?').run(exact.id), /money\/minor mismatch/);
+  console.log('✓ K-05 customer: partial/duplicate/concurrent payments, exact minor units, credit settlement, DB guards, legacy paid');
 }
 
 async function supplierSide() {
@@ -189,10 +200,10 @@ async function supplierSide() {
   const old = await receivedOrder(10, 10);
   const legacy = await ok('POST', '/purchasing/invoices', { invoiceNo: 'SET-LEG-1', poId: old.order.id, amount: 60 });
   db.prepare('DELETE FROM supplier_invoice_allocations WHERE invoice_id=?').run(legacy.id);
-  db.prepare("UPDATE supplier_invoices SET allocation_state='legacy', vat_amount=NULL, match_status='matched' WHERE id=?").run(legacy.id);
+  db.prepare("UPDATE supplier_invoices SET allocation_state='legacy', vat_amount=NULL, vat_amount_minor=NULL, match_status='matched' WHERE id=?").run(legacy.id);
   assert.equal((await api('POST', `/purchasing/invoices/${legacy.id}/approve`, { vatAmount: 12 })).status, 409);
   assert.equal((await api('POST', `/purchasing/invoices/${legacy.id}/payments`, { amount: 1 })).status, 409);
-  assert.throws(() => db.prepare("UPDATE supplier_invoices SET match_status='approved', vat_amount=1 WHERE id=?").run(legacy.id),
+  assert.throws(() => db.prepare("UPDATE supplier_invoices SET match_status='approved', vat_amount=1, vat_amount_minor=100 WHERE id=?").run(legacy.id),
     /Legacy invoice requires reconciliation/);
   assert.equal((await api('POST', '/purchasing/invoices', { invoiceNo: 'SET-LEG-2', poId: old.order.id, amount: 1 })).status, 409,
     'new billing on the PO waits for reconciliation');
@@ -238,7 +249,7 @@ async function supplierSide() {
   // A legacy invoice for services (no receipts) needs an explicit VAT amount.
   const svc = await ok('POST', '/purchasing/invoices', { invoiceNo: 'SET-SVC-1', poId: other.order.id, amount: 30 });
   db.prepare('DELETE FROM supplier_invoice_allocations WHERE invoice_id=?').run(svc.id);
-  db.prepare("UPDATE supplier_invoices SET allocation_state='legacy', vat_amount=NULL WHERE id=?").run(svc.id);
+  db.prepare("UPDATE supplier_invoices SET allocation_state='legacy', vat_amount=NULL, vat_amount_minor=NULL WHERE id=?").run(svc.id);
   assert.equal((await api('POST', `/purchasing/invoices/${svc.id}/reconcile`, { lines: [], note: 'Nakliye hizmeti' })).status, 422);
   const svcDone = await ok('POST', `/purchasing/invoices/${svc.id}/reconcile`, { lines: [], vatAmount: 6, note: 'Nakliye hizmeti' });
   assert.equal(svcDone.allocationState, 'none');

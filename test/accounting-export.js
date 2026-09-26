@@ -68,6 +68,36 @@ const db = new Database(dbPath, { readonly: true });
   });
   ok('alış faturası oluşturuldu ve eşleşti', purchInv.status === 201 && purchInv.data.matchStatus === 'matched', JSON.stringify(purchInv.data));
 
+  console.log('\n=== STOK MALİYETİ VE ÖDEME HAREKETLERİ / COGS AND PAYMENTS ===');
+  const stock = db.prepare(`SELECT sl.item_id,sl.unit_cost,i.name FROM stock_lots sl JOIN items i ON i.id=sl.item_id
+    WHERE sl.status='available' AND sl.qty>=1 AND sl.unit_cost>0 ORDER BY sl.qty DESC LIMIT 1`).get();
+  ok('maliyetli ve sevk edilebilir stok bulundu', !!stock, JSON.stringify(stock));
+  const so = await api('POST', '/api/sales/orders', { token: admin,
+    body: { customerId: customer.id, lines: [{ itemId: stock.item_id, qty: 1, price: 100 }] } });
+  ok('maliyet testi satış siparişi oluştu', so.status === 201, JSON.stringify(so.data));
+  const shipment = await api('POST', '/api/sales/shipments', { token: admin,
+    body: { soId: so.data.id, destination: 'Muhasebe test deposu', items: [{ itemId: stock.item_id, qty: 1 }] } });
+  ok('maliyet testi sevkiyatı oluştu', shipment.status === 201, JSON.stringify(shipment.data));
+  const shippedInv = await api('POST', '/api/sales/invoices', { token: admin,
+    body: { customerId: customer.id, soId: so.data.id, shipmentId: shipment.data.id } });
+  ok('sevk edilmiş sipariş faturası oluştu', shippedInv.status === 201, JSON.stringify(shippedInv.data));
+
+  const collection = await api('POST', `/api/sales/invoices/${salesInv.data.id}/payments`, { token: admin,
+    body: { amount: 100, paidOn: today, method: 'bank', requestKey: 'acc-customer-pay' } });
+  ok('müşteri tahsilatı kaydedildi', collection.status === 201, JSON.stringify(collection.data));
+  const collectionReverse = await api('POST', `/api/sales/invoices/${salesInv.data.id}/payments/${collection.data.paymentId}/reverse`, { token: admin,
+    body: { reason: 'Muhasebe dışa aktarım ters kayıt testi', reversedOn: today, requestKey: 'acc-customer-reverse' } });
+  ok('müşteri tahsilatı ters kaydı oluşturuldu', collectionReverse.status === 201, JSON.stringify(collectionReverse.data));
+
+  const approvedPurchase = await api('POST', `/api/purchasing/invoices/${purchInv.data.id}/approve`, { token: admin, body: {} });
+  ok('alış faturası ödeme için onaylandı', approvedPurchase.status === 200, JSON.stringify(approvedPurchase.data));
+  const supplierPayment = await api('POST', `/api/purchasing/invoices/${purchInv.data.id}/payments`, { token: admin,
+    body: { amount: 100, paidOn: today, method: 'bank', requestKey: 'acc-supplier-pay' } });
+  ok('tedarikçi ödemesi kaydedildi', supplierPayment.status === 201, JSON.stringify(supplierPayment.data));
+  const supplierReverse = await api('POST', `/api/purchasing/invoices/${purchInv.data.id}/payments/${supplierPayment.data.paymentId}/reverse`, { token: admin,
+    body: { reason: 'Muhasebe dışa aktarım ters kayıt testi', reversedOn: today, requestKey: 'acc-supplier-reverse' } });
+  ok('tedarikçi ödemesi ters kaydı oluşturuldu', supplierReverse.status === 201, JSON.stringify(supplierReverse.data));
+
   console.log('\n=== DIŞA AKTARIM / EXPORT ===');
   const exp = await api('GET', `/api/accounting/export?from=${today}&to=${today}`, { token: admin });
   ok('dışa aktarım başarılı', exp.status === 200, JSON.stringify(exp.data));
@@ -92,6 +122,27 @@ const db = new Database(dbPath, { readonly: true });
   ok('satıcı hesabına (320) alacak yazıldı', payRow && payRow.credit > 0, JSON.stringify(payRow));
   const invRow = purchRows.find(r => r.accountCode === '153');
   ok('stok hesabına (153) borç yazıldı, tutar = net (45300)', invRow && invRow.debit === 45300, JSON.stringify(invRow));
+
+  const cogsRows = exp.data.rows.filter(r => r.sourceId === shippedInv.data.id && r.sourceType === 'customer_invoice_cogs');
+  ok('gerçek sevkiyat faturası SMM ve stok çıkışı üretir', cogsRows.length === 2 &&
+    cogsRows.some(r => r.accountCode === '621' && r.debit === stock.unit_cost) &&
+    cogsRows.some(r => r.accountCode === '153' && r.credit === stock.unit_cost), JSON.stringify(cogsRows));
+  const customerPaymentRows = exp.data.rows.filter(r => r.sourceId === collection.data.paymentId && r.sourceType === 'customer_payment');
+  ok('tahsilat banka borç/alıcı alacak olarak çift taraflıdır', customerPaymentRows.length === 2 &&
+    customerPaymentRows.some(r => r.accountCode === '102' && r.debit === 100) &&
+    customerPaymentRows.some(r => r.accountCode === '120' && r.credit === 100), JSON.stringify(customerPaymentRows));
+  const customerReverseRows = exp.data.rows.filter(r => r.sourceId === collectionReverse.data.reversalId && r.sourceType === 'customer_payment_reversal');
+  ok('tahsilat ters kaydı yönleri tam tersine çevirir', customerReverseRows.length === 2 &&
+    customerReverseRows.some(r => r.accountCode === '120' && r.debit === 100) &&
+    customerReverseRows.some(r => r.accountCode === '102' && r.credit === 100), JSON.stringify(customerReverseRows));
+  const supplierPaymentRows = exp.data.rows.filter(r => r.sourceId === supplierPayment.data.paymentId && r.sourceType === 'supplier_payment');
+  ok('tedarikçi ödemesi satıcı borç/banka alacak olarak çift taraflıdır', supplierPaymentRows.length === 2 &&
+    supplierPaymentRows.some(r => r.accountCode === '320' && r.debit === 100) &&
+    supplierPaymentRows.some(r => r.accountCode === '102' && r.credit === 100), JSON.stringify(supplierPaymentRows));
+  const supplierReverseRows = exp.data.rows.filter(r => r.sourceId === supplierReverse.data.reversalId && r.sourceType === 'supplier_payment_reversal');
+  ok('tedarikçi ödeme ters kaydı yönleri tam tersine çevirir', supplierReverseRows.length === 2 &&
+    supplierReverseRows.some(r => r.accountCode === '102' && r.debit === 100) &&
+    supplierReverseRows.some(r => r.accountCode === '320' && r.credit === 100), JSON.stringify(supplierReverseRows));
 
   console.log('\n=== HATA DURUMLARI / ERROR CASES ===');
   const badRange = await api('GET', `/api/accounting/export?from=${today}&to=2020-01-01`, { token: admin });

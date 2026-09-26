@@ -6,43 +6,44 @@
 ve ticari hazırlık eksiklerini kapatmak; her güvenlik/veri değişikliğini test
 etmek ve doğrulanmış kontrol noktalarını `main` dalına commit/push etmektir.
 
-**Bu kontrol noktasında tamamlananlar:** migration `026` aktif ürün kodu ve
-barkodunu şirket içinde tekilleştirdi; stoklu/BOM/sipariş bağlı ürün silme
-korumaları güçlendi. Migration `027` müşteri ve tedarikçi ödeme ters kayıtlarını
-değiştirilemez defter olarak ekledi; mal kabul ters kaydı stok, ortalama maliyet
-ve sipariş miktarını atomik geri alıyor, bağımlı mali/kalite kayıtlarında
-mutabakat istiyor. Muhasebe aktarımı COGS/stok ile tahsilat, ödeme ve ters kayıt
-fişlerini kapsıyor. RFQ sonuçlandırma siparişi atomik oluşturuyor; PO iptal ve
-kapatma, tedarikçi iadesi liste/durum akışı, gerçek kaynak tedarikçisi kontrolü
-ve ilgili kullanıcı ekranları/OpenAPI eklendi. SVG logo, aşırı onay limiti,
-ürün kimliği/BOM silme ve kırık mobil/PWA script açıkları kapandı.
+**Bu kontrol noktasında tamamlananlar:** `8ccb7c2` ile ürün kimliği/BOM
+bütünlüğü, ödeme ve mal kabul ters kayıtları, muhasebe kapsamı, RFQ→PO, PO
+yaşam döngüsü, tedarikçi iadeleri API'si ve temel güvenlik açıkları kapatılıp
+`origin/main` dalına gönderildi. Sonraki çalışma kullanıcıya özgü bildirim
+okundu kayıtlarını migration `028` ile ayırdı; bir kullanıcının okuması başka
+kullanıcının rozetini artık değiştirmiyor. Belge yüklemesi gerçek PDF/görsel/
+ofis dosyası imzasını doğruluyor, sahte içerikleri 415 ile reddediyor ve
+indirmeyi güvenli ek olarak sunuyor. Satış/alış faturası ve ödeme defterlerinde
+migration `029` ile tam sayı kuruş alanları kaynak gerçeklik oldu; uyumluluk
+amaçlı REAL alanların ayrışması veritabanı tetikleriyle engelleniyor. Kur ve
+muhasebe hesabı da kuruş sınırında tek kez yuvarlanıyor. Ters tahsilatın müşteri
+bakiyesini yeniden açmaması hatası düzeltildi. Gerçek sevkiyat COGS/stok,
+tahsilat/ödeme ve ters kayıt yevmiyeleri regresyon testine alındı. Satın Alma
+ekranına iade oluşturma, listeleme ve durum ilerletme sekmesi eklendi.
 
-**Doğrulama:** build, typecheck, OpenAPI/contract, lint (0 hata, 45 mevcut
-uyarı), Faz 0 `b1b-stock` 52/52 ve `b2-purch-auth` 43/43, ödeme/mutabakat,
-muhasebe, veri sağlığı ve stok bütünlüğü paketleri **Geçti**. Tam `run-all`
-koşusunda 38 paket geçti; yeni tekillik/tedarikçi kaynağı kuralıyla eski test
-kurulumları çakıştığı için `data-health` ve `stock-integrity` kaldı. Test
-kurulumları yeni veri sözleşmesine uyarlandı ve iki paket ayrı tekrar koşuda
-**Geçti**; tüm paket tek koşu son doğrulaması sonraki kontrol noktasında
-yenilenecek.
+**API/veri etkisi:** `notification_reads` kullanıcı-bildirim okuma tablosu;
+fatura ve ödeme tablolarında `*_minor` tam sayı sütunları eklendi. Dış API'deki
+ondalık para sözleşmesi korunuyor. Eski kayıtlar migration sırasında en yakın
+kuruşa taşınıyor; yeni doğrudan SQL yazımları hem uyumluluk değeri hem kuruş
+değeri sağlamazsa reddediliyor.
 
-**Bağımsız inceleme:** `ai_team.py --phase review --timeout 300` çalıştı.
-Claude kota sınırı nedeniyle gerçek inceleme veremedi (**Doğrulanamadı**).
-Gemini kod değişikliklerinde yeni somut hata bildirmedi, ancak bağlam sınırı
-testleri dışarıda bıraktı ve temiz kurulum/TLS/off-site restore/pilot kapılarını
-doğru biçimde açık saydı; bu görüş test kanıtının yerine kullanılmadı.
+**Doğrulama:** build ve typecheck **Geçti**; lint **0 hata / 42 tarihsel uyarı**.
+Güvenlik 67/67, Faz 0 b4a 24/24, muhasebe 36/36, UI smoke 113/113, contract
+58/58, OpenAPI 10/10, exact-money birim paketi ve ödeme/mutabakat paketi
+**Geçti**. Tam izole `run-all` koşusunda 40 paket doğrudan geçti; Faz 0 içindeki bildirim assertion alan adı düzeltildikten sonra aynı `faz0-verify` paketi bütünüyle tekrar çalıştırıldı ve **Geçti**. Böylece tüm 41 paket için yeşil kanıt vardır.
 
-**Açık teknik sıra:** kullanıcıya özgü bildirim okundu durumu; yüklenen belgenin
-gerçek dosya imzası doğrulaması; finansal toplamların tam kuruş cinsinden
-saklanması/hesaplanması; gerçek sevkiyatlı COGS ve ödeme/ters kayıt yevmiye
-regresyonları; tedarikçi iade ekranı; belge ve release durumunun yenilenmesi.
-Ardından temiz paket kurulumu, ayrı konuma gerçek restore, servis yeniden
-başlatma ve temsili büyük veri provasının yerel olarak yapılabilen kısmı
-tamamlanacak. Müşteri ağı/TLS sertifikası, fiziksel yazıcı-barkod cihazı,
-hukukçu onayı ve imzalı müşteri pilotu dış saha kanıtı gerektirir.
+**Bağımsız inceleme:** Önceki `ai_team.py --phase review --timeout 300`
+çağrısında Claude kota sınırı nedeniyle **Doğrulanamadı**; Gemini yeni somut
+hata bildirmedi ancak bağlam/test kapsamı sınırlıydı. Yeni para migration'ı ve
+operasyon turu bittikten sonra inceleme tekrar çalıştırılacak.
 
-**Sonraki tek somut adım:** bildirim okundu bilgisini kullanıcı bazlı tabloya
-taşıyıp viewer işleminin admin rozetini değiştirmediğini negatif testle kanıtla.
+**Açık sıra:** tam `run-all` ve tarayıcı paketi; temiz release paketi kurulumu;
+ayrı konuma gerçek tam yedek geri yükleme; servis yeniden başlatma; temsili büyük
+veri/yükseltme-rollback provası; release/satış belgelerinin güncellenmesi. Müşteri
+ağı/TLS sertifikası, fiziksel yazıcı-barkod cihazı, hukukçu onayı ve imzalı gerçek
+müşteri pilotu yalnız gerçek saha kanıtıyla kapanabilir.
+
+**Sonraki tek somut adım:** temiz release paketi üretip paketi izole bir dizine çıkar; kurulum, servis yeniden başlatma ve tam yedekten geri dönüşü paket içinden prova et.
 
 ## 26 Eylül 2026 — Claude sonrası Codex bağımsız denetimi
 

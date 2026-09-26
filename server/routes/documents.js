@@ -5,9 +5,7 @@ const fs = require('fs');
 const multer = require('multer');
 const db = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
-const { validate, z } = require('../middleware/validate');
 const { AppError, logAudit, paginate } = require('../lib/core');
-const notifications = require('../services/notifications');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -62,6 +60,41 @@ const upload = multer({
   }
 });
 
+function bytesStart(buffer, bytes) {
+  return bytes.every((value, index) => buffer[index] === value);
+}
+
+/** Verify bytes after upload; multipart MIME and filename are both controlled by the client. */
+function verifyUploadedFile(req, res, next) {
+  if (!req.file) return next();
+  try {
+    const sample = fs.readFileSync(req.file.path).subarray(0, 64 * 1024);
+    const ascii = sample.toString('latin1');
+    const mime = req.file.mimetype;
+    let valid = false;
+    if (mime === 'application/pdf') valid = ascii.startsWith('%PDF-');
+    else if (mime === 'image/png') valid = bytesStart(sample, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    else if (mime === 'image/jpeg') valid = bytesStart(sample, [0xff, 0xd8, 0xff]);
+    else if (mime === 'image/gif') valid = ascii.startsWith('GIF87a') || ascii.startsWith('GIF89a');
+    else if (mime === 'image/webp') valid = ascii.startsWith('RIFF') && ascii.slice(8, 12) === 'WEBP';
+    else if (mime.includes('openxmlformats-officedocument')) valid = bytesStart(sample, [0x50, 0x4b, 0x03, 0x04]);
+    else if (mime === 'application/msword' || mime === 'application/vnd.ms-excel') {
+      valid = bytesStart(sample, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+    } else if (mime === 'text/plain' || mime === 'text/csv') {
+      valid = sample.length > 0 && !sample.includes(0) && !sample.toString('utf8').includes('\ufffd');
+    }
+    if (!valid) {
+      fs.rmSync(req.file.path, { force: true });
+      req.file = undefined;
+      return next(new AppError('Dosya içeriği bildirilen türle eşleşmiyor / File content does not match its declared type', 415));
+    }
+    next();
+  } catch (error) {
+    if (req.file?.path) fs.rmSync(req.file.path, { force: true });
+    next(error);
+  }
+}
+
 router.get('/', (req, res) => {
   const { refType = '', refId = '', docType = '', controlled = '', page = 1, pageSize = 50 } = req.query;
   let sql = 'SELECT * FROM documents WHERE 1=1';
@@ -87,7 +120,7 @@ function serializeDoc(d) {
   };
 }
 
-router.post('/', WRITE, upload.single('file'), (req, res) => {
+router.post('/', WRITE, upload.single('file'), verifyUploadedFile, (req, res) => {
   const b = req.body || {};
   if (!b.title && !req.file) throw new AppError('Başlık veya dosya gerekli / Title or file required');
 
@@ -128,7 +161,7 @@ router.get('/:id/download', (req, res) => {
   const full = path.join(uploadDir, path.basename(d.file_path));
   if (!full.startsWith(uploadDir) || !fs.existsSync(full)) throw new AppError('Dosya bulunamadı / File missing', 404);
   res.setHeader('Content-Type', d.mime_type || 'application/octet-stream');
-  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(d.original_name || 'file')}"`);
+  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(d.original_name || 'file')}`);
   fs.createReadStream(full).pipe(res);
 });
 
@@ -136,7 +169,7 @@ router.get('/:id/download', (req, res) => {
  * New revision of a controlled document: the old one is marked superseded rather
  * than overwritten, which is what ISO document control actually requires.
  */
-router.post('/:id/revise', MANAGER, upload.single('file'), (req, res) => {
+router.post('/:id/revise', MANAGER, upload.single('file'), verifyUploadedFile, (req, res) => {
   const old = db.prepare('SELECT * FROM documents WHERE id = ?').get(req.params.id);
   if (!old) throw new AppError('Doküman bulunamadı / Document not found', 404);
   const b = req.body || {};

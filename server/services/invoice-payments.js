@@ -14,17 +14,17 @@
 const db = require('../db');
 const { AppError, uuid, logAudit } = require('../lib/core');
 const { toLocalDateStr } = require('../lib/dates');
+const { toMinor, fromMinor } = require('../lib/money');
 
-const EPS = 0.005;
-const round2 = value => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+const round2 = value => fromMinor(toMinor(value));
 
 function customerPaid(invoiceId) {
-  return db.prepare(`SELECT COALESCE(SUM(p.amount),0) s FROM customer_invoice_payments p
+  return db.prepare(`SELECT COALESCE(SUM(p.amount_minor),0) s FROM customer_invoice_payments p
     WHERE p.invoice_id=? AND NOT EXISTS
       (SELECT 1 FROM customer_invoice_payment_reversals r WHERE r.payment_id=p.id)`).get(invoiceId).s;
 }
 function customerCredits(invoiceId) {
-  return db.prepare(`SELECT COALESCE(SUM(amount),0) s FROM customer_invoices
+  return db.prepare(`SELECT COALESCE(SUM(amount_minor),0) s FROM customer_invoices
     WHERE original_invoice_id=? AND invoice_type='iade' AND status!='cancelled'`).get(invoiceId).s;
 }
 
@@ -33,18 +33,18 @@ function customerSettlement(inv) {
   if (inv.invoice_type === 'iade') {
     return { paidAmount: 0, creditAmount: 0, openAmount: 0 };
   }
-  const payments = customerPaid(inv.id);
-  const credits = customerCredits(inv.id);
-  const paidAmount = inv.paid_legacy ? round2(Math.max(0, inv.amount - credits)) : round2(payments);
-  const openAmount = inv.status === 'cancelled' ? 0 : round2(Math.max(0, inv.amount - paidAmount - credits));
-  return { paidAmount, creditAmount: round2(credits), openAmount };
+  const paymentsMinor = customerPaid(inv.id);
+  const creditsMinor = customerCredits(inv.id);
+  const paidMinor = inv.paid_legacy ? Math.max(0, inv.amount_minor - creditsMinor) : paymentsMinor;
+  const openMinor = inv.status === 'cancelled' ? 0 : Math.max(0, inv.amount_minor - paidMinor - creditsMinor);
+  return { paidAmount: fromMinor(paidMinor), creditAmount: fromMinor(creditsMinor), openAmount: fromMinor(openMinor) };
 }
 
 /** Marks an issued customer invoice paid once payments + credits cover it. */
 function refreshCustomerInvoiceStatus(invoiceId) {
   const inv = db.prepare('SELECT * FROM customer_invoices WHERE id=?').get(invoiceId);
   if (!inv || inv.status !== 'issued' || inv.invoice_type === 'iade') return inv?.status;
-  if (customerPaid(inv.id) + customerCredits(inv.id) >= inv.amount - EPS) {
+  if (customerPaid(inv.id) + customerCredits(inv.id) >= inv.amount_minor) {
     db.prepare("UPDATE customer_invoices SET status='paid' WHERE id=? AND status='issued'").run(inv.id);
     return 'paid';
   }
@@ -53,14 +53,15 @@ function refreshCustomerInvoiceStatus(invoiceId) {
 
 function validatePaymentInput(input) {
   const paidOn = input.paidOn || toLocalDateStr();
-  const amount = input.amount == null ? null : round2(input.amount);
-  if (amount != null && !(amount > 0)) throw new AppError('Ödeme tutarı pozitif olmalı / Payment amount must be positive', 422);
-  return { paidOn, amount };
+  const amountMinor = input.amount == null ? null : toMinor(input.amount);
+  const amount = amountMinor == null ? null : fromMinor(amountMinor);
+  if (amountMinor != null && !(amountMinor > 0)) throw new AppError('Ödeme tutarı pozitif olmalı / Payment amount must be positive', 422);
+  return { paidOn, amount, amountMinor };
 }
 
 function existingByKey(table, invoiceId, requestKey) {
   if (!requestKey) return null;
-  return db.prepare(`SELECT id, amount FROM ${table} WHERE invoice_id=? AND request_key=?`).get(invoiceId, requestKey);
+  return db.prepare(`SELECT id, amount, amount_minor FROM ${table} WHERE invoice_id=? AND request_key=?`).get(invoiceId, requestKey);
 }
 
 /**
@@ -76,20 +77,22 @@ function recordCustomerPayment(req, invoiceId, input = {}) {
     if (replay) return { ok: true, paymentId: replay.id, duplicate: true, ...customerSettlement(inv), status: inv.status };
     if (inv.status === 'paid') return { ok: true, alreadyPaid: true, ...customerSettlement(inv), status: 'paid' };
     if (inv.status !== 'issued') throw new AppError('Bu fatura tahsil edilemez / Invoice is not issued', 409);
-    const { paidOn, amount } = validatePaymentInput(input);
+    const { paidOn, amountMinor } = validatePaymentInput(input);
     const before = customerSettlement(inv);
-    const payAmount = amount ?? before.openAmount;
-    if (!(payAmount > 0)) {
+    const openMinor = toMinor(before.openAmount);
+    const payMinor = amountMinor ?? openMinor;
+    const payAmount = fromMinor(payMinor);
+    if (!(payMinor > 0)) {
       refreshCustomerInvoiceStatus(inv.id);
       return { ok: true, alreadyPaid: true, ...customerSettlement(inv), status: 'paid' };
     }
-    if (payAmount > before.openAmount + EPS) {
+    if (payMinor > openMinor) {
       throw new AppError('Ödeme açık tutarı aşıyor / Payment exceeds open amount', 409, { outstanding: before.openAmount });
     }
     const id = uuid();
     db.prepare(`INSERT INTO customer_invoice_payments
-      (id,invoice_id,amount,paid_on,method,reference,note,request_key,created_at,created_by)
-      VALUES (?,?,?,?,?,?,?,?,?,?)`).run(id, inv.id, payAmount, paidOn, input.method || null,
+      (id,invoice_id,amount,amount_minor,paid_on,method,reference,note,request_key,created_at,created_by)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(id, inv.id, payAmount, payMinor, paidOn, input.method || null,
       input.reference || null, input.note || null, input.requestKey || null, Date.now(), req.user?.id || null);
     const status = refreshCustomerInvoiceStatus(inv.id);
     logAudit(req, 'auditCustomerInvoicePaid', { entityType: 'customer_invoice', entityId: inv.id,
@@ -100,11 +103,11 @@ function recordCustomerPayment(req, invoiceId, input = {}) {
 }
 
 function listCustomerPayments(invoiceId) {
-  return db.prepare(`SELECT p.id, p.amount, p.paid_on, p.method, p.reference, p.note, p.created_at, p.created_by,
+  return db.prepare(`SELECT p.id, p.amount, p.amount_minor, p.paid_on, p.method, p.reference, p.note, p.created_at, p.created_by,
       r.id reversal_id, r.reversed_on, r.reason reversal_reason, r.created_at reversal_created_at, r.created_by reversal_created_by
     FROM customer_invoice_payments p LEFT JOIN customer_invoice_payment_reversals r ON r.payment_id=p.id
     WHERE p.invoice_id=? ORDER BY p.created_at, p.id`).all(invoiceId)
-    .map(p => ({ id: p.id, amount: p.amount, paidOn: p.paid_on, method: p.method, reference: p.reference,
+    .map(p => ({ id: p.id, amount: fromMinor(p.amount_minor), paidOn: p.paid_on, method: p.method, reference: p.reference,
       note: p.note, createdAt: p.created_at, createdBy: p.created_by, reversed: !!p.reversal_id,
       reversal: p.reversal_id ? { id: p.reversal_id, reversedOn: p.reversed_on, reason: p.reversal_reason,
         createdAt: p.reversal_created_at, createdBy: p.reversal_created_by } : null }));
@@ -134,16 +137,17 @@ function reverseCustomerPayment(req, invoiceId, paymentId, input) {
 /* ------------------------------ supplier ------------------------------ */
 
 function supplierPaid(invoiceId) {
-  return db.prepare(`SELECT COALESCE(SUM(p.amount),0) s FROM supplier_invoice_payments p
+  return db.prepare(`SELECT COALESCE(SUM(p.amount_minor),0) s FROM supplier_invoice_payments p
     WHERE p.invoice_id=? AND NOT EXISTS
       (SELECT 1 FROM supplier_invoice_payment_reversals r WHERE r.payment_id=p.id)`).get(invoiceId).s;
 }
 
 function supplierSettlement(inv) {
-  const gross = inv.vat_amount == null ? null : round2(inv.amount + inv.vat_amount);
-  const payments = supplierPaid(inv.id);
-  const paidAmount = inv.paid_legacy && gross != null ? gross : round2(payments);
-  return { grossAmount: gross, paidAmount, openAmount: gross == null ? null : round2(Math.max(0, gross - paidAmount)) };
+  const grossMinor = inv.vat_amount_minor == null ? null : inv.amount_minor + inv.vat_amount_minor;
+  const paymentsMinor = supplierPaid(inv.id);
+  const paidMinor = inv.paid_legacy && grossMinor != null ? grossMinor : paymentsMinor;
+  return { grossAmount: grossMinor == null ? null : fromMinor(grossMinor), paidAmount: fromMinor(paidMinor),
+    openAmount: grossMinor == null ? null : fromMinor(Math.max(0, grossMinor - paidMinor)) };
 }
 
 /** Weighted VAT from the invoice's receipt-line snapshots, in invoice currency. */
@@ -167,19 +171,21 @@ function recordSupplierPayment(req, invoiceId, input = {}) {
     if (inv.match_status !== 'approved') {
       throw new AppError('Fatura ödeme için onaylanmamış / Invoice is not approved for payment', 409);
     }
-    const { paidOn, amount } = validatePaymentInput(input);
+    const { paidOn, amountMinor } = validatePaymentInput(input);
     const before = supplierSettlement(inv);
-    const payAmount = amount ?? before.openAmount;
-    if (payAmount > before.openAmount + EPS) {
+    const openMinor = toMinor(before.openAmount);
+    const payMinor = amountMinor ?? openMinor;
+    const payAmount = fromMinor(payMinor);
+    if (payMinor > openMinor) {
       throw new AppError('Ödeme açık tutarı aşıyor / Payment exceeds open amount', 409, { outstanding: before.openAmount });
     }
     const id = uuid();
     db.prepare(`INSERT INTO supplier_invoice_payments
-      (id,invoice_id,amount,paid_on,method,reference,note,request_key,created_at,created_by)
-      VALUES (?,?,?,?,?,?,?,?,?,?)`).run(id, inv.id, payAmount, paidOn, input.method || null,
+      (id,invoice_id,amount,amount_minor,paid_on,method,reference,note,request_key,created_at,created_by)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(id, inv.id, payAmount, payMinor, paidOn, input.method || null,
       input.reference || null, input.note || null, input.requestKey || null, Date.now(), req.user?.id || null);
     let status = inv.match_status;
-    if (supplierPaid(inv.id) >= before.grossAmount - EPS) {
+    if (supplierPaid(inv.id) >= inv.amount_minor + inv.vat_amount_minor) {
       db.prepare("UPDATE supplier_invoices SET match_status='paid' WHERE id=? AND match_status='approved'").run(inv.id);
       status = 'paid';
     }
@@ -191,11 +197,11 @@ function recordSupplierPayment(req, invoiceId, input = {}) {
 }
 
 function listSupplierPayments(invoiceId) {
-  return db.prepare(`SELECT p.id, p.amount, p.paid_on, p.method, p.reference, p.note, p.created_at, p.created_by,
+  return db.prepare(`SELECT p.id, p.amount, p.amount_minor, p.paid_on, p.method, p.reference, p.note, p.created_at, p.created_by,
       r.id reversal_id, r.reversed_on, r.reason reversal_reason, r.created_at reversal_created_at, r.created_by reversal_created_by
     FROM supplier_invoice_payments p LEFT JOIN supplier_invoice_payment_reversals r ON r.payment_id=p.id
     WHERE p.invoice_id=? ORDER BY p.created_at, p.id`).all(invoiceId)
-    .map(p => ({ id: p.id, amount: p.amount, paidOn: p.paid_on, method: p.method, reference: p.reference,
+    .map(p => ({ id: p.id, amount: fromMinor(p.amount_minor), paidOn: p.paid_on, method: p.method, reference: p.reference,
       note: p.note, createdAt: p.created_at, createdBy: p.created_by, reversed: !!p.reversal_id,
       reversal: p.reversal_id ? { id: p.reversal_id, reversedOn: p.reversed_on, reason: p.reversal_reason,
         createdAt: p.reversal_created_at, createdBy: p.reversal_created_by } : null }));

@@ -47,7 +47,7 @@ export default function PurchasingView() {
     const body = document.getElementById('purchBody');
     const actions = document.getElementById('purchActions');
     if (!body || !actions) return;
-    const fns = { orders: renderOrders, suppliers: renderSuppliers, requests: renderRequests, rfqs: renderRfqs, invoices: renderInvoices };
+    const fns = { orders: renderOrders, suppliers: renderSuppliers, requests: renderRequests, rfqs: renderRfqs, invoices: renderInvoices, returns: renderReturns };
     (async () => {
       try { await fns[tab](body, actions); }
       catch (e) { UI.errorState(body, e, reload); }
@@ -880,6 +880,80 @@ export default function PurchasingView() {
   }
 
 
+  /* ================= SUPPLIER RETURNS ================= */
+  async function renderReturns(body, actions) {
+    const tr = UI.getLang() === 'tr';
+    const res = await Api.supplierReturns({ page: pagesRef.current.returns || 1, pageSize: 25 });
+    const rows = res.data || res;
+    const labels = {
+      open: tr ? 'Açık' : 'Open', shipped: tr ? 'Gönderildi' : 'Shipped',
+      credited: tr ? 'Alacak dekontu alındı' : 'Credited', closed: tr ? 'Kapalı' : 'Closed'
+    };
+    const next = { open: 'shipped', shipped: 'credited', credited: 'closed' };
+    const badge = value => `<span class="badge ${value === 'closed' ? 'ok' : value === 'open' ? 'warn' : 'plain'}">${esc(labels[value] || value)}</span>`;
+    actions.innerHTML = can('write') ? `<button class="btn btn-primary btn-sm" id="returnNew">${UI.icon(UI.ICONS.plus)}${tr ? 'Yeni iade' : 'New return'}</button>` : '';
+    body.innerHTML = `<div class="card">${table([
+      { key: 'returnNo', label: tr ? 'İade no' : 'Return no', render: r => `<span class="mono">${esc(r.returnNo)}</span>` },
+      { key: 'supplier', label: t('supplierName'), render: r => esc(r.supplier || '—') },
+      { key: 'itemName', label: t('itemName'), render: r => `${esc(r.itemName || '—')}<div class="sub-line">${esc(r.lotNo || '—')}</div>` },
+      { key: 'qty', label: t('qty'), num: true, render: r => num(r.qty) },
+      { key: 'reason', label: tr ? 'Gerekçe' : 'Reason', render: r => esc(r.reason || '—') },
+      { key: 'status', label: t('status'), render: r => badge(r.status) },
+      { key: 'act', label: t('actions'), render: r => next[r.status] && can('approve')
+        ? `<button class="btn btn-ghost btn-sm" data-return-next="${esc(r.id)}" data-current="${esc(r.status)}">${esc(labels[next[r.status]])}</button>` : '' }
+    ], rows)}${pager(res, page => { pagesRef.current.returns = page; reload(); })}</div>`;
+    document.getElementById('returnNew')?.addEventListener('click', createReturnDialog);
+    body.querySelectorAll('[data-return-next]').forEach(button => {
+      button.onclick = () => advanceReturnDialog(button.dataset.returnNext, button.dataset.current, next[button.dataset.current], labels);
+    });
+  }
+
+  async function createReturnDialog() {
+    const tr = UI.getLang() === 'tr';
+    let lots;
+    try {
+      const result = await Api.lots({ pageSize: 500 });
+      lots = (result.data || result).filter(lot => lot.supplierId != null && lot.qty > 0);
+    } catch (e) { UI.err(e); return; }
+    if (!lots.length) return UI.toast(tr ? 'Tedarikçiye bağlı, iade edilebilir stok partisi yok.' : 'No returnable stock lot linked to a supplier.');
+    const supplierName = id => suppliersRef.current.find(supplier => supplier.id === id)?.name || `#${id}`;
+    modal({
+      title: tr ? 'Yeni tedarikçi iadesi' : 'New supplier return',
+      body: `${field(tr ? 'Parti ve tedarikçi' : 'Lot and supplier', select('returnLot', lots.map(lot => ({
+          v: lot.id, l: `${lot.itemName} · ${lot.lotNo || lot.id} · ${supplierName(lot.supplierId)} · ${num(lot.qty)}`
+        }))))}
+        ${field(t('qty'), input('returnQty', { type: 'number', min: 0.0001, step: 'any' }))}
+        ${field(tr ? 'İade gerekçesi (zorunlu)' : 'Return reason (required)', textarea('returnReason'))}`,
+      footer: `<button class="btn btn-ghost" data-close>${t('cancel')}</button><button class="btn btn-primary" id="returnGo">${t('save')}</button>`,
+      onOpen: box => guardedSubmit(box.querySelector('#returnGo'), async () => {
+        const lot = lots.find(row => row.id === val('returnLot'));
+        const qty = numVal('returnQty');
+        const reason = val('returnReason').trim();
+        if (!lot) throw new Error(tr ? 'Parti seçin.' : 'Select a lot.');
+        if (!(qty > 0) || qty > lot.qty) throw new Error(tr ? 'Miktar sıfırdan büyük ve parti miktarını aşmamalı.' : 'Quantity must be positive and not exceed the lot.');
+        if (reason.length < 3) throw new Error(tr ? 'En az 3 karakter gerekçe girin.' : 'Enter a reason of at least 3 characters.');
+        await Api.createSupplierReturn({ supplierId: lot.supplierId, lotId: lot.id, qty, reason });
+        closeModal(); UI.ok(t('saved')); reload();
+      })
+    });
+  }
+
+  function advanceReturnDialog(id, current, target, labels) {
+    const tr = UI.getLang() === 'tr';
+    modal({
+      title: `${tr ? 'İade durumunu ilerlet' : 'Advance return'} — ${labels[current]} → ${labels[target]}`,
+      body: field(tr ? 'İşlem notu (zorunlu)' : 'Action note (required)', textarea('returnStatusNote')),
+      footer: `<button class="btn btn-ghost" data-close>${t('cancel')}</button><button class="btn btn-primary" id="returnStatusGo">${t('confirm')}</button>`,
+      onOpen: box => guardedSubmit(box.querySelector('#returnStatusGo'), async () => {
+        const note = val('returnStatusNote').trim();
+        if (note.length < 3) throw new Error(tr ? 'En az 3 karakter işlem notu girin.' : 'Enter an action note of at least 3 characters.');
+        await Api.setSupplierReturnStatus(id, { status: target, note });
+        closeModal(); UI.ok(t('saved')); reload();
+      })
+    });
+  }
+
+
   /** Runs one submit at a time for a modal button; prevents double posting. */
   function guardedSubmit(button, work) {
     button.onclick = async () => {
@@ -1049,7 +1123,8 @@ export default function PurchasingView() {
     </div>
     ${UI.tabs([
       { k: 'orders', l: t('tabOrders') }, { k: 'suppliers', l: t('tabSuppliers') },
-      { k: 'requests', l: t('tabRequests') }, { k: 'rfqs', l: t('tabRfqs') }, { k: 'invoices', l: t('tabInvoices') }
+      { k: 'requests', l: t('tabRequests') }, { k: 'rfqs', l: t('tabRfqs') }, { k: 'invoices', l: t('tabInvoices') },
+      { k: 'returns', l: UI.getLang() === 'tr' ? 'İadeler' : 'Returns' }
     ], tab, k => setTab(k))}
     <div id="purchBody">${loading()}</div>`;
 

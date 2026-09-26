@@ -1,28 +1,30 @@
 const db = require('../db');
+const { fromMinor, multiplyMinor } = require('../lib/money');
 
 /**
- * Open receivable in base currency.
- *
- * For every non-cancelled sales invoice: amount − payments − linked credit
- * notes. An invoice marked paid before the payment ledger existed
- * (paid_legacy) counts as fully paid, so a credit note issued against it shows
- * up as a negative balance (money owed back to the customer), as before.
- * Credit notes without an original invoice (pre-015 data) reduce the balance
- * directly while they are issued.
+ * Open receivable in base currency, calculated from authoritative integer
+ * minor-unit ledgers. Reversed payments never reduce the balance.
  */
 function outstandingBalance(customerId) {
-  return db.prepare(`SELECT COALESCE(SUM(open_base),0) AS balance FROM (
-      SELECT (ci.amount
-        - CASE WHEN ci.paid_legacy = 1 THEN ci.amount
-            ELSE COALESCE((SELECT SUM(p.amount) FROM customer_invoice_payments p WHERE p.invoice_id=ci.id),0) END
-        - COALESCE((SELECT SUM(r.amount) FROM customer_invoices r WHERE r.original_invoice_id=ci.id
-            AND r.invoice_type='iade' AND r.status!='cancelled'),0)) * ci.fx_rate AS open_base
-      FROM customer_invoices ci
-      WHERE ci.customer_id=? AND ci.invoice_type!='iade' AND ci.status IN ('issued','paid')
-      UNION ALL
-      SELECT -r.amount * r.fx_rate FROM customer_invoices r
-      WHERE r.customer_id=? AND r.invoice_type='iade' AND r.status='issued' AND r.original_invoice_id IS NULL
-    )`).get(customerId, customerId).balance;
+  const invoices = db.prepare(`SELECT id,amount_minor,fx_rate,paid_legacy
+    FROM customer_invoices
+    WHERE customer_id=? AND invoice_type!='iade' AND status IN ('issued','paid')`).all(customerId);
+  let baseMinor = 0;
+  const paid = db.prepare(`SELECT COALESCE(SUM(p.amount_minor),0) value
+    FROM customer_invoice_payments p
+    WHERE p.invoice_id=? AND NOT EXISTS
+      (SELECT 1 FROM customer_invoice_payment_reversals r WHERE r.payment_id=p.id)`);
+  const credits = db.prepare(`SELECT COALESCE(SUM(amount_minor),0) value FROM customer_invoices
+    WHERE original_invoice_id=? AND invoice_type='iade' AND status!='cancelled'`);
+  for (const invoice of invoices) {
+    const paidMinor = invoice.paid_legacy ? invoice.amount_minor : paid.get(invoice.id).value;
+    const openMinor = invoice.amount_minor - paidMinor - credits.get(invoice.id).value;
+    baseMinor += multiplyMinor(openMinor, invoice.fx_rate || 1);
+  }
+  const standaloneCredits = db.prepare(`SELECT amount_minor,fx_rate FROM customer_invoices
+    WHERE customer_id=? AND invoice_type='iade' AND status='issued' AND original_invoice_id IS NULL`).all(customerId);
+  for (const credit of standaloneCredits) baseMinor -= multiplyMinor(credit.amount_minor, credit.fx_rate || 1);
+  return fromMinor(baseMinor);
 }
 
 module.exports = { outstandingBalance };

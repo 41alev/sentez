@@ -11,28 +11,35 @@ router.use(requireAuth);
 
 router.get('/', (req, res) => {
   const { unread = '', severity = '', page = 1, pageSize = 50 } = req.query;
-  let sql = 'SELECT * FROM notifications WHERE 1=1';
-  const params = [];
-  if (unread === '1') sql += ' AND is_read = 0';
+  let sql = `SELECT n.*,CASE WHEN nr.notification_id IS NULL THEN 0 ELSE 1 END user_is_read
+    FROM notifications n LEFT JOIN notification_reads nr ON nr.notification_id=n.id AND nr.user_id=? WHERE 1=1`;
+  const params = [req.user.id];
+  if (unread === '1') sql += ' AND nr.notification_id IS NULL';
   if (severity) { sql += ' AND severity = ?'; params.push(severity); }
-  sql += ' ORDER BY created_at DESC';
+  sql += ' ORDER BY n.created_at DESC';
   const result = paginate(sql, params, page, pageSize);
-  result.unreadCount = db.prepare('SELECT COUNT(*) c FROM notifications WHERE is_read = 0').get().c;
+  result.unreadCount = db.prepare(`SELECT COUNT(*) c FROM notifications n
+    WHERE NOT EXISTS (SELECT 1 FROM notification_reads nr WHERE nr.notification_id=n.id AND nr.user_id=?)`).get(req.user.id).c;
   result.data = result.data.map(n => ({
     id: n.id, ruleType: n.rule_type, severity: n.severity, title: n.title, body: n.body,
-    refType: n.ref_type, refId: n.ref_id, isRead: !!n.is_read, createdAt: n.created_at
+    refType: n.ref_type, refId: n.ref_id, isRead: !!n.user_is_read, createdAt: n.created_at
   }));
   res.json(result);
 });
 
 router.post('/:id/read', (req, res) => {
-  db.prepare('UPDATE notifications SET is_read = 1 WHERE id = ?').run(req.params.id);
+  if (!db.prepare('SELECT id FROM notifications WHERE id=?').get(req.params.id)) {
+    throw new AppError('Bildirim bulunamadı / Notification not found', 404);
+  }
+  db.prepare('INSERT OR IGNORE INTO notification_reads(notification_id,user_id,read_at) VALUES (?,?,?)')
+    .run(req.params.id, req.user.id, Date.now());
   res.json({ ok: true });
 });
 
 router.post('/read-all', (req, res) => {
-  db.prepare('UPDATE notifications SET is_read = 1 WHERE is_read = 0').run();
-  res.json({ ok: true });
+  const result = db.prepare(`INSERT OR IGNORE INTO notification_reads(notification_id,user_id,read_at)
+    SELECT id,?,? FROM notifications`).run(req.user.id, Date.now());
+  res.json({ ok: true, marked: result.changes });
 });
 
 /** Manually run the alert scan (low stock, expiry, overdue POs, open NCRs, calibration). */

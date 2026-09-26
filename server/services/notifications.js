@@ -40,7 +40,7 @@ function push({ ruleType, severity = 'info', title, body, refType, refId, dedupe
   // Avoid re-raising the same open alert every scan
   if (dedupeKey) {
     const existing = db.prepare(
-      `SELECT id FROM notifications WHERE ref_type = ? AND ref_id = ? AND rule_type = ? AND is_read = 0`
+      `SELECT id FROM notifications WHERE ref_type = ? AND ref_id = ? AND rule_type = ?`
     ).get(refType || null, dedupeKey, ruleType);
     if (existing) return existing.id;
   }

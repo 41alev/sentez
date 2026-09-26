@@ -170,7 +170,7 @@ async function until(fn, timeout = 6000, step = 60) {
 
   console.log('\n=== SEKMELER / TABS ===');
   // Tabbed modules re-render on click; a broken tab handler leaves the pane empty.
-  for (const [view, count] of [['purchasing', 5], ['crm', 3], ['sales', 5], ['planning', 5], ['quality', 6], ['reports', 10], ['admin', 11]]) {
+  for (const [view, count] of [['purchasing', 6], ['crm', 3], ['sales', 5], ['planning', 5], ['quality', 6], ['reports', 10], ['admin', 11]]) {
     go(view);
     await until(() => doc.getElementById('view-' + view).querySelector('.chip-row'));
     const chips = [...doc.getElementById('view-' + view).querySelectorAll('.chip-row .chip')];
@@ -261,6 +261,8 @@ async function until(fn, timeout = 6000, step = 60) {
 
   await openAndCheck('supplier detail opens', 'purchasing', async () =>
     await selectTab('purchasing', /Tedarik|Suppl/i) && clickFirst('#purchBody [data-open]'));
+  await openAndCheck('new supplier return form opens', 'purchasing', async () =>
+    await selectTab('purchasing', /İade|Return/i) && clickFirst('#returnNew'));
 
   await openAndCheck('sales order detail opens', 'sales', async () =>
     await selectTab('sales', /Satış Sipariş|Sales Order/i) && clickFirst('#salesBody [data-open]'));

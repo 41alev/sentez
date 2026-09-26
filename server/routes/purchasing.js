@@ -11,6 +11,7 @@ const stock = require('../services/stock');
 const costing = require('../services/costing');
 const { dispatchEvent } = require('../lib/webhooks');
 const payments = require('../services/invoice-payments');
+const { toMinor, fromMinor } = require('../lib/money');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -965,10 +966,11 @@ router.post('/invoices', requirePermission('purchase.write'), validate(invoiceSc
       const supplier = db.prepare('SELECT payment_terms_days FROM suppliers WHERE id = ?').get(po.supplier_id);
       const invDate = b.invoiceDate || toLocalDateStr();
       const due = toLocalDateStr(new Date(`${invDate}T12:00:00`).getTime() + (supplier ? supplier.payment_terms_days : 30) * 86400000);
+      const amountMinor = toMinor(b.amount);
       db.prepare(`INSERT INTO supplier_invoices (id,invoice_no,supplier_id,po_id,receipt_id,invoice_date,due_date,
-        amount,currency,fx_rate,match_status,discrepancy_note,created_at,allocation_state) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+        amount,amount_minor,currency,fx_rate,match_status,discrepancy_note,created_at,allocation_state) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
         id, b.invoiceNo, po.supplier_id, po.id, b.receiptId || null, invDate, due,
-        b.amount, b.currency, rate, withinTolerance ? 'matched' : 'discrepancy',
+        fromMinor(amountMinor), amountMinor, b.currency, rate, withinTolerance ? 'matched' : 'discrepancy',
         withinTolerance ? null : `Fatura ${invoiceBase.toFixed(2)} TL, teslim alınan ${receivedBase.toFixed(2)} TL`,
         Date.now(), chosen.length ? 'recorded' : 'none');
       const insertAllocation = db.prepare(`INSERT INTO supplier_invoice_allocations
@@ -977,7 +979,11 @@ router.post('/invoices', requirePermission('purchase.write'), validate(invoiceSc
       for (const line of chosen) insertAllocation.run(id, line.id, line.invoiceQty, line.price,
         line.currency, line.fx_rate, line.invoiceVatRate);
       const vatAmount = b.vatAmount ?? payments.snapshotVatAmount(id, b.amount);
-      if (vatAmount != null) db.prepare('UPDATE supplier_invoices SET vat_amount=? WHERE id=?').run(payments.round2(vatAmount), id);
+      if (vatAmount != null) {
+        const vatMinor = toMinor(vatAmount);
+        db.prepare('UPDATE supplier_invoices SET vat_amount=?, vat_amount_minor=? WHERE id=?')
+          .run(fromMinor(vatMinor), vatMinor, id);
+      }
       logAudit(req, 'auditInvoiceAdd', { entityType: 'supplier_invoice', entityId: id,
         newValue: { invoiceNo: b.invoiceNo, amount: b.amount, matched: withinTolerance }, detail: b.invoiceNo });
       return { id, matchStatus: withinTolerance ? 'matched' : 'discrepancy',
@@ -1105,9 +1111,10 @@ router.post('/invoices/:id/reconcile', requirePermission('purchase.approve'), va
     }
     const note = matched ? null : `Fatura ${invoiceBase.toFixed(2)} TL, eşleştirilen teslim ${receivedBase.toFixed(2)} TL`;
     const nextMatch = ['approved', 'paid'].includes(inv.match_status) ? inv.match_status : (matched ? 'matched' : 'discrepancy');
-    const changed = db.prepare(`UPDATE supplier_invoices SET allocation_state=?, vat_amount=?, match_status=?,
+    const vatMinor = toMinor(vatAmount);
+    const changed = db.prepare(`UPDATE supplier_invoices SET allocation_state=?, vat_amount=?, vat_amount_minor=?, match_status=?,
         discrepancy_note=?, reconciled_at=?, reconciled_by=?, reconcile_note=?
-      WHERE id=? AND allocation_state='legacy'`).run(chosen.length ? 'recorded' : 'none', payments.round2(vatAmount),
+      WHERE id=? AND allocation_state='legacy'`).run(chosen.length ? 'recorded' : 'none', fromMinor(vatMinor), vatMinor,
       nextMatch, note, Date.now(), req.user.id, b.note, inv.id).changes;
     if (changed !== 1) throw new AppError('Fatura eşzamanlı olarak değiştirildi / Invoice changed concurrently', 409);
     logAudit(req, 'auditSupplierInvoiceReconciled', { entityType: 'supplier_invoice', entityId: inv.id,
@@ -1148,10 +1155,11 @@ router.post('/invoices/:id/approve', requirePermission('purchase.approve'), vali
       if (b.vatAmount == null) throw new AppError('Fatura KDV tutarı gerekli / Invoice VAT amount required', 422);
       vatAmount = payments.round2(b.vatAmount);
     }
-    const changed = db.prepare(`UPDATE supplier_invoices SET match_status='approved', vat_amount=?,
+    const vatMinor = toMinor(vatAmount);
+    const changed = db.prepare(`UPDATE supplier_invoices SET match_status='approved', vat_amount=?, vat_amount_minor=?,
         approved_at=?, approved_by=?, approval_note=?
       WHERE id=? AND match_status IN ('matched','discrepancy','unmatched')`)
-      .run(vatAmount, Date.now(), req.user.id, b.note || null, inv.id).changes;
+      .run(fromMinor(vatMinor), vatMinor, Date.now(), req.user.id, b.note || null, inv.id).changes;
     if (changed !== 1) throw new AppError('Fatura eşzamanlı olarak değiştirildi / Invoice changed concurrently', 409);
     logAudit(req, 'auditSupplierInvoiceApproved', { entityType: 'supplier_invoice', entityId: inv.id,
       oldValue: { matchStatus: inv.match_status }, newValue: { matchStatus: 'approved', vatAmount, note: b.note || null },

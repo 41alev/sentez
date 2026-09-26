@@ -28,7 +28,7 @@ const SERVER_SUITES = [
   'approval-limit', 'concurrency-races', 'search', 'release-hardening', 'stock-integrity', 'finance-integrity', 'invoice-settlement', 'planning-integrity', 'pilot-flow'
 ];
 // Sunucu gerektirmez — kendi geçici durumunu kendi kurar/söker.
-const STANDALONE_SUITES = ['visual-audit', 'backup-restore', 'email', 'barcode', 'dates', 'sandbox-safety', 'maintenance-safety', 'proxy-rate-limit', 'release-package'];
+const STANDALONE_SUITES = ['visual-audit', 'backup-restore', 'email', 'barcode', 'dates', 'sandbox-safety', 'maintenance-safety', 'proxy-rate-limit', 'release-package', 'money'];
 // Kendi izole geçici dizinlerini kullanır (execFileSync ile alt süreç açar),
 // ana data/ klasörüne hiç dokunmaz.
 const CHILD_ISOLATED_SUITES = ['setup-upgrade', 'license', 'faz0-verify'];
