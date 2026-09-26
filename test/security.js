@@ -297,10 +297,12 @@ async function api(method, p, { token, body, headers = {}, raw } = {}) {
   const health = await api('GET', '/health');
   ok('sağlık ucu kimlik istemiyor (izleme için)', health.status === 200);
   ok('sağlık ucu hassas bilgi vermiyor',
-    !JSON.stringify(health.data).match(/secret|password|key|token/i), JSON.stringify(health.data).slice(0, 100));
+    !JSON.stringify(health.data).match(/secret|password|key|token|users/i), JSON.stringify(health.data).slice(0, 100));
 
   const idx = fs.readFileSync(path.join(__dirname, '..', 'server', 'index.js'), 'utf8');
   ok('JWT sırrı koda gömülü değil', !/JWT_SECRET\s*=\s*['"][^'"]{8,}/.test(idx));
+  ok('üretimde CORS izin listesi yoksa çapraz kaynak başlığı kapalı',
+    /NODE_ENV === 'production' \? \{ origin: false \}/.test(idx));
   // Davranışsal kanıt: statik regex "auth.js JWT_SECRET'ı env'den okuyor mu" diyebilir
   // ama üretimde varsayılana sessizce düşülüp düşülmediğini KANITLAYAMAZ — gerçekten
   // ayrı bir sunucu süreci NODE_ENV=production + JWT_SECRET boş ile başlatılıp
@@ -340,6 +342,42 @@ async function api(method, p, { token, body, headers = {}, raw } = {}) {
     });
     ok('JWT_SECRET tanımsızken üretimde sunucu açılmıyor',
       noSecretResult.crashed === true && noSecretResult.code === 1, noSecretResult.output.slice(-300));
+
+    const corsPort = port + 1;
+    const corsResult = await new Promise((resolve) => {
+      const env = { ...process.env, DATA_DIR: dir, DB_PATH: path.join(dir, 'depo-takip.sqlite'),
+        BACKUP_DIR: path.join(dir, 'backups'), PORT: String(corsPort), NODE_ENV: 'production',
+        JWT_SECRET: 'security-test-only-secret-with-sufficient-length', CORS_ORIGINS: '' };
+      const proc = spawn('node', [path.join(ROOT, 'server', 'index.js')], { cwd: ROOT, env });
+      let output = ''; let settled = false;
+      proc.stdout.on('data', d => output += d); proc.stderr.on('data', d => output += d);
+      proc.on('exit', code => {
+        if (!settled) { settled = true; resolve({ ok: false, code, output }); }
+      });
+      const deadline = Date.now() + 6000;
+      const poll = () => {
+        if (settled) return;
+        fetch(`http://127.0.0.1:${corsPort}/health`, { headers: { Origin: 'https://evil.example' } }).then(r => {
+          if (settled) return;
+          settled = true;
+          const allowOrigin = r.headers.get('access-control-allow-origin');
+          const result = { ok: r.ok && allowOrigin === null, allowOrigin, output };
+          proc.once('exit', () => resolve(result));
+          proc.kill();
+        }).catch(() => {
+          if (Date.now() < deadline) setTimeout(poll, 200);
+          else if (!settled) {
+            settled = true;
+            const result = { ok: false, output: output + '\n(zaman aşımı)' };
+            proc.once('exit', () => resolve(result));
+            proc.kill();
+          }
+        });
+      };
+      setTimeout(poll, 300);
+    });
+    ok('üretimde CORS izin listesi yokken yabancı origin başlığı verilmiyor',
+      corsResult.ok === true, corsResult.output?.slice(-300) || `allow-origin=${corsResult.allowOrigin}`);
     fs.rmSync(dir, { recursive: true, force: true });
   } catch (e) {
     soft('JWT_SECRET üretim kontrolü çalıştırılamadı', false, e.message);

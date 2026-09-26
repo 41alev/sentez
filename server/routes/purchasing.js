@@ -11,10 +11,20 @@ const stock = require('../services/stock');
 const costing = require('../services/costing');
 const { dispatchEvent } = require('../lib/webhooks');
 const payments = require('../services/invoice-payments');
-const { toMinor, fromMinor } = require('../lib/money');
+const { toMinor, fromMinor, multiplyMinor } = require('../lib/money');
 
 const router = express.Router();
 router.use(requireAuth);
+
+function validMoney(work) {
+  try { return work(); }
+  catch (e) {
+    if (e instanceof RangeError || e instanceof TypeError) {
+      throw new AppError('Tutar güvenli para aralığını aşıyor / Amount exceeds safe money range', 422);
+    }
+    throw e;
+  }
+}
 
 // ============================ SUPPLIERS ============================
 const supplierSchema = z.object({
@@ -966,7 +976,8 @@ router.post('/invoices', requirePermission('purchase.write'), validate(invoiceSc
       const supplier = db.prepare('SELECT payment_terms_days FROM suppliers WHERE id = ?').get(po.supplier_id);
       const invDate = b.invoiceDate || toLocalDateStr();
       const due = toLocalDateStr(new Date(`${invDate}T12:00:00`).getTime() + (supplier ? supplier.payment_terms_days : 30) * 86400000);
-      const amountMinor = toMinor(b.amount);
+      const amountMinor = validMoney(() => toMinor(b.amount));
+      validMoney(() => multiplyMinor(amountMinor, rate));
       db.prepare(`INSERT INTO supplier_invoices (id,invoice_no,supplier_id,po_id,receipt_id,invoice_date,due_date,
         amount,amount_minor,currency,fx_rate,match_status,discrepancy_note,created_at,allocation_state) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
         id, b.invoiceNo, po.supplier_id, po.id, b.receiptId || null, invDate, due,
@@ -980,7 +991,7 @@ router.post('/invoices', requirePermission('purchase.write'), validate(invoiceSc
         line.currency, line.fx_rate, line.invoiceVatRate);
       const vatAmount = b.vatAmount ?? payments.snapshotVatAmount(id, b.amount);
       if (vatAmount != null) {
-        const vatMinor = toMinor(vatAmount);
+        const vatMinor = validMoney(() => toMinor(vatAmount));
         db.prepare('UPDATE supplier_invoices SET vat_amount=?, vat_amount_minor=? WHERE id=?')
           .run(fromMinor(vatMinor), vatMinor, id);
       }

@@ -1,5 +1,8 @@
 # Dream Plus
 
+> Güncel satış ve teslim kapıları:
+> [`docs/SATISA-HAZIRLIK-SON-DURUM-2026-09-26.md`](docs/SATISA-HAZIRLIK-SON-DURUM-2026-09-26.md).
+
 Fabrika ölçeğinde depo, üretim, satın alma, satış ve kalite yönetimi. Node.js + Express + SQLite backend,
 masaüstü tarayıcı için React ekranları. Türkçe/İngilizce arayüz. (Mobil/PWA el terminali
 26 Eylül 2026'da kapsamdan çıkarıldı; USB barkod okuyucu masaüstünde klavye gibi çalışır.)
@@ -38,8 +41,8 @@ Testler:
 npm test                # 77 — iş kuralları, yetki matrisi, uçtan uca akışlar
 npm run test:contract   # 58 — API alan adları arayüzün okuduklarıyla eşleşiyor mu
 npm run test:planning   # 78 — kapasite, çizelgeleme, MRP, OEE
-npm run test:ui         # 98 — arayüz gerçek bir DOM'da çalıştırılır
-npm run test:security   # 57 — kimlik doğrulama, enjeksiyon, XSS, sır sızıntısı
+npm run test:ui         # 113 — arayüz gerçek bir DOM'da çalıştırılır
+npm run test:security   # 69 — kimlik doğrulama, enjeksiyon, XSS, sır sızıntısı
 npm run test:load       # 19 — yanıt süreleri ve eşzamanlı yazma doğruluğu
 
 # Sunucu gerektirmez:

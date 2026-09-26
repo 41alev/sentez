@@ -392,9 +392,10 @@ const { invariants } = require('./inv');
   });
   await check('CO-03', "müşteri PUT creditLimit ''/null → kredi limiti sessizce kaldırılmamalı", async () => {
     const c = await ok('POST', '/sales/customers', { name: 'Limit 500', creditLimit: 500 });
-    await api('PUT', '/sales/customers/' + c.id, { creditLimit: '' });
+    const invalid = await api('PUT', '/sales/customers/' + c.id, { creditLimit: '' });
+    assert.equal(invalid.status, 422, `boş kredi limiti 422 yerine ${invalid.status} döndü`);
     const after = (await ok('GET', '/sales/customers/' + c.id)).credit_limit;
-    info('CO-03b', "creditLimit='' gönderildi", { sonuc: after });
+    info('CO-03b', "creditLimit='' gönderildi", { status: invalid.status, sonuc: after });
     assert.equal(after, 500, 'kredi limiti 500 iken boş girdiyle ' + after + ' oldu (0 = limitsiz)');
   });
   await check('CO-04', "ürün minStock/salePrice ''/null → 0'a dönüşmemeli", async () => {

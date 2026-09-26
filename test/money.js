@@ -10,4 +10,5 @@ assert.equal(multiplyMinor(10001, '1.2345'), 12346, 'FX conversion rounds once t
 assert.equal(multiplyMinor(1, '0.5'), 1, 'half minor unit rounds away from zero');
 assert.throws(() => toMinor('not-money'), /Invalid decimal/);
 assert.throws(() => fromMinor(1.5), /safe integer/);
+assert.throws(() => multiplyMinor(9_000_000_000_000_000, 2), /safe integer range/);
 console.log('✓ exact money: decimal boundary, FX and safe-integer guards');

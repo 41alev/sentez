@@ -102,11 +102,13 @@ app.set('trust proxy', process.env.TRUST_PROXY || false);
 app.use(express.json({ limit: '2mb' }));
 
 // CORS: locked to configured origins in production, permissive in development.
+// With no production allow-list, emit no cross-origin permission headers. The
+// application still works same-origin while browsers block foreign origins.
 const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
 app.use(cors(
   allowedOrigins.length
     ? { origin: (origin, cb) => cb(null, !origin || allowedOrigins.includes(origin)), credentials: true }
-    : {}
+    : (process.env.NODE_ENV === 'production' ? { origin: false } : {})
 ));
 
 // Baseline security headers (no external dependency needed for these).
@@ -209,15 +211,15 @@ app.use('/api', require('./routes/admin'));   // users, warehouses, settings, fx
 // ---------- Health ----------
 app.get('/health', (req, res) => {
   try {
-    const r = db.prepare('SELECT COUNT(*) c FROM users').get();
+    db.prepare('SELECT 1').get();
     const pending = require('./migrate').pendingMigrations().length;
     res.json({
       status: 'ok', uptimeSec: Math.round(process.uptime()),
-      db: 'connected', users: r.c, pendingMigrations: pending,
+      db: 'connected', pendingMigrations: pending,
       version: require('../package.json').version, ts: Date.now()
     });
-  } catch (e) {
-    res.status(503).json({ status: 'error', db: 'unavailable', message: e.message });
+  } catch {
+    res.status(503).json({ status: 'error', db: 'unavailable' });
   }
 });
 

@@ -1,49 +1,64 @@
 # PROJECT_STATUS.md
 
-## 26 Eylül 2026 — satış engellerini kapatma turu (Codex, devam ediyor)
+## 26 Eylül 2026 — Dream Plus 2.0.1 satış adayı (Codex, teknik tur tamamlandı)
 
-**Aktif hedef:** Kullanıcının tam yetkisiyle denetimde kalan teknik, operasyonel
-ve ticari hazırlık eksiklerini kapatmak; her güvenlik/veri değişikliğini test
-etmek ve doğrulanmış kontrol noktalarını `main` dalına commit/push etmektir.
+**Aktif hedef ve kabul ölçütü:** Kullanıcının tam yetkisiyle kod deposunda
+kapatılabilen güvenlik, veri bütünlüğü, finans, iş akışı, kurulum ve belge
+eksiklerini kapatmak; ilgili bütün testleri geçirmek; temiz dağıtım/geri dönüş
+kanıtı üretmek ve sonucu `main` dalına commit/push etmektir.
 
-**Bu kontrol noktasında tamamlananlar:** `8ccb7c2` ile ürün kimliği/BOM
-bütünlüğü, ödeme ve mal kabul ters kayıtları, muhasebe kapsamı, RFQ→PO, PO
-yaşam döngüsü, tedarikçi iadeleri API'si ve temel güvenlik açıkları kapatılıp
-`origin/main` dalına gönderildi. Sonraki çalışma kullanıcıya özgü bildirim
-okundu kayıtlarını migration `028` ile ayırdı; bir kullanıcının okuması başka
-kullanıcının rozetini artık değiştirmiyor. Belge yüklemesi gerçek PDF/görsel/
-ofis dosyası imzasını doğruluyor, sahte içerikleri 415 ile reddediyor ve
-indirmeyi güvenli ek olarak sunuyor. Satış/alış faturası ve ödeme defterlerinde
-migration `029` ile tam sayı kuruş alanları kaynak gerçeklik oldu; uyumluluk
-amaçlı REAL alanların ayrışması veritabanı tetikleriyle engelleniyor. Kur ve
-muhasebe hesabı da kuruş sınırında tek kez yuvarlanıyor. Ters tahsilatın müşteri
-bakiyesini yeniden açmaması hatası düzeltildi. Gerçek sevkiyat COGS/stok,
-tahsilat/ödeme ve ters kayıt yevmiyeleri regresyon testine alındı. Satın Alma
-ekranına iade oluşturma, listeleme ve durum ilerletme sekmesi eklendi.
+**Sonuç:** Kodda kapatılabilen satış engelleri kapatıldı. Dream Plus 2.0.1,
+temiz müşteri kurulumu ve kontrollü pilot için release candidate durumundadır.
+Genel ve koşulsuz "hatasız" iddiası yapılmaz: TLS/proxy, gerçek off-site hedef,
+müşteri donanımı/verisi, hukukçu onayı ve imzalı pilot yalnız seçilen müşterinin
+sahasında kanıtlanabilir. Güncel ayrıntılı karar
+[`docs/SATISA-HAZIRLIK-SON-DURUM-2026-09-26.md`](docs/SATISA-HAZIRLIK-SON-DURUM-2026-09-26.md)
+dosyasındadır.
 
-**API/veri etkisi:** `notification_reads` kullanıcı-bildirim okuma tablosu;
-fatura ve ödeme tablolarında `*_minor` tam sayı sütunları eklendi. Dış API'deki
-ondalık para sözleşmesi korunuyor. Eski kayıtlar migration sırasında en yakın
-kuruşa taşınıyor; yeni doğrudan SQL yazımları hem uyumluluk değeri hem kuruş
-değeri sağlamazsa reddediliyor.
+**Bu turda kapatılanlar:** `8ccb7c2` ürün/BOM bütünlüğü, finans ve mal kabul
+ters kayıtları, gerçek COGS/ödeme yevmiyeleri, RFQ→PO, PO yaşam döngüsü ve
+tedarikçi iadelerini; `7dd0767` kullanıcı bazlı bildirim okuma, gerçek belge
+bayt doğrulaması/indirme, migration 029 tam sayı kuruş defterleri, müşteri bakiye
+düzeltmesi ve satın alma iade arayüzünü getirdi. Son sertleştirme üretimde güvenli
+CORS varsayılanını, sade sağlık yanıtını, kur/para güvenli aralıklarını ve
+Faz 0 kredi limiti assertion'ını ekledi; sürüm 2.0.1'e çıkarıldı.
 
-**Doğrulama:** build ve typecheck **Geçti**; lint **0 hata / 42 tarihsel uyarı**.
-Güvenlik 67/67, Faz 0 b4a 24/24, muhasebe 36/36, UI smoke 113/113, contract
-58/58, OpenAPI 10/10, exact-money birim paketi ve ödeme/mutabakat paketi
-**Geçti**. Tam izole `run-all` koşusunda 40 paket doğrudan geçti; Faz 0 içindeki bildirim assertion alan adı düzeltildikten sonra aynı `faz0-verify` paketi bütünüyle tekrar çalıştırıldı ve **Geçti**. Böylece tüm 41 paket için yeşil kanıt vardır.
+**API/veri etkisi:** Migration 028 `notification_reads`; migration 029 fatura ve
+ödeme `*_minor` alanlarını ekler. Dış API ondalık sözleşmesi korunur. Para yarım
+kuruşta sıfırdan uzağa yuvarlanır; uyumluluk REAL alanı ile kuruş alanının
+ayrışması tetiklerle engellenir. Yeni kur girişleri `0.000001..1,000,000`
+aralığındadır; fatura baz para dönüşümü güvenli tamsayı aralığını aşarsa 422 ile
+kayıt öncesi durur. Üretimde CORS allow-list boşsa çapraz kaynak başlığı yoktur.
 
-**Bağımsız inceleme:** Önceki `ai_team.py --phase review --timeout 300`
-çağrısında Claude kota sınırı nedeniyle **Doğrulanamadı**; Gemini yeni somut
-hata bildirmedi ancak bağlam/test kapsamı sınırlıydı. Yeni para migration'ı ve
-operasyon turu bittikten sonra inceleme tekrar çalıştırılacak.
+**Doğrulama — Geçti:** 41 izole `run-all` paketi; Faz 0 217/217; Chromium
+39/39; güvenlik 69/69 ve 0 uyarı; muhasebe 36/36; UI 113/113; contract 58/58;
+OpenAPI 10/10; build ve typecheck; lint 0 hata; `npm audit --audit-level=high`
+0 bulgu. Finans/mutabakat/muhasebe/güvenlik ve Faz 0 son değişiklikten sonra
+yeniden çalıştırıldı.
 
-**Açık sıra:** tam `run-all` ve tarayıcı paketi; temiz release paketi kurulumu;
-ayrı konuma gerçek tam yedek geri yükleme; servis yeniden başlatma; temsili büyük
-veri/yükseltme-rollback provası; release/satış belgelerinin güncellenmesi. Müşteri
-ağı/TLS sertifikası, fiziksel yazıcı-barkod cihazı, hukukçu onayı ve imzalı gerçek
-müşteri pilotu yalnız gerçek saha kanıtıyla kapanabilir.
+**Dağıtım/kurtarma kanıtı — Geçti:** Commit `7dd0767` tabanlı temiz paket geçici
+izole dizinde üretildi; `npm ci --omit=dev` 0 zafiyet; boş müşteri kurulumu,
+üretim süreci açılışı, süreç yeniden başlatma, `/health`, migration=0 ve yeniden
+giriş başarılı. Tam bundle yedek başka boş dizine geri yüklendi; SQLite
+bütünlüğü `ok`, yabancı anahtar hatası 0, firma/kullanıcı/migration 29 korundu;
+geri yüklenen kopya ayrı üretim süreciyle açıldı ve giriş başarılı oldu. 2.0.1
+paketi son commit sonrasında yeniden üretilecek.
 
-**Sonraki tek somut adım:** temiz release paketi üretip paketi izole bir dizine çıkar; kurulum, servis yeniden başlatma ve tam yedekten geri dönüşü paket içinden prova et.
+**Bağımsız inceleme:** `ai_team.py --phase review --timeout 300` çalıştı. Gemini
+verilen dosyalarda yeni somut hata bildirmedi. Claude 1,91 saniyede oturum kota
+sınırı mesajı verdiğinden Claude görüşü **Doğrulanamadı**. Bazı test dosyaları
+bağlam/sır filtresiyle atlandığı için son karar canlı test ve kod kanıtındadır.
+
+**Doğrulanamadı / dış teslim kapıları:** Bu bilgisayarda Docker yok. Ayrı fiziksel
+Windows makinede servis ve reboot; gerçek TLS/alan adı/proxy; gerçek off-site
+sağlayıcıdan restore; müşteri barkod/yazıcıları; temsili müşteri verisiyle
+migration/performans; hukukçu onaylı sözleşme/KVKK/SLA ve imzalı 13 adımlı pilot
+müşteri seçilmeden kapatılamaz. Bunlardan biri kalırsa ilgili müşteri üretim
+kabulü verilmez.
+
+**Sonraki tek somut adım:** son diff ve tam regresyonu doğrula; commit/push et;
+temiz `release/dream-plus-2.0.1` paketini üretip manifest/checksum ve paket içi
+üretim smoke testini son commit üzerinde kaydet.
 
 ## 26 Eylül 2026 — Claude sonrası Codex bağımsız denetimi
 

@@ -252,10 +252,12 @@ const { invariants } = require('./inv');
     const bad = await api('POST', '/exchange-rates', { currency: 'USD', rate: 34, rateDate: '2026-99-99' });
     assert(bad.status >= 400, 'geçersiz takvim tarihi kur olarak kaydedildi');
   });
-  await check('FX-02', 'uçtan uç kur uygunsuzluğu: aşırı oranlar (0.0000001 / 1e12) kabul mü (bilgi)', async () => {
+  await check('FX-02', 'güvenli para dönüşüm aralığını aşan kurlar reddedilir', async () => {
     const a = await api('POST', '/exchange-rates', { currency: 'EUR', rate: 0.0000001, rateDate: '2026-09-01' });
     const b = await api('POST', '/exchange-rates', { currency: 'EUR', rate: 1e12, rateDate: '2026-09-02' });
     info('FX-02b', 'aşırı kurlar', { kucuk: a.status, buyuk: b.status });
+    assert.equal(a.status, 422, 'güvenli alt sınırın altındaki kur kabul edildi');
+    assert.equal(b.status, 422, 'güvenli üst sınırın üstündeki kur kabul edildi');
   });
 
   console.log('\n[AUTH] kimlik');

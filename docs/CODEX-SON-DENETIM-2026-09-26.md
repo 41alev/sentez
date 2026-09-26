@@ -1,5 +1,12 @@
 # Dream Plus — Claude sonrası bağımsız son denetim
 
+> **Güncellik notu:** Bu belge `c1714b4` sürümündeki açıkları kaydeden tarihsel
+> denetimdir. Buradaki yedi teknik engel daha sonraki `8ccb7c2`, `7dd0767` ve
+> 2.0.1 sertleştirme turunda kapatıldı. Güncel karar ve gerçekten açık kalan
+> saha kapıları için
+> [`SATISA-HAZIRLIK-SON-DURUM-2026-09-26.md`](SATISA-HAZIRLIK-SON-DURUM-2026-09-26.md)
+> esas alınır.
+
 **Tarih:** 26 Eylül 2026
 
 **İncelenen sürüm:** `c1714b4` (`main`, `origin/main`)

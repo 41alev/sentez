@@ -294,7 +294,10 @@ router.get('/exchange-rates/current', (req, res) => {
 
 router.post('/exchange-rates', MANAGER, validate(z.object({
   currency: z.enum(['USD', 'EUR', 'GBP']),
-  rate: z.coerce.number().positive(),
+  // Prevent values that cannot be represented safely once a document amount
+  // is converted to integer minor units. This is a technical guardrail, not a
+  // market-rate plausibility check.
+  rate: z.coerce.number().min(0.000001).max(1_000_000),
   rateDate: optionalDate,
   source: z.string().max(1000).optional()
 })), (req, res) => {

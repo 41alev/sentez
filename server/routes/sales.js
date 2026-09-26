@@ -20,6 +20,16 @@ router.use(requireAuth);
 const WRITE = requireRole('admin', 'manager', 'operator');
 const ADMIN = requireRole('admin', 'manager');
 
+function validMoney(work) {
+  try { return work(); }
+  catch (e) {
+    if (e instanceof RangeError || e instanceof TypeError) {
+      throw new AppError('Tutar güvenli para aralığını aşıyor / Amount exceeds safe money range', 422);
+    }
+    throw e;
+  }
+}
+
 /* ============================ CUSTOMERS ============================ */
 
 const customerSchema = z.object({
@@ -426,7 +436,7 @@ router.post('/invoices', WRITE, validate(invoiceSchema), (req, res) => {
     const lines = prepared.lines;
 
     let subtotalMinor = 0, vatTotalMinor = 0, discountTotalMinor = 0;
-    const computed = (lines || []).map((l, i) => {
+    const computed = validMoney(() => (lines || []).map((l, i) => {
       const grossMinor = toMinor(Number(l.qty) * Number(l.unitPrice));
       const discountMinor = multiplyMinor(grossMinor, Number(l.discountRate || 0) / 100);
       const lineMinor = grossMinor - discountMinor;
@@ -435,10 +445,11 @@ router.post('/invoices', WRITE, validate(invoiceSchema), (req, res) => {
       subtotalMinor += lineMinor; vatTotalMinor += vatMinor; discountTotalMinor += discountMinor;
       return { ...l, lineNo: i + 1, discountAmount: fromMinor(discountMinor),
         lineTotal: fromMinor(lineMinor), vatRate, vatAmount: fromMinor(vatMinor) };
-    });
+    }));
 
     // Kalem yoksa geriye dönük uyumluluk için düz tutar kabul edilir.
-    const amountMinor = computed.length ? subtotalMinor + vatTotalMinor : toMinor(b.amount || 0);
+    const amountMinor = computed.length ? subtotalMinor + vatTotalMinor : validMoney(() => toMinor(b.amount || 0));
+    validMoney(() => multiplyMinor(amountMinor, rate));
     const amount = fromMinor(amountMinor);
     if (!computed.length && !b.amount) throw new AppError('Fatura tutarı veya kalemleri gerekli / Amount or lines required', 400);
     if (b.invoiceType === 'iade') {
